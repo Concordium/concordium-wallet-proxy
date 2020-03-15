@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+LD_LIBRARY_PATH=$PWD/../deps/crypto/rust-src/target/release stack "$@"

@@ -43,13 +43,12 @@ packages:
 
 extra-deps:
 - ./deps/simple-client/deps/crypto/
-- ./deps/simple-client/deps/crypto/
-- ./deps/simple-client/deps/crypto/
-- ./deps/simple-client/deps/crypto/
+- ./deps/simple-client/deps/acorn
+- ./deps/simple-client/deps/globalstate-types
 - ./deps/globalstate-mockup/globalstate
 - ./deps/globalstate-mockup/deps/lmdb-simple-cereal
 - ./deps/globalstate-mockup/deps/haskell-lmdb
-- ./simple-client/
+- ./deps/simple-client/
 
 - github: lucasdicioccio/http2-client
   commit: d1cac5951a37211bfa08167d6aec3625537b8624
