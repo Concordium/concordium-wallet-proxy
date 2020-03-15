@@ -1,0 +1,110 @@
+name:                wallet-proxy
+version:             0.1.0.0
+github:              "githubuser/wallet-proxy"
+license:             BSD3
+author:              "Author name here"
+maintainer:          "example@example.com"
+copyright:           "2020 Author name here"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/githubuser/pager#readme>
+
+dependencies:
+- base >=4.7 && < 5
+- microlens-platform >=0.3
+- microlens >=0.3
+- bytestring >= 0.10
+- hashable >= 1.2
+- concordium-crypto
+- cereal >= 0.5.7
+- containers > 0.5.9.1
+- unordered-containers >= 0.2.9
+- pqueue >= 1.4.1
+- globalstate-types
+- acorn
+- time >= 1.8
+- mtl >= 2.2.2
+- transformers >= 0.5.6
+- aeson >= 1.4.2
+- text >= 1.2.3
+- base16-bytestring >= 0.1.1.6
+- recursion-schemes >= 5.1
+- vector >= 0.12
+- split
+- directory >= 1.3
+- acorn
+- lmdb-simple >= 0.4
+- lmdb
+- either
+- filepath >= 1.4
+- random >= 1.1
+- persistent-template == 2.6.0
+- persistent-postgresql == 2.9.1
+- persistent >= 2.9.2 && < 2.10
+- monad-logger >= 0.3.30
+- resource-pool >= 0.2.3.2
+- conduit == 1.3.1.*
+- globalstate
+- persistent-pagination
+- lifted-base >= 0.2.3
+- conduit-extra == 1.3.*
+- http-types >= 0.12
+- network >= 2.8
+- wai >= 3.2
+- wai-conduit >= 3
+- yesod >= 1.6
+- warp >= 3.2
+
+- simple-client
+
+default-extensions:
+- RecordWildCards
+- LambdaCase
+- TupleSections
+- MultiParamTypeClasses
+- FlexibleContexts
+- FlexibleInstances
+- FunctionalDependencies
+- GeneralizedNewtypeDeriving
+
+library:
+  source-dirs: src
+  ghc-options:
+    - -Wall
+    - -Wcompat
+    - -Werror=missing-fields
+    - -Werror=missing-methods
+    - -Wredundant-constraints
+    - -fno-ignore-asserts
+
+executables:
+  wallet-proxy-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - wallet-proxy
+
+tests:
+  wallet-proxy-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - wallet-proxy

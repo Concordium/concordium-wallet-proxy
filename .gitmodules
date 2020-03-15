@@ -1,0 +1,9 @@
+[submodule "deps/simple-client"]
+	path = deps/simple-client
+	url = git@gitlab.com:Concordium/consensus/simple-client.git
+[submodule "deps/globalstate-types"]
+	path = deps/globalstate-mockup
+	url = ../../consensus/globalstate-mockup.git
+[submodule "deps/globalstate-mockup"]
+	path = deps/globalstate-mockup
+	url = git@gitlab.com:Concordium/consensus/globalstate-mockup.git
