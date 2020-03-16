@@ -14,14 +14,7 @@ $ curl -XPUT -d "@examples/cdi.json" localhost:3000/submitCredential
 
 If the credential is well-formed and communication with the server is good, and
 the baker node is alive the server will respond with a submission id which can
-be queried later on. Otherwise 
-
-- if JSON request body is not a valid credential then the server responds with
-  error code 400 and a JSON object with a single field `error` in the body.
-- if there is a communication problem with the baker the response code is 502
-  (Bad Gateway) and body is Null.
-- if there are any other problems with the request (e.g., duplicate submission)
-  we reply with error code 400 and a JSON object with a single field `error`
+be queried later on.
 
 If the submission is successful then the returned `submissionid` can be used to
 query the status of the submission as in the following example.
@@ -29,30 +22,23 @@ query the status of the submission as in the following example.
 ```console
 $ curl -XGET localhost:3000/submissionStatus/f1a3a3c17e3bc70a4dad3f409265f8a1fca07c607b732e11cf279dd2e891e0af
 {
+  {
   "status": "finalized",
-  "95637bb7647d9a2b5c2cac64916ec4165685862c349a38237a35349a180d1a7f": {
-    "hash": "f1a3a3c17e3bc70a4dad3f409265f8a1fca07c607b732e11cf279dd2e891e0af",
-    "sender": null,
-    "cost": 0,
-    "result": {
-      "events": [
-        {
-          "tag": "AccountCreated",
-          "contents": "4a3wqcAdVz7QC34rxyXNzRwYMgBKPBNYWfyTBnjAaLpeR6H3pR"
-        },
-        {
-          "tag": "CredentialDeployed",
-          "regid": "b341a8e766932bd728f186a669d49f7a91e016f59a2bbfa206a9eca0a242a818626eda2f7f58e10ed13ac9d5fae7f2ff",
-          "account": "4a3wqcAdVz7QC34rxyXNzRwYMgBKPBNYWfyTBnjAaLpeR6H3pR"
-        }
-      ],
-      "outcome": "success"
-    },
-    "energycost": 9990,
-    "type": null,
-    "index": 0
+  "outcomes": {
+    "e9d11ac5b1045092ec5bcbadf5c69b9b4e73f70dc8f3467e37cf2c9b6404e03a": {
+      "hash": "f1a3a3c17e3bc70a4dad3f409265f8a1fca07c607b732e11cf279dd2e891e0af",
+      "sender": null,
+      "cost": 0,
+      "result": {
+        "accountAddress": "4a3wqcAdVz7QC34rxyXNzRwYMgBKPBNYWfyTBnjAaLpeR6H3pR",
+        "outcome": "newaccount"
+      },
+      "energycost": 9990,
+      "type": null,
+      "index": 0
+      }
+    }
   }
-}
 ```
 
 In this particular case we can see the transaction has already been finalized.
@@ -73,36 +59,67 @@ In general the return values possible from the call are
 - ```json
   {
     "status": "committed",
-    "$BLOCKHASH": "$OUTCOME"
+    "outcomes": { ... }
   }```
 
 where there can be one or more pairs of block hash and outcome, and outcome
 always has the format as above in the case of a finalized block. For
-credential submission the format is always going to be the same as above,
-except that `events` can be different. It is always a list of objects. For
-credential deployment the possible results are
+credential submission the format is always going to be the same as above, except that if 
+we are deploying a new credential onto an existing account the "outcome" field will be
+`newCredential` instead and instead of the `accountAddress` field there will be a `details` field
+which contains an object with two fields `onAccount` and `credentialId`, both of which are strings.
 
-  - ```json
-     [
-        {
-          "tag": "AccountCreated",
-          "contents": "4a3wqcAdVz7QC34rxyXNzRwYMgBKPBNYWfyTBnjAaLpeR6H3pR"
-        },
-        {
-          "tag": "CredentialDeployed",
-          "regid": "b341a8e766932bd728f186a669d49f7a91e016f59a2bbfa206a9eca0a242a818626eda2f7f58e10ed13ac9d5fae7f2ff",
-          "account": "4a3wqcAdVz7QC34rxyXNzRwYMgBKPBNYWfyTBnjAaLpeR6H3pR"
-        }
-      ]
+## Simple transfer
 
-  - ```json
-     [
-        {
-          "tag": "CredentialDeployed",
-          "regid": "b341a8e766932bd728f186a669d49f7a91e016f59a2bbfa206a9eca0a242a818626eda2f7f58e10ed13ac9d5fae7f2ff",
-          "account": "4a3wqcAdVz7QC34rxyXNzRwYMgBKPBNYWfyTBnjAaLpeR6H3pR"
-        }
-      ]
-    
-  The first will happen in the case a credential is creating an account, and the
-  second when a new credential is being deployed onto an existing account.
+When submitting a simple transfer you should make a PUT request to `submitTransfer` endpoint.
+The data that should be sent is as the one returned from the library provided as part of the crypto repository.
+After submission of the transaction the responses are the same as for the submission of the credential. If successful
+a submission id is returned.
+
+When querying the status of this transaction different outcomes are possible. In case of success the following 
+will be returned
+
+```json
+{
+  "status": "finalized",
+  "outcomes": {
+    "45bee841a3c6f6d5b5aebe6e4193fea7568b2b19e11c9ba8a616074d3fd01610": {
+      "hash": "edd9915e22d0c4570a15289912be44b542701d2f245e34d59ea823b2213fae74",
+      "sender": "3urFJGp9AaU62fQ3DEfCczqJwVt9V3F1gjE5PPBaYgqBD6rqPB",
+      "cost": 10,
+      "result": {
+        "amount": 1000,
+        "to": "3urFJGp9AaU62fQ3DEfCczqJwVt9V3F1gjE5PPBaYgqBD6rqPB",
+        "outcome": "transfersuccess"
+      },
+      "energycost": 10,
+      "type": "transfer",
+      "index": 0
+    }
+  }
+}
+```
+
+The key part is `transfersuccess` as the outcome.
+
+In case of failure for different reasons the `outcome` field can contain one of the following
+- "InvalidTargetAccount"
+- "NonExistentAmount"
+- "MalformedTransaction"
+- "InsufficientEnergy"
+
+## Errors
+
+In case of a non 200 return code the return value will always be a JSON object with two fields
+```json
+{
+  "errorMessage": "free form string",
+  "error": Int
+}
+```
+
+Where the error codes currently returned are
+- 0 for internal server error, most likely the server could not communicate with the the baker
+- 1 for when the request is invalid. There can be a number of reasons for this, but most of them
+  should not occur once the initial debugging is over. They indicate that data is malformed in one
+  way or another.
