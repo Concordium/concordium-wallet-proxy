@@ -18,7 +18,7 @@ data DBOptions = DBOptions {
 
 dbOptions :: Parser DBOptions
 dbOptions = do
-  let dbString = strOption (long "db" <> short 'd' <> metavar "CONNSTRING")
+  let dbString = strOption (long "db" <> metavar "STR")
   DBOptions <$> dbString
 
 parser :: ParserInfo (Backend, DBOptions)
