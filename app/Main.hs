@@ -9,7 +9,7 @@ import Control.Monad.Except
 import Concordium.Client.GRPC
 
 defaultConfig :: GrpcConfig
-defaultConfig = GrpcConfig "localhost" 11111 Nothing
+defaultConfig = GrpcConfig "localhost" 11109 Nothing
 
 dbConnString :: String
 dbConnString = "host=localhost port=5432 user=concordium dbname=concordium password=concordium"
