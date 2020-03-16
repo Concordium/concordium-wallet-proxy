@@ -123,3 +123,21 @@ Where the error codes currently returned are
 - 1 for when the request is invalid. There can be a number of reasons for this, but most of them
   should not occur once the initial debugging is over. They indicate that data is malformed in one
   way or another.
+
+## Get account nonce best guess
+
+When making a transfer the wallet must select a nonce for the transaction. This nonce must be sequential.
+The server provides a "best effort" functionality for querying the nonce. This is on the endpoint `accNonce`
+which will always return a JSON object (unless there is an internal server error) consisting of two fields
+```json
+{
+  "nonce": UInt,
+  "allFinal": Bool
+}
+```
+
+The `nonce` is always the next nonce that should be used provided all the known transactions will be finalized eventually.
+- If `allFinal` is `True` then all transactions from this account are finlized and the nonce should be considered reliable.
+- Otherwise there are some pending transactions so the nonce returned is a best guess assuming all transctions will be successful.
+
+In case the wallet is the only user of the account then this nonce tracking is reliable. If there are other concurrent users of the account then there is a chance the nonce returned will be wrong, but then it is up to the user to keep track of that themselves.
