@@ -106,6 +106,7 @@ putTransferR =
       case parse transferParser txJSON  of
         Error err -> respond400Error err RequestInvalid
         Success tx -> do
+          $(logInfo) (Text.pack (show tx))
           runGRPC (sendTransactionToBaker (NormalTransaction tx) defaultNetId) $ \case
             False -> do -- this case cannot happen at this time
               $(logError) "Credential rejected by node."
