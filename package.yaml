@@ -97,6 +97,7 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - wallet-proxy
+    - optparse-applicative
 
 tests:
   wallet-proxy-test:

@@ -18,3 +18,5 @@ stack.yaml.lock
 .idea
 *.iml
 
+*.cabal
+*.aes
