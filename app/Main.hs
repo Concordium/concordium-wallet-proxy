@@ -44,7 +44,7 @@ runSite port host site = do
 main :: IO ()
 main = do
   (backend, dbOptions) <- execParser parser
-  runExceptT (mkGrpcClient defaultConfig) >>= \case
+  runExceptT (mkGrpcClient (GrpcConfig (grpcHost backend) (grpcPort backend) (grpcTarget backend))) >>= \case
     Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
     Right cfg ->
       runSite 3000 "0.0.0.0" (Proxy cfg)
