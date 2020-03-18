@@ -44,11 +44,6 @@ $ curl -XGET localhost:3000/submissionStatus/f1a3a3c17e3bc70a4dad3f409265f8a1fca
 In this particular case we can see the transaction has already been finalized.
 
 In general the return values possible from the call are
-- status code 502 and Null as the body
-- status code 400 if the submission id is ill-formed (not a valid SHA256 hash)
-  and an object with a single field `error` describing the error.
-- status code 200 and Null as the body (this means there is no submission with
-  that ID known to the baker)
 - ```json
   {
     "status": "received"
@@ -56,9 +51,23 @@ In general the return values possible from the call are
   When the submission has been received, but it is not yet committed to any
   blocks and no outcomes are known.
   
+
+- ```json
+  {
+    "status": "absent"
+  }```
+  When something went wrong and the submission failed and will not be part of
+  any blocks.
+
 - ```json
   {
     "status": "committed",
+    "outcomes": { ... }
+  }```
+
+- ```json
+  {
+    "status": "finalized",
     "outcomes": { ... }
   }```
 
@@ -68,6 +77,11 @@ credential submission the format is always going to be the same as above, except
 we are deploying a new credential onto an existing account the "outcome" field will be
 `newCredential` instead and instead of the `accountAddress` field there will be a `details` field
 which contains an object with two fields `onAccount` and `credentialId`, both of which are strings.
+
+If a submission is finalized it will always stay finalized. A received
+transaction can transition into either committed, directly to finalized, or to
+absent. A transaction that is committed is most likely going to transition to a
+finalized one, although it is technically possible that it will become absent as well.
 
 ## Simple transfer
 
@@ -140,4 +154,6 @@ The `nonce` is always the next nonce that should be used provided all the known 
 - If `allFinal` is `True` then all transactions from this account are finlized and the nonce should be considered reliable.
 - Otherwise there are some pending transactions so the nonce returned is a best guess assuming all transctions will be successful.
 
-In case the wallet is the only user of the account then this nonce tracking is reliable. If there are other concurrent users of the account then there is a chance the nonce returned will be wrong, but then it is up to the user to keep track of that themselves.
+In case the wallet is the only user of the account then this nonce tracking is reliable. 
+If there are other concurrent users of the account then there is a chance the
+nonce returned will be wrong, but then it is up to the user to keep track of that themselves.
