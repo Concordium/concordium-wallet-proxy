@@ -27,7 +27,7 @@ parser = info (helper <*> ((,) <$> backendParser <*> dbOptions))
 
 
 defaultConfig :: GrpcConfig
-defaultConfig = GrpcConfig "localhost" 11109 Nothing
+defaultConfig = GrpcConfig "localhost" 11109 Nothing Nothing
 
 -- dbConnString :: String
 -- dbConnString = "host=localhost port=5432 user=concordium dbname=concordium password=concordium"
@@ -44,7 +44,7 @@ runSite port host site = do
 main :: IO ()
 main = do
   (backend, dbOptions) <- execParser parser
-  runExceptT (mkGrpcClient (GrpcConfig (grpcHost backend) (grpcPort backend) (grpcTarget backend))) >>= \case
+  runExceptT (mkGrpcClient (GrpcConfig (grpcHost backend) (grpcPort backend) (grpcTarget backend) Nothing)) >>= \case
     Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
     Right cfg ->
       runSite 3000 "0.0.0.0" (Proxy cfg)
