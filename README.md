@@ -8,7 +8,7 @@ following displays an interaction that leads to credential deployment.
 ```console
 $ curl -XPUT -d "@examples/cdi.json" localhost:3000/submitCredential
 {
-  "submissionid": "f1a3a3c17e3bc70a4dad3f409265f8a1fca07c607b732e11cf279dd2e891e0af"
+  "submissionId": "f1a3a3c17e3bc70a4dad3f409265f8a1fca07c607b732e11cf279dd2e891e0af"
 }
 ```
 
@@ -16,7 +16,7 @@ If the credential is well-formed and communication with the server is good, and
 the baker node is alive the server will respond with a submission id which can
 be queried later on.
 
-If the submission is successful then the returned `submissionid` can be used to
+If the submission is successful then the returned `submissionId` can be used to
 query the status of the submission as in the following example.
 
 ```console
@@ -31,7 +31,7 @@ $ curl -XGET localhost:3000/submissionStatus/f1a3a3c17e3bc70a4dad3f409265f8a1fca
       "cost": 0,
       "result": {
         "accountAddress": "4a3wqcAdVz7QC34rxyXNzRwYMgBKPBNYWfyTBnjAaLpeR6H3pR",
-        "outcome": "newaccount"
+        "outcome": "newAccount"
       },
       "energycost": 9990,
       "type": null,
@@ -104,7 +104,7 @@ will be returned
       "result": {
         "amount": 1000,
         "to": "3urFJGp9AaU62fQ3DEfCczqJwVt9V3F1gjE5PPBaYgqBD6rqPB",
-        "outcome": "transfersuccess"
+        "outcome": "transferSuccess"
       },
       "energycost": 10,
       "type": "transfer",
@@ -114,13 +114,13 @@ will be returned
 }
 ```
 
-The key part is `transfersuccess` as the outcome.
+The key part is `transferSuccess` as the outcome.
 
 In case of failure for different reasons the `outcome` field can contain one of the following
-- "InvalidTargetAccount"
-- "NonExistentAmount"
-- "MalformedTransaction"
-- "InsufficientEnergy"
+- "invalidTargetAccount"
+- "nonExistentAmount"
+- "malformedTransaction"
+- "insufficientEnergy"
 
 ## Errors
 

@@ -87,7 +87,7 @@ putCredentialR =
               $(logError) "Credential rejected by node."
               respond400Error ("Credential rejected by node." :: Text.Text) RequestInvalid
             True -> 
-              sendResponse (object ["submissionid" .= (getHash (CredentialDeployment cdi) :: TransactionHash)])
+              sendResponse (object ["submissionId" .= (getHash (CredentialDeployment cdi) :: TransactionHash)])
 
 -- |Use the serialize instance of a type to deserialize 
 decodeBase16 :: (MonadFail m) => Text.Text -> m BS.ByteString
@@ -112,7 +112,7 @@ putTransferR =
               $(logError) "Credential rejected by node."
               respond400Error ("Credential rejected by node." :: Text.Text) RequestInvalid
             True -> 
-              sendResponse (object ["submissionid" .= (getHash (NormalTransaction tx) :: TransactionHash)])
+              sendResponse (object ["submissionId" .= (getHash (NormalTransaction tx) :: TransactionHash)])
       where transferParser = withObject "Parse transfer request." $ \obj -> do
               sig :: TransactionSignature <- obj .: "signatures"
               body <- decodeBase16 =<< (obj .: "transaction")
