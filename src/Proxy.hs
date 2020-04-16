@@ -41,6 +41,7 @@ defaultNetId = 100
 mkYesod "Proxy" [parseRoutes|
 /accBalance/#Text AccountBalanceR GET
 /accNonce/#Text AccountNonceR GET
+/simpleTransferCost SimpleTransferCostR GET
 /submissionStatus/#Text SubmissionStatusR GET
 /submitCredential/ CredentialR PUT
 /submitTransfer/ TransferR PUT
@@ -81,23 +82,25 @@ runGRPC c k = do
 -- also be present, since accounts cannot be deleted from the chain.
 getAccountBalanceR :: Text -> Handler TypedContent
 getAccountBalanceR addrText =
-    runGRPC doGetBal $ \v -> do
-      $(logInfo) "Retrieved account balance."
-      sendResponse v
+    runGRPC doGetBal $ \(lastFinInfo, bestInfo) -> do
+      let
+          getBal :: Value -> Maybe Integer
+          getBal = parseMaybe (withObject "account info" (.: "accountAmount")) 
+          lastFinBal = getBal lastFinInfo
+          bestBal = getBal bestInfo
+      $(logInfo) $ "Retrieved account balance for " <> addrText
+                  <> ": finalizedBalance=" <> (Text.pack $ show lastFinBal)
+                  <> ", currentBalance=" <> (Text.pack $ show bestBal)
+      sendResponse $ object $ (maybe [] (\b -> ["finalizedBalance" .= b]) lastFinBal) <>
+                        (maybe [] (\b -> ["currentBalance" .= b]) bestBal)
   where
     doGetBal = do
       status <- either fail return =<< getConsensusStatus
       lastFinBlock <- liftResult $ parse readLastFinalBlock status
       bestBlock <- liftResult $ parse readBestBlock status
-      lastFinInfo <- either fail return =<< getAccountInfo addrText lastFinBlock
+      lastFinInfo <- either fail return =<< getAccountInfo addrText lastFinBlock      
       bestInfo <- either fail return =<< getAccountInfo addrText bestBlock
-      let
-          getBal :: Value -> Maybe Text
-          getBal = parseMaybe (withObject "account info" (.: "accountAmount")) 
-          lastFinBal = getBal lastFinInfo
-          bestBal = getBal bestInfo
-      return $ Right $ object $ (maybe [] (\b -> ["finalizedBalance" .= b]) lastFinBal) <>
-                        (maybe [] (\b -> ["currentBalance" .= b]) bestBal)
+      return $ Right (lastFinInfo, bestInfo)
     liftResult (Success s) = return s
     liftResult (Error err) = fail err
 
@@ -106,6 +109,9 @@ getAccountNonceR addrText =
     runGRPC (getNextAccountNonce addrText) $ \v -> do
       $(logInfo) "Successfully got nonce."
       sendResponse v
+
+getSimpleTransferCostR :: Handler TypedContent
+getSimpleTransferCostR = sendResponse (Yesod.Number 59)
 
 putCredentialR :: Handler TypedContent
 putCredentialR = 
