@@ -14,7 +14,7 @@ import Text.Read
 import Control.Monad.IO.Class   (liftIO)
 import Control.Monad.Fail(MonadFail)
 import Data.Aeson(withObject, object, (.=), fromJSON, Result(..))
-import Data.Aeson.Types(parse)
+import Data.Aeson.Types(parse, parseMaybe)
 import Data.Aeson.Parser(json')
 import Data.Conduit(connect)
 import qualified Data.Serialize as S
@@ -39,7 +39,9 @@ defaultNetId :: Int
 defaultNetId = 100
 
 mkYesod "Proxy" [parseRoutes|
+/accBalance/#Text AccountBalanceR GET
 /accNonce/#Text AccountNonceR GET
+/simpleTransferCost SimpleTransferCostR GET
 /submissionStatus/#Text SubmissionStatusR GET
 /submitCredential/ CredentialR PUT
 /submitTransfer/ TransferR PUT
@@ -68,11 +70,48 @@ runGRPC c k = do
     Right (Left err) -> respond400Error err RequestInvalid
     Right (Right a) -> k a
 
+
+-- |Get the balance of an account.  If successful, the result is a JSON
+-- object consisting of the following optional fields:
+--   * "finalizedBalance": the balance of the account at the last finalized block
+--   * "currentBalance": the balance of the account at the current best block
+-- If neither field is present, the account does not currently exist.
+-- The "finalizedBalance" field will be absent if the account has been created since
+-- the last finalized block.
+-- If the "finalizedBalance" field is present, then the "currentBalance" field will
+-- also be present, since accounts cannot be deleted from the chain.
+getAccountBalanceR :: Text -> Handler TypedContent
+getAccountBalanceR addrText =
+    runGRPC doGetBal $ \(lastFinInfo, bestInfo) -> do
+      let
+          getBal :: Value -> Maybe Integer
+          getBal = parseMaybe (withObject "account info" (.: "accountAmount")) 
+          lastFinBal = getBal lastFinInfo
+          bestBal = getBal bestInfo
+      $(logInfo) $ "Retrieved account balance for " <> addrText
+                  <> ": finalizedBalance=" <> (Text.pack $ show lastFinBal)
+                  <> ", currentBalance=" <> (Text.pack $ show bestBal)
+      sendResponse $ object $ (maybe [] (\b -> ["finalizedBalance" .= b]) lastFinBal) <>
+                        (maybe [] (\b -> ["currentBalance" .= b]) bestBal)
+  where
+    doGetBal = do
+      status <- either fail return =<< getConsensusStatus
+      lastFinBlock <- liftResult $ parse readLastFinalBlock status
+      bestBlock <- liftResult $ parse readBestBlock status
+      lastFinInfo <- either fail return =<< getAccountInfo addrText lastFinBlock      
+      bestInfo <- either fail return =<< getAccountInfo addrText bestBlock
+      return $ Right (lastFinInfo, bestInfo)
+    liftResult (Success s) = return s
+    liftResult (Error err) = fail err
+
 getAccountNonceR :: Text -> Handler TypedContent
 getAccountNonceR addrText =
     runGRPC (getNextAccountNonce addrText) $ \v -> do
       $(logInfo) "Successfully got nonce."
       sendResponse v
+
+getSimpleTransferCostR :: Handler TypedContent
+getSimpleTransferCostR = sendResponse (Yesod.Number 59)
 
 putCredentialR :: Handler TypedContent
 putCredentialR = 
