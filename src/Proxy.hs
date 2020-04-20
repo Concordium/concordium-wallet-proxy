@@ -11,8 +11,10 @@ import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString as BS
 
 import Text.Read
+import Control.Arrow (left)
 import Control.Monad.IO.Class   (liftIO)
 import Control.Monad.Fail(MonadFail)
+import Control.Exception (SomeException, catch)
 import Data.Aeson(withObject, object, (.=), fromJSON, Result(..))
 import Data.Aeson.Types(parse, parseMaybe)
 import Data.Aeson.Parser(json')
@@ -60,11 +62,14 @@ respond400Error err code =
 runGRPC :: ClientMonad IO (Either String a) -> (a -> Handler TypedContent) -> Handler TypedContent
 runGRPC c k = do
   Proxy cfg <- getYesod
-  liftIO (runClient cfg c) >>= \case
+  let
+    exHandler :: SomeException -> IO (Either String a)
+    exHandler = pure . Left . show
+  liftIO ((left show <$> runClient cfg c) `catch` exHandler) >>= \case
     Left err -> do
-      $(logError) $ "Internal error accessing GRPC endpoint: " <> Text.pack (show err)
+      $(logError) $ "Internal error accessing GRPC endpoint: " <> Text.pack err
       sendResponseStatus badGateway502 $ object [
-        "errorMessage" .= show err,
+        "errorMessage" .= Yesod.String "Error accessing the GRPC endpoint",
         "error" .= fromEnum InternalError
         ]
     Right (Left err) -> respond400Error err RequestInvalid
@@ -111,7 +116,7 @@ getAccountNonceR addrText =
       sendResponse v
 
 getSimpleTransferCostR :: Handler TypedContent
-getSimpleTransferCostR = sendResponse (Yesod.Number 59)
+getSimpleTransferCostR = sendResponse $ object ["cost" .= Yesod.Number 59]
 
 putCredentialR :: Handler TypedContent
 putCredentialR = 
