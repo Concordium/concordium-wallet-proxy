@@ -10,6 +10,7 @@ The wallet proxy provides the following endpoints:
 * `GET /submissionStatus/{submissionId}`: get the status of a simple transfer or credential deployment
 * `PUT /submitCredential`: deploy a credential/create an account
 * `PUT /submitTransfer`: perform a simple transfer
+* `GET /accTransactions/{accountNumer}`: get the transactions affecting an account
 
 
 ### Errors
@@ -196,4 +197,147 @@ In case of failure for different reasons the `outcome` field can contain one of 
 - "malformedTransaction"
 - "insufficientEnergy"
 
+## Get transactions
 
+The endpoint `/accTransactions/{account address}` retrieves a partial list of transactions affecting an account.
+The following parameters are supported:
+- `order`: whether to order the transactions in ascending or descending order of occurrence. A value beginning with `d` or `D` is interpreted as descending; any other (or no) value is interpreted as ascending.
+- `offset`: the offset at which to request the transactions; defaults to 0.
+- `limit`: the maximum number of transactions to return; defaults to 100; values above 1000 are treated as 1000.
+
+The result is a JSON object with the following fields:
+- `order`: either `"ascending"` or `"descending"` indicating the ordering applied to the transactions.
+- `offset`: the offset at which the transactions are fetched.
+- `limit`: the limit on the number of transactions returned.
+- `count`: the actual number of transactions returned. This can be less than limit if there are no more transactions to return.
+- `transactions`: an array of transactions in the order specified.
+
+A transaction consists of the following fields:
+
+#### `origin` (required)
+
+The originator of the transaction.
+This is a JSON object with the following fields:
+- `type`:
+  - `"self"` if the transaction originates from the account itself
+  - `"account"` if the transaction originates from another account
+  - `"reward"` if the transaction originates as a reward (e.g. for baking)
+  - `"none"` if the transaction has no originator (e.g. a credential deployment)
+- `address`: an account address; present only if `type` is `"account"`.
+
+#### `block` (required)
+The hash of the block in which the transaction occurs.
+
+#### `blockTime` (required)
+The nominal time at which the block was baked.
+The time is given in seconds since the UNIX epoch.
+(Currently, it is always an integer, although in future this may have a sub-second resolution.)
+
+#### `transactionHash` (optional)
+This is the hash of the transaction.
+This is not present for special transactions, such as rewards.
+
+#### `subtotal` (optional)
+The change in the account's balance due to this transaction, not including the transaction fee.
+This is only present if the origin type is `"self"` and the transaction involves a transfer to or from the account other than the transaction fee.
+
+#### `fee` (optional)
+The change in the account's balance due to the transaction fee.
+This is only present if the origin type is `"self"` (since otherwise the account is not responsible for the fee).
+When present, this is always a negative value.
+
+#### `total` (required)
+The total change in the account's balance due to the transaction and associated fees.
+A negative value indicates a debit from the account, while a positive value indicates a credit to the account.
+
+#### `energy` (optional)
+The energy cost (in NRG) of executing the transaction.
+This is not present for special transactions.
+
+#### `details` (required)
+A JSON object containing more details about the transaction.
+It consists of the following fields:
+
+- `type` (required): one of the following:
+  - `"deployModule"`
+  - `"initContract"`
+  - `"update"`
+  - `"transfer"`
+  - `"deployEncryptionKey"`
+  - `"addBaker"`
+  - `"removeBaker"`
+  - `"updateBakerAccount"`
+  - `"updateBakerSignKey"`
+  - `"delegateStake"`
+  - `"undelegateStake"`
+  - `"updateElectionDifficulty"`
+  - `"deployCredential"`
+  - `"bakingReward"`
+- `description` (required): a brief English description of the type of the transaction
+- `outcome` (required):
+  - `"success"` if the transaction was executed successfully
+  - `"reject"` if the transaction failed, in which case it had no effect other than charging the fee
+- `rejectReason` (when outcome is `"reject"`): a brief English description of why the transaction was rejected
+- `events` (when outcome is `"success"`): an array of strings consisting of brief English descriptions of the on-chain events resulting from the transaction
+- The following fields are present if the transaction is a simple transfer:
+  - `transferSource`: account address of the source of the transfer
+  - `transferDestination`: account address of the destination of the transfer
+  - `transferAmount`: amount of the transfer
+
+For the purposes of the above, a simple transfer is a transaction of type `"transfer"` which transfers funds from one account to another.
+A transactions of type `"transfer"` is not considered a simple transfer if the destination is a smart contract instance.
+
+### Example
+
+```console
+$ curl -XGET http://localhost:3000/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL?limit=2&offset=2&order=a
+```
+```JSON
+{
+  "transactions": [
+    {
+      "blockTime": 1587646256,
+      "origin": {
+        "type": "self"
+      },
+      "energy": 59,
+      "fee": -59,
+      "subtotal": 0,
+      "transactionHash": "84bf1e2ef8d3af3063cdb681932990f71ddb3949655f55307a266e5d687b414f",
+      "block": "013c6d2dd67affd6f39b9a7b255d244055b53d68fe8b0add4839a20e911d04cb",
+      "details": {
+        "transferAmount": 123,
+        "events": [
+          "Transferred 123 from 4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL to 4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL"
+        ],
+        "outcome": "success",
+        "type": "transfer",
+        "transferDestination": "4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL",
+        "description": "Transfer",
+        "transferSource": "4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL"
+      },
+      "total": -59
+    },
+    {
+      "blockTime": 1587646300,
+      "origin": {
+        "type": "reward"
+      },
+      "block": "7a496e01bf67ad4fe720551185cf10c05acd8d4c91e995826d0703193eeac2b4",
+      "details": {
+        "events": [
+          "Award 6270 to baker 0 at 4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL"
+        ],
+        "outcome": "success",
+        "type": "bakingReward",
+        "description": "Baking reward for baker 0"
+      },
+      "total": 6270
+    }
+  ],
+  "offset": 2,
+  "count": 2,
+  "limit": 2,
+  "order": "ascending"
+}
+```
