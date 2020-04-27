@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Main where
 
 import Proxy
@@ -7,6 +8,7 @@ import qualified Network.Wai.Handler.Warp
 
 import System.Exit(die)
 import Control.Monad.Except
+import Control.Monad.Logger
 
 import Concordium.Client.GRPC
 import Concordium.Client.Commands
@@ -27,7 +29,7 @@ parser = info (helper <*> ((,) <$> backendParser <*> dbOptions))
 
 
 defaultConfig :: GrpcConfig
-defaultConfig = GrpcConfig "localhost" 11109 Nothing Nothing
+defaultConfig = GrpcConfig "localhost" 11109 Nothing Nothing Nothing
 
 -- dbConnString :: String
 -- dbConnString = "host=localhost port=5432 user=concordium dbname=concordium password=concordium"
@@ -44,7 +46,9 @@ runSite port host site = do
 main :: IO ()
 main = do
   (backend, dbOptions) <- execParser parser
-  runExceptT (mkGrpcClient (GrpcConfig (grpcHost backend) (grpcPort backend) (grpcTarget backend) Nothing)) >>= \case
+  let logm s = runStderrLoggingT ($logDebug ("[GRPC]: " <> s))
+  let config = GrpcConfig (grpcHost backend) (grpcPort backend) (grpcTarget backend) (grpcRetryNum backend) (Just 30)
+  runExceptT (mkGrpcClient config (Just logm)) >>= \case
     Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
     Right cfg ->
       runSite 3000 "0.0.0.0" (Proxy cfg)
