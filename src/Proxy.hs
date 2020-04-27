@@ -12,10 +12,8 @@ import qualified Data.ByteString as BS
 
 import Text.Read
 import Control.Arrow (left)
-import Control.Monad.IO.Class   (liftIO)
-import Control.Monad.Fail(MonadFail)
 import Control.Exception (SomeException, catch)
-import Data.Aeson(withObject, object, (.=), fromJSON, Result(..))
+import Data.Aeson(withObject, fromJSON, Result(..))
 import Data.Aeson.Types(parse, parseMaybe)
 import Data.Aeson.Parser(json')
 import Data.Conduit(connect)

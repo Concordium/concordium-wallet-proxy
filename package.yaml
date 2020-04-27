@@ -48,12 +48,12 @@ dependencies:
 - either
 - filepath >= 1.4
 - random >= 1.1
-- persistent-template == 2.6.0
-- persistent-postgresql == 2.9.1
-- persistent >= 2.9.2 && < 2.10
+- persistent-template >= 2.7
+- persistent-postgresql >= 2.9
+- persistent >= 2.9.2
 - monad-logger >= 0.3.30
 - resource-pool >= 0.2.3.2
-- conduit == 1.3.1.*
+- conduit == 1.3.*
 - globalstate
 - persistent-pagination
 - lifted-base >= 0.2.3
