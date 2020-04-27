@@ -35,6 +35,12 @@ Where the error codes currently returned are
   {"error":1,"errorMessage":"Malformed transaction hash."}
   ```
 
+### Language & localization
+
+Error messages and textual descriptions will be localized by the proxy based on the `Accept-Language` header.
+(Currently, only `en` is available.)
+Languages can also be specified with the `_LANG` GET-parameter and/or a `_LANG` cookie; these have higher precedence than `Accept-Language`.
+
 ## Account Balance
 
 The balance on an account can be queried as in the following example:
@@ -112,7 +118,7 @@ On success, the response is of the following form:
 Only the `status` field is required.
 Other fields are present depending on the value of the `status` field and the type and result of the transaction.
 
-#### `status`
+#### `status` (required)
 One of the following values:
 * `"absent"`: the transaction is not known to the node
 * `"received"`: the transaction has been received but not yet added to any block
@@ -124,39 +130,38 @@ transaction can transition into either committed, directly to finalized, or to
 absent. A transaction that is committed is most likely going to transition to a
 finalized one, although it is technically possible that it will become absent as well.
 
-#### `outcome`
+#### `outcome` (optional)
 This field is present if the `status` field is `committed` or `finalized`.
 The possible values are:
-* `"newAccount"`: the transaction created a new account
-* `"newCredential"`: the transaction deployed a credential to an existing account
-* `"transferSuccess"`: the transaction was a successful simple transfer
-* `"invalidTargetAccount"`: the transaction attempted to send funds to an invalid account
-* `"nonExistentAmount"`: the funds were insufficient for the transfer
-* `"insufficientEnergy"`: not enough energy was allocated to this transaction
-* `"malformedTransaction"`: the transaction was malformed and could not be correctly deserialized
+* `"success"`: the transaction completed successfully
+* `"reject"`: the transaction failed
 * `"ambiguous"`: the transaction has different outcomes in different blocks
 
 The `ambiguous` outcome only applies to `committed` transactions.
 
-#### `transactionHash`
+#### `rejectReason` (optional)
+This field is present if `outcome` is `reject`.
+It contains a description of of the reason for rejection.
+
+#### `transactionHash` (optional)
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is not `ambiguous`.
 The value is the hash of the transaction.
 
-#### `sender`
+#### `sender` (optional)
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is not `ambiguous`.
 The value is either the account address of the sender for a simple transfer, or `null` for a credential deployment.
 
-#### `cost`
+#### `cost` (optional)
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is not `ambiguous`.
 The value is a number representing the actual cost of the transaction to the sender.
 (The value is an integer in the smallest denomination of GTU.)
 
-#### `to`
-This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `transferSuccess`.
+#### `to` (optional)
+This field is present if the `status` field is `committed` or `finalized`, the `outcome` field is `success`, and the transaction is a simple transfer.
 The value is the account address of the recipient of the simple transfer.
 
-#### `amount`
-This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `transferSuccess`.
+#### `amount` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is a simple transfer.
 The value is a number representing the amount transferred from the sender to the recipient.
 (The value is an integer in the smallest denomination of GTU.)
 
@@ -190,29 +195,29 @@ The data that should be sent is as the one returned from the library provided as
 After submission of the transaction the responses are the same as for the submission of the credential. If successful
 a submission id is returned, which can be used to query the status of the transfer via the `/submissionStatus` endpoint.
 
-If the transaction succeeds, the `outcome` field will contain "transferSuccess".
-In case of failure for different reasons the `outcome` field can contain one of the following:
-- "invalidTargetAccount"
-- "nonExistentAmount"
-- "malformedTransaction"
-- "insufficientEnergy"
 
 ## Get transactions
 
 The endpoint `/accTransactions/{account address}` retrieves a partial list of transactions affecting an account.
 The following parameters are supported:
 - `order`: whether to order the transactions in ascending or descending order of occurrence. A value beginning with `d` or `D` is interpreted as descending; any other (or no) value is interpreted as ascending.
-- `offset`: the offset at which to request the transactions; defaults to 0.
+- `from`: a transaction id. If the order is ascending, return transactions with higher ids than this; if the order is descending, return transactions with lower ids.
 - `limit`: the maximum number of transactions to return; defaults to 100; values above 1000 are treated as 1000.
 
 The result is a JSON object with the following fields:
 - `order`: either `"ascending"` or `"descending"` indicating the ordering applied to the transactions.
-- `offset`: the offset at which the transactions are fetched.
+- `from`: the transaction id offset, if one was specified.
 - `limit`: the limit on the number of transactions returned.
 - `count`: the actual number of transactions returned. This can be less than limit if there are no more transactions to return.
 - `transactions`: an array of transactions in the order specified.
 
 A transaction consists of the following fields:
+
+#### `id` (required)
+
+This is a stable, ordered identifier for a finalized transaction.
+It is a positive integer.
+Transactions with higher ids always happen later.
 
 #### `origin` (required)
 
@@ -225,7 +230,7 @@ This is a JSON object with the following fields:
   - `"none"` if the transaction has no originator (e.g. a credential deployment)
 - `address`: an account address; present only if `type` is `"account"`.
 
-#### `block` (required)
+#### `blockHash` (required)
 The hash of the block in which the transaction occurs.
 
 #### `blockTime` (required)
@@ -241,10 +246,10 @@ This is not present for special transactions, such as rewards.
 The change in the account's balance due to this transaction, not including the transaction fee.
 This is only present if the origin type is `"self"` and the transaction involves a transfer to or from the account other than the transaction fee.
 
-#### `fee` (optional)
-The change in the account's balance due to the transaction fee.
-This is only present if the origin type is `"self"` (since otherwise the account is not responsible for the fee).
-When present, this is always a negative value.
+#### `cost` (optional)
+The cost of performing the transaction, if this cost is paid by the account.
+This is only present if the origin type is `"self"` (since otherwise the account is not responsible for the cost).
+When present, this is always a positive value.
 
 #### `total` (required)
 The total change in the account's balance due to the transaction and associated fees.
@@ -273,12 +278,12 @@ It consists of the following fields:
   - `"updateElectionDifficulty"`
   - `"deployCredential"`
   - `"bakingReward"`
-- `description` (required): a brief English description of the type of the transaction
+- `description` (required): a brief localized description of the type of the transaction
 - `outcome` (required):
   - `"success"` if the transaction was executed successfully
   - `"reject"` if the transaction failed, in which case it had no effect other than charging the fee
-- `rejectReason` (when outcome is `"reject"`): a brief English description of why the transaction was rejected
-- `events` (when outcome is `"success"`): an array of strings consisting of brief English descriptions of the on-chain events resulting from the transaction
+- `rejectReason` (when outcome is `"reject"`): a brief localized description of why the transaction was rejected
+- `events` (when outcome is `"success"`): an array of strings consisting of brief localized descriptions of the on-chain events resulting from the transaction
 - The following fields are present if the transaction is a simple transfer:
   - `transferSource`: account address of the source of the transfer
   - `transferDestination`: account address of the destination of the transfer
@@ -290,21 +295,22 @@ A transactions of type `"transfer"` is not considered a simple transfer if the d
 ### Example
 
 ```console
-$ curl -XGET http://localhost:3000/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL?limit=2&offset=2&order=a
+$ curl -XGET http://localhost:3000/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL?limit=2&from=4&order=a
 ```
 ```JSON
 {
   "transactions": [
     {
+      "id": 5,
       "blockTime": 1587646256,
       "origin": {
         "type": "self"
       },
       "energy": 59,
-      "fee": -59,
+      "cost": 59,
       "subtotal": 0,
       "transactionHash": "84bf1e2ef8d3af3063cdb681932990f71ddb3949655f55307a266e5d687b414f",
-      "block": "013c6d2dd67affd6f39b9a7b255d244055b53d68fe8b0add4839a20e911d04cb",
+      "blockHash": "013c6d2dd67affd6f39b9a7b255d244055b53d68fe8b0add4839a20e911d04cb",
       "details": {
         "transferAmount": 123,
         "events": [
@@ -319,11 +325,12 @@ $ curl -XGET http://localhost:3000/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8Ajup
       "total": -59
     },
     {
+      "id": 7,
       "blockTime": 1587646300,
       "origin": {
         "type": "reward"
       },
-      "block": "7a496e01bf67ad4fe720551185cf10c05acd8d4c91e995826d0703193eeac2b4",
+      "blockHash": "7a496e01bf67ad4fe720551185cf10c05acd8d4c91e995826d0703193eeac2b4",
       "details": {
         "events": [
           "Award 6270 to baker 0 at 4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL"
@@ -335,7 +342,7 @@ $ curl -XGET http://localhost:3000/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8Ajup
       "total": 6270
     }
   ],
-  "offset": 2,
+  "from": 4,
   "count": 2,
   "limit": 2,
   "order": "ascending"

@@ -10,13 +10,14 @@ module Proxy where
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString as BS
 
-import Text.Read
+import qualified Data.HashMap.Strict as HM
+import Text.Read hiding (String)
 import Control.Arrow (left)
 import Control.Monad.IO.Class   (liftIO)
 import Control.Monad.Fail(MonadFail)
 import Control.Exception (SomeException, catch)
 import Data.Aeson(withObject, object, (.=), fromJSON, Result(..))
-import Data.Aeson.Types(parse, parseMaybe)
+import Data.Aeson.Types(parse, parseMaybe, Pair, parseEither)
 import Data.Aeson.Parser(json')
 import qualified Data.Aeson as AE
 import Data.Conduit(connect)
@@ -35,20 +36,23 @@ import qualified Data.Text.Encoding as Text
 import Concordium.Types
 import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
-import qualified Concordium.Types.Acorn.Core as Core
-import Concordium.Client.TransactionStatus
 import Concordium.Types.Execution
 import Concordium.Client.GRPC
 import Concordium.ID.Types (addressFromText)
 import Concordium.GlobalState.SQLiteATI
 
+import Internationalization
 
 data ErrorCode = InternalError | RequestInvalid
     deriving(Eq, Show, Enum)
 
 data Proxy = Proxy !EnvData ConnectionPool
 instance Yesod Proxy where
-  errorHandler e = return $ toTypedContent $ object [
+  errorHandler e = do
+    case e of
+      Yesod.InternalError emsg -> $(logError) emsg
+      _ -> return ()
+    return $ toTypedContent $ object [
         "errorMessage" .= msg,
         "error" .= fromEnum code
       ]
@@ -81,10 +85,11 @@ mkYesod "Proxy" [parseRoutes|
 /submitTransfer/ TransferR PUT
 |]
 
-respond400Error :: ToJSON a => a -> ErrorCode -> Handler TypedContent
-respond400Error err code =
+respond400Error :: ErrorMessage -> ErrorCode -> Handler TypedContent
+respond400Error err code = do
+  i <- internationalize
   sendResponseStatus badRequest400 $
-    object ["errorMessage" .= err,
+    object ["errorMessage" .= i18n i err,
             "error" .= fromEnum code
            ]
 
@@ -97,11 +102,18 @@ runGRPC c k = do
   liftIO ((left show <$> runClient cfg c) `catch` exHandler) >>= \case
     Left err -> do
       $(logError) $ "Internal error accessing GRPC endpoint: " <> Text.pack err
+      i <- internationalize
       sendResponseStatus badGateway502 $ object [
-        "errorMessage" .= Yesod.String "Error accessing the GRPC endpoint",
+        "errorMessage" .= i18n i EMGRPCError,
         "error" .= fromEnum InternalError
         ]
-    Right (Left err) -> respond400Error err RequestInvalid
+    Right (Left err) -> do
+      $(logError) $ "GRPC call failed: " <> Text.pack err
+      i <- internationalize
+      sendResponseStatus badGateway502 $ object [
+        "errorMessage" .= i18n i EMGRPCError,
+        "error" .= fromEnum InternalError
+        ]
     Right (Right a) -> k a
 
 
@@ -150,15 +162,15 @@ getSimpleTransferCostR = sendResponse $ object ["cost" .= Yesod.Number 59]
 putCredentialR :: Handler TypedContent
 putCredentialR = 
   connect rawRequestBody (sinkParserEither json') >>= \case
-    Left err -> respond400Error (show err) RequestInvalid
+    Left err -> respond400Error (EMParseError (show err)) RequestInvalid
     Right credJSON ->
       case fromJSON credJSON of
-        Error err -> respond400Error err RequestInvalid
+        Error err -> respond400Error (EMParseError err) RequestInvalid
         Success cdi -> do
           runGRPC (sendTransactionToBaker (CredentialDeployment cdi) defaultNetId) $ \case
             False -> do -- this case cannot happen at this time
               $(logError) "Credential rejected by node."
-              respond400Error ("Credential rejected by node." :: Text.Text) RequestInvalid
+              respond400Error EMCredentialRejected RequestInvalid
             True -> 
               sendResponse (object ["submissionId" .= (getHash (CredentialDeployment cdi) :: TransactionHash)])
 
@@ -174,16 +186,16 @@ decodeBase16 t =
 putTransferR :: Handler TypedContent
 putTransferR = 
   connect rawRequestBody (sinkParserEither json') >>= \case
-    Left err -> respond400Error (show err) RequestInvalid
+    Left err -> respond400Error (EMParseError (show err)) RequestInvalid
     Right txJSON ->
       case parse transferParser txJSON  of
-        Error err -> respond400Error err RequestInvalid
+        Error err -> respond400Error (EMParseError err) RequestInvalid
         Success tx -> do
           $(logInfo) (Text.pack (show tx))
           runGRPC (sendTransactionToBaker (NormalTransaction tx) defaultNetId) $ \case
             False -> do -- this case cannot happen at this time
               $(logError) "Credential rejected by node."
-              respond400Error ("Credential rejected by node." :: Text.Text) RequestInvalid
+              respond400Error EMCredentialRejected RequestInvalid
             True -> 
               sendResponse (object ["submissionId" .= (getHash (NormalTransaction tx) :: TransactionHash)])
       where transferParser = withObject "Parse transfer request." $ \obj -> do
@@ -193,39 +205,103 @@ putTransferR =
                 Left err -> fail err
                 Right tx -> return tx
 
+
+getSimpleTransactionStatus :: MonadIO m => I18n -> TransactionHash -> ClientMonad m (Either String Value)
+getSimpleTransactionStatus i trHash = do
+    eitherStatus <- getTransactionStatus (Text.pack $ show trHash)
+    return $
+      eitherStatus >>= \case
+        Null -> return $ object ["status" .= String "absent"]
+        Object o -> do
+          parseEither (.: "status") o >>= \case
+            "received" -> return $ object ["status" .= String "received"]
+            "finalized" -> HM.toList <$> parseEither (.: "outcomes") o >>= \case
+              [(bh,outcome)] -> do
+                fields <- outcomeToPairs outcome
+                return $ object $ ["status" .= String "finalized", "blockHashes" .= [bh :: BlockHash]] <> fields
+              _ -> fail "expected exactly one outcome for a finalized transaction"
+            "committed" -> do
+              outcomes <- HM.toList <$> parseEither (.: "outcomes") o
+              fields <- outcomesToPairs (snd <$> outcomes)
+              return $ object $ ["status" .= String "committed", "blockHashes" .= (fst <$> outcomes :: [BlockHash])] <> fields
+            s -> fail ("unexpected \"status\": " <> s)
+        _ -> fail "expected null or object"
+  where
+    outcomeToPairs :: TransactionSummary -> Either String [Pair]
+    outcomeToPairs TransactionSummary{..} = 
+      (["transactionHash" .= tsHash
+      , "sender" .= tsSender
+      , "cost" .= tsCost] <>) <$>
+      case tsType of
+        Nothing -> -- credential deployment
+          case tsResult of
+            TxSuccess [AccountCreated {}, _] ->
+              return ["outcome" .= String "success"]
+            TxSuccess [CredentialDeployed {}] ->
+              return ["outcome" .= String "success"]
+            es ->
+              Left $ "Unexpected outcome of credential deployment: " ++ show es
+        Just TTTransfer -> 
+          case tsResult of
+            TxSuccess [Transferred{etTo = AddressAccount addr,..}] ->
+              return ["outcome" .= String "success", "to" .= addr, "amount" .= etAmount]
+            TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
+            es ->
+              Left $ "Unexpected outcome of simple transfer: " ++ show es
+        _ ->
+          Left "Unsupported transaction type for simple statuses."
+    outcomesToPairs :: [TransactionSummary] -> Either String [Pair]
+    outcomesToPairs l = do
+      outcomes <- mapM outcomeToPairs l
+      case outcomes of
+        [] -> Left "Expected at least one transaction outcome for a committed transaction"
+        [o] -> return o
+        (h:r)
+          | all (h==) r -> return h
+          | otherwise -> return ["outcome" .= String "ambiguous"]
+
 -- Get the status of the submission.
 getSubmissionStatusR :: Text -> Handler TypedContent
 getSubmissionStatusR submissionId =
   case readMaybe (Text.unpack submissionId) of
-    Nothing -> respond400Error ("Malformed transaction hash." :: Text.Text) RequestInvalid
-    Just txHash -> runGRPC (getSimpleTransactionStatus txHash) (sendResponse . toJSON)
+    Nothing -> respond400Error EMMalformedTransaction RequestInvalid
+    Just txHash -> do
+      i <- internationalize
+      runGRPC (getSimpleTransactionStatus i txHash) (sendResponse . toJSON)
 
 getAccountTransactionsR :: Text -> Handler TypedContent
-getAccountTransactionsR addrText =
+getAccountTransactionsR addrText = do
+  i <- internationalize
   case addressFromText addrText of
-    Left err -> respond400Error ("Malformed account address: " <> Text.pack err) RequestInvalid
+    Left _ -> respond400Error EMMalformedAddress RequestInvalid
     Right addr -> do
+      order <- lookupGetParam "order"
+      let (ordering, ordType :: Text, ordRel) = case order of
+                        Just (Text.unpack . Text.toLower -> ('d':_)) -> (Desc EntryId, "descending", (<.))
+                        _ -> (Asc EntryId, "ascending", (>.))
+      startId :: Maybe EntryId <- (>>= fromPathPiece) <$> lookupGetParam "from"
+      let (startFilter, fromField) = maybe ([], []) (\sid -> ([ordRel EntryId sid], ["from" .= sid])) startId
       let addrFilter = [EntryAccount ==. S.encode addr]
       limit <- maybe 100 (max 0 . min 1000) . (>>= readMaybe . Text.unpack) <$> lookupGetParam "limit"
-      offset <- maybe 0 (max 0) . (>>= readMaybe . Text.unpack) <$> lookupGetParam "offset"
-      order <- lookupGetParam "order"
-      let (ordering, ordType :: Text) = case order of
-                        Just (Text.unpack . Text.toLower -> ('d':_)) -> (Desc EntryId, "descending")
-                        _ -> (Asc EntryId, "ascending")
-      entries <- runDB $ selectList addrFilter [ordering, LimitTo limit, OffsetBy offset]
-      case mapM (formatEntry addr) entries of
+      entries <- runDB $ selectList (addrFilter <> startFilter) [ordering, LimitTo limit]
+      case mapM (formatEntry i addr) entries of
         Left err -> do
           $(logError) $ "Error decoding transaction: " <> Text.pack err
           sendResponseStatus badGateway502 $ object [
-            "errorMessage" .= Yesod.String "Database error",
+            "errorMessage" .= i18n i EMDatabaseError,
             "error" .= fromEnum InternalError
             ]
-        Right fentries -> sendResponse $ object ["offset" .= offset, "limit" .= limit, "order" .= ordType, "count" .= length fentries, "transactions" .= fentries]
+        Right fentries -> sendResponse $ object $ [
+          "limit" .= limit,
+          "order" .= ordType,
+          "count" .= length fentries,
+          "transactions" .= fentries] <>
+          fromField
 
-formatEntry :: AccountAddress -> Entity Entry -> Either String Value
-formatEntry self = \(entityVal -> Entry{..}) -> do
+formatEntry :: I18n -> AccountAddress -> Entity Entry -> Either String Value
+formatEntry i self = \(Entity key Entry{..}) -> do
   bHash :: BlockHash <- S.decode entryBlock
-  let blockDetails = ["block" .= bHash, "blockTime" .= entryBlockTime]
+  let blockDetails = ["blockHash" .= bHash, "blockTime" .= entryBlockTime]
   transactionDetails <- case entryHash of
     Just tHashBS -> do
       tHash :: TransactionHash <- S.decode tHashBS
@@ -236,17 +312,17 @@ formatEntry self = \(entityVal -> Entry{..}) -> do
               | otherwise -> (object ["type" .= ("account" :: Text), "address" .= sender], False)
             Nothing -> (object ["type" .= ("none" :: Text)], False)
       let (resultDetails, subtotal) = case tsResult of
-            TxSuccess evts -> ((["outcome" .= ("success" :: Text), "events" .= fmap descrEvent evts]
+            TxSuccess evts -> ((["outcome" .= ("success" :: Text), "events" .= fmap (i18n i) evts]
               <> case (tsType, evts) of
                   (Just TTTransfer, [Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr)]) ->
                     ["transferSource" .= fromAddr, "transferDestination" .= toAddr, "transferAmount" .= amt]
                   _ -> []), eventSubtotal self evts)
-            TxReject reason -> (["outcome" .= ("reject" :: Text), "rejectReason" .= descrRejectReason reason], Nothing)
-      let details = object $ ["type" .= renderMaybeTransactionType tsType, "description" .= descrMaybeTransactionType tsType] <> resultDetails
+            TxReject reason -> (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason], Nothing)
+      let details = object $ ["type" .= renderMaybeTransactionType tsType, "description" .= i18n i tsType] <> resultDetails
       let costs
             | selfOrigin = case subtotal of
-                Nothing -> ["fee" .= (- toInteger tsCost), "total" .= (- toInteger tsCost)]
-                Just st -> ["subtotal" .= st, "fee" .= (- toInteger tsCost), "total" .= (st - toInteger tsCost)]
+                Nothing -> ["cost" .= toInteger tsCost, "total" .= (- toInteger tsCost)]
+                Just st -> ["subtotal" .= st, "cost" .= toInteger tsCost, "total" .= (st - toInteger tsCost)]
             | otherwise = ["total" .= maybe 0 id subtotal]
       return $ [
         "origin" .= origin,
@@ -263,9 +339,9 @@ formatEntry self = \(entityVal -> Entry{..}) -> do
           "details" .= object [
             "type" .= ("bakingReward" :: Text),
             "outcome" .= ("success" :: Text),
-            "description" .= descrBakingReward stoBakerId,
-            "events" .= [descrSpecialEvent sto]]]
-  return $ object $ blockDetails <> transactionDetails
+            "description" .= i18n i (ShortDescription sto),
+            "events" .= [i18n i sto]]]
+  return $ object $ ["id" .= key] <> blockDetails <> transactionDetails
 
 renderTransactionType :: TransactionType -> Text
 renderTransactionType TTDeployModule = "deployModule"
@@ -284,96 +360,6 @@ renderTransactionType TTUpdateElectionDifficulty = "updateElectionDifficulty"
 renderMaybeTransactionType :: Maybe TransactionType -> Text
 renderMaybeTransactionType (Just tt) = renderTransactionType tt
 renderMaybeTransactionType Nothing = "deployCredential"
-
-descrBakingReward :: BakerId -> Text
-descrBakingReward bid = "Baking reward for baker " <> descrBaker bid
-
-descrModule :: Core.ModuleRef -> Text
-descrModule = Text.pack . show
-
-descrContractRef :: Core.ModuleRef -> Core.TyName -> Text
-descrContractRef mref (Core.TyName tyname) = descrModule mref <> ":" <> Text.pack (show tyname)
-
-descrAccount :: AccountAddress -> Text
-descrAccount = Text.pack . show
-
-descrInstance :: ContractAddress -> Text
-descrInstance = Text.pack . show
-
-descrAmount :: Amount -> Text
-descrAmount = Text.pack . show
-
-descrBaker :: BakerId -> Text
-descrBaker = Text.pack . show
-
-descrAddress :: Address -> Text
-descrAddress (AddressAccount addr) = descrAccount addr
-descrAddress (AddressContract caddr) = descrInstance caddr
-
-descrRejectReason :: RejectReason -> Text
-descrRejectReason ModuleNotWF = "Typechecking of module failed" -- ^Error raised when typechecking of the module has failed.
-descrRejectReason MissingImports = "Module has missing imports"
-descrRejectReason (ModuleHashAlreadyExists mref) = "A module with the hash " <> descrModule mref <> " already exists"
-descrRejectReason MessageTypeError = "Typechecking of smart contract message failed"
-descrRejectReason ParamsTypeError = "Typechecking of smart contract initial parameters failed"
-descrRejectReason (InvalidAccountReference addr) = "The account " <> descrAccount addr <> " does not exist"
-descrRejectReason (InvalidContractReference mref tyname) = "Invalid smart contract reference: " <> descrContractRef mref tyname
-descrRejectReason (InvalidModuleReference mref) = "Module does not exist: " <> descrModule mref
-descrRejectReason (InvalidContractAddress caddr) = "No smart contract instance exists with address " <> descrInstance caddr
-descrRejectReason (ReceiverAccountNoCredential addr) = "The receiving account (" <> descrAccount addr <> ") has has no valid credential"
-descrRejectReason (ReceiverContractNoCredential caddr) = "The receiving smart contract instance (" <> descrInstance caddr <> "') has no valid credential"
-descrRejectReason (AmountTooLarge addr _) = "The sending account (" <> descrAddress addr <> ") has insufficient funds"
-descrRejectReason SerializationFailure = "Malformed transaction body" -- ^Serialization of the body failed.
-descrRejectReason OutOfEnergy = "Insufficient energy"
-descrRejectReason Rejected = "Rejected by contract logic"
-descrRejectReason (AccountEncryptionKeyAlreadyExists _ _) = "The account encryption key already exists"
-descrRejectReason (NonExistentRewardAccount addr) = "The designated reward account (" <> descrAccount addr <> ") does not exist"
-descrRejectReason InvalidProof = "Invalid proof"
-descrRejectReason (RemovingNonExistentBaker bid) = "Baker does not exist: " <> descrBaker bid
-descrRejectReason (InvalidBakerRemoveSource _) = "Sender is not authorized to remove baker"
-descrRejectReason (UpdatingNonExistentBaker bid) = "Baker does not exist: " <> descrBaker bid
-descrRejectReason (InvalidStakeDelegationTarget bid) = "Baker does not exist: " <> descrBaker bid
-descrRejectReason (DuplicateSignKey _) = "Duplicate baker signature key"
-descrRejectReason (NotFromBakerAccount _ _) = "Sender is not the baker's designated account"
-descrRejectReason NotFromSpecialAccount = "Sender is not authorized to perform chain control actions"
-
-descrTransactionType :: TransactionType -> Text
-descrTransactionType TTDeployModule = "Deploy a module"
-descrTransactionType TTInitContract = "Initialize a smart contract"
-descrTransactionType TTUpdate = "Invoke a smart contract"
-descrTransactionType TTTransfer = "Transfer"
-descrTransactionType TTDeployEncryptionKey = "Deploy account encryption key"
-descrTransactionType TTAddBaker = "Add a baker"
-descrTransactionType TTRemoveBaker = "Remove a baker"
-descrTransactionType TTUpdateBakerAccount = "Update a baker's designated account"
-descrTransactionType TTUpdateBakerSignKey = "Update a baker's signature key"
-descrTransactionType TTDelegateStake = "Delegate stake to a baker"
-descrTransactionType TTUndelegateStake = "Undelegate stake"
-descrTransactionType TTUpdateElectionDifficulty = "Update leadership election difficulty parameter"
-
-descrMaybeTransactionType :: Maybe TransactionType -> Text
-descrMaybeTransactionType (Just tt) = descrTransactionType tt
-descrMaybeTransactionType Nothing = "Deploy an account credential"
-
-descrEvent :: Event -> Text
-descrEvent (ModuleDeployed mref) = "Deployed module " <> descrModule mref
-descrEvent (ContractInitialized mref tyname caddr amt) = "Initialized smart contract " <> descrContractRef mref tyname <> " at address " <> descrInstance caddr <> " with balance " <> descrAmount amt
-descrEvent (Updated _ _ _ _) = "Invoked smart contract"
-descrEvent (Transferred sender amt recv) = "Transferred " <> descrAmount amt <> " from " <> descrAddress sender <> " to " <> descrAddress recv
-descrEvent (AccountCreated addr) = "Created account with address " <> descrAccount addr
-descrEvent (CredentialDeployed _ addr) = "Deployed a credential to account " <> descrAccount addr
-descrEvent (AccountEncryptionKeyDeployed _ addr) = "Deployed an encryption key to account " <> descrAccount addr
-descrEvent (BakerAdded bid) = "Added baker " <> descrBaker bid
-descrEvent (BakerRemoved bid) = "Removed baker " <> descrBaker bid
-descrEvent (BakerAccountUpdated bid addr) = "Updated account for baker " <> descrBaker bid <> " to " <> descrAccount addr
-descrEvent (BakerKeyUpdated bid _) = "Updated key for baker " <> descrBaker bid
-descrEvent (BakerElectionKeyUpdated bid _) = "Updated election key for baker " <> descrBaker bid
-descrEvent (StakeDelegated _ bid) = "Delegated stake to baker " <> descrBaker bid
-descrEvent (StakeUndelegated _ _) = "Undelegated stake"
-descrEvent (ElectionDifficultyUpdated diff) = "Updated leadership election difficulty to " <> Text.pack (show diff)
-
-descrSpecialEvent :: SpecialTransactionOutcome -> Text
-descrSpecialEvent BakingReward{..} = "Award " <> descrAmount stoRewardAmount <> " to baker " <> descrBaker stoBakerId <> " at " <> descrAccount stoBakerAccount
 
 eventSubtotal :: AccountAddress -> [Event] -> Maybe Integer
 eventSubtotal self evts = case catMaybes $ eventCost <$> evts of
