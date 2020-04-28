@@ -282,7 +282,7 @@ getAccountTransactionsR addrText = do
       startId :: Maybe EntryId <- (>>= fromPathPiece) <$> lookupGetParam "from"
       let (startFilter, fromField) = maybe ([], []) (\sid -> ([ordRel EntryId sid], ["from" .= sid])) startId
       let addrFilter = [EntryAccount ==. S.encode addr]
-      limit <- maybe 100 (max 0 . min 1000) . (>>= readMaybe . Text.unpack) <$> lookupGetParam "limit"
+      limit <- maybe 20 (max 0 . min 1000) . (>>= readMaybe . Text.unpack) <$> lookupGetParam "limit"
       entries <- runDB $ selectList (addrFilter <> startFilter) [ordering, LimitTo limit]
       case mapM (formatEntry i addr) entries of
         Left err -> do

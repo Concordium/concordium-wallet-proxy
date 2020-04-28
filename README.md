@@ -202,7 +202,7 @@ The endpoint `/accTransactions/{account address}` retrieves a partial list of tr
 The following parameters are supported:
 - `order`: whether to order the transactions in ascending or descending order of occurrence. A value beginning with `d` or `D` is interpreted as descending; any other (or no) value is interpreted as ascending.
 - `from`: a transaction id. If the order is ascending, return transactions with higher ids than this; if the order is descending, return transactions with lower ids.
-- `limit`: the maximum number of transactions to return; defaults to 100; values above 1000 are treated as 1000.
+- `limit`: the maximum number of transactions to return; defaults to 20; values above 1000 are treated as 1000.
 
 The result is a JSON object with the following fields:
 - `order`: either `"ascending"` or `"descending"` indicating the ordering applied to the transactions.
