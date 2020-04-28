@@ -56,7 +56,7 @@ translation = I18n {..}
 
         i18nEvent (ModuleDeployed mref) = "Deployed module " <> descrModule mref
         i18nEvent (ContractInitialized mref tyname caddr amt) = "Initialized smart contract " <> descrContractRef mref tyname <> " at address " <> descrInstance caddr <> " with balance " <> descrAmount amt
-        i18nEvent (Updated _ _ _ _) = "Invoked smart contract"
+        i18nEvent (Updated target src amt msg) = "Invoked smart contract: source=" <> descrAddress src <> ", target=" <> descrInstance target <> ", amount=" <> descrAmount amt <> ", message=" <> Text.pack (show msg)
         i18nEvent (Transferred sender amt recv) = "Transferred " <> descrAmount amt <> " from " <> descrAddress sender <> " to " <> descrAddress recv
         i18nEvent (AccountCreated addr) = "Created account with address " <> descrAccount addr
         i18nEvent (CredentialDeployed _ addr) = "Deployed a credential to account " <> descrAccount addr
