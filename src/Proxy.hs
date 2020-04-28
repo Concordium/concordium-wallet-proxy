@@ -13,10 +13,9 @@ import qualified Data.ByteString as BS
 import qualified Data.HashMap.Strict as HM
 import Text.Read hiding (String)
 import Control.Arrow (left)
-import Control.Monad.IO.Class   (liftIO)
-import Control.Monad.Fail(MonadFail)
+import Control.Monad.Except
 import Control.Exception (SomeException, catch)
-import Data.Aeson(withObject, object, (.=), fromJSON, Result(..))
+import Data.Aeson(withObject, fromJSON, Result(..))
 import Data.Aeson.Types(parse, parseMaybe, Pair, parseEither)
 import Data.Aeson.Parser(json')
 import qualified Data.Aeson as AE
@@ -219,13 +218,13 @@ getSimpleTransactionStatus i trHash = do
               [(bh,outcome)] -> do
                 fields <- outcomeToPairs outcome
                 return $ object $ ["status" .= String "finalized", "blockHashes" .= [bh :: BlockHash]] <> fields
-              _ -> fail "expected exactly one outcome for a finalized transaction"
+              _ -> throwError "expected exactly one outcome for a finalized transaction"
             "committed" -> do
               outcomes <- HM.toList <$> parseEither (.: "outcomes") o
               fields <- outcomesToPairs (snd <$> outcomes)
               return $ object $ ["status" .= String "committed", "blockHashes" .= (fst <$> outcomes :: [BlockHash])] <> fields
-            s -> fail ("unexpected \"status\": " <> s)
-        _ -> fail "expected null or object"
+            s -> throwError ("unexpected \"status\": " <> s)
+        _ -> throwError "expected null or object"
   where
     outcomeToPairs :: TransactionSummary -> Either String [Pair]
     outcomeToPairs TransactionSummary{..} = 
