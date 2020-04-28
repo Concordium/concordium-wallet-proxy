@@ -60,7 +60,7 @@ extra-deps:
 - th-utilities-0.2.4.0
 
 extra-lib-dirs:
-- ./deps/crypto/rust-src/target/release
+- ./deps/simple-client/deps/crypto/rust-src/target/release
 
 
 # Override default flag values for local packages and extra-deps
