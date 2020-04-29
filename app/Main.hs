@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Main where
 
 import Proxy
@@ -30,7 +31,7 @@ parser = info (helper <*> ((,) <$> backendParser <*> dbOptions))
 
 
 defaultConfig :: GrpcConfig
-defaultConfig = GrpcConfig "localhost" 11109 Nothing Nothing
+defaultConfig = GrpcConfig "localhost" 11109 Nothing Nothing Nothing
 
 -- dbConnString :: String
 -- dbConnString = "host=localhost port=5432 user=concordium dbname=concordium password=concordium"
@@ -47,8 +48,10 @@ runSite port host site = do
 main :: IO ()
 main = do
   (backend, dbOpts) <- execParser parser
+  let logm s = runStderrLoggingT ($logDebug ("[GRPC]: " <> s))
+  let config = GrpcConfig (grpcHost backend) (grpcPort backend) (grpcTarget backend) (grpcRetryNum backend) (Just 30)
   runStderrLoggingT $ withPostgresqlPool (dbConnString dbOpts) 10 $ \dbPool -> liftIO $
-    runExceptT (mkGrpcClient (GrpcConfig (grpcHost backend) (grpcPort backend) (grpcTarget backend) Nothing)) >>= \case
+    runExceptT (mkGrpcClient config (Just logm)) >>= \case
       Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
       Right cfg ->
         runSite 3000 "0.0.0.0" (Proxy cfg dbPool)
