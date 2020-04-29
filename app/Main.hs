@@ -4,7 +4,9 @@ module Main where
 
 import Proxy
 import Yesod
+import Database.Persist.Postgresql
 import qualified Network.Wai.Handler.Warp
+import Data.ByteString(ByteString)
 
 import System.Exit(die)
 import Control.Monad.Except
@@ -15,12 +17,12 @@ import Concordium.Client.Commands
 import Options.Applicative
 
 data DBOptions = DBOptions {
-  dbConnString :: String
+  dbConnString :: ByteString
   }
 
 dbOptions :: Parser DBOptions
 dbOptions = do
-  let dbString = strOption (long "db" <> metavar "STR")
+  let dbString = strOption (long "db" <> metavar "STR" <> help "database connection string")
   DBOptions <$> dbString
 
 parser :: ParserInfo (Backend, DBOptions)
@@ -45,10 +47,11 @@ runSite port host site = do
 
 main :: IO ()
 main = do
-  (backend, dbOptions) <- execParser parser
+  (backend, dbOpts) <- execParser parser
   let logm s = runStderrLoggingT ($logDebug ("[GRPC]: " <> s))
   let config = GrpcConfig (grpcHost backend) (grpcPort backend) (grpcTarget backend) (grpcRetryNum backend) (Just 30)
-  runExceptT (mkGrpcClient config (Just logm)) >>= \case
-    Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
-    Right cfg ->
-      runSite 3000 "0.0.0.0" (Proxy cfg)
+  runStderrLoggingT $ withPostgresqlPool (dbConnString dbOpts) 10 $ \dbPool -> liftIO $
+    runExceptT (mkGrpcClient config (Just logm)) >>= \case
+      Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
+      Right cfg ->
+        runSite 3000 "0.0.0.0" (Proxy cfg dbPool)
