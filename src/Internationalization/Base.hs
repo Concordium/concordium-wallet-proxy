@@ -18,6 +18,8 @@ data ErrorMessage
     | EMMalformedTransaction
     | EMMalformedAddress
     | EMDatabaseError
+    | EMAccountNotFinal
+    | EMConfigurationError
 
 data I18n = I18n {
     i18nRejectReason :: RejectReason -> Text,

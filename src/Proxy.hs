@@ -5,6 +5,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE UndecidableInstances, StandaloneDeriving, DerivingStrategies #-}
 module Proxy where
 
 import qualified Data.ByteString.Base16 as BS16
@@ -22,11 +24,12 @@ import qualified Data.Aeson as AE
 import Data.Conduit(connect)
 import qualified Data.Serialize as S
 import Data.Conduit.Attoparsec  (sinkParserEither)
-import Network.HTTP.Types(badRequest400, badGateway502)
+import Network.HTTP.Types(badRequest400, forbidden403, badGateway502)
 import Yesod hiding (InternalError)
 import qualified Yesod
 import Database.Persist.Sql
 import Data.Maybe(catMaybes)
+import Data.Time.Clock.POSIX
 
 import Data.Text(Text)
 import qualified Data.Text as Text
@@ -37,38 +40,54 @@ import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
 import Concordium.Client.GRPC
-import Concordium.ID.Types (addressFromText)
-import Concordium.GlobalState.SQLiteATI
+import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex)
+import Concordium.Crypto.SignatureScheme (KeyPair)
+import Concordium.GlobalState.SQL.AccountTransactionIndex
+import Concordium.GlobalState.SQL
 
 import Internationalization
 
 data ErrorCode = InternalError | RequestInvalid
     deriving(Eq, Show, Enum)
 
-data Proxy = Proxy !EnvData ConnectionPool
+data Proxy = Proxy {
+  grpcEnvData :: !EnvData,
+  dbConnectionPool :: ConnectionPool,
+  dropAccount :: AccountAddress,
+  dropKeys :: [(KeyIndex, KeyPair)]
+}
 instance Yesod Proxy where
   errorHandler e = do
     case e of
       Yesod.InternalError emsg -> $(logError) emsg
       _ -> return ()
+    i <- internationalize
     return $ toTypedContent $ object [
-        "errorMessage" .= msg,
+        "errorMessage" .= i18n i (EMErrorResponse e),
         "error" .= fromEnum code
       ]
     where
-      (msg, code) = case e of
-        NotFound -> ("Not found", RequestInvalid)
-        Yesod.InternalError{} -> ("Internal server error", InternalError)
-        InvalidArgs{} -> ("Invalid arguments", RequestInvalid)
-        NotAuthenticated -> ("Not logged in", RequestInvalid)
-        (PermissionDenied reason) -> ("Permission denied: " <> reason, RequestInvalid)
-        (BadMethod _) -> ("Bad method", RequestInvalid)
+      code = case e of
+        NotFound -> RequestInvalid
+        Yesod.InternalError{} -> InternalError
+        InvalidArgs{} -> RequestInvalid
+        NotAuthenticated -> RequestInvalid
+        PermissionDenied{} -> RequestInvalid
+        BadMethod{} -> RequestInvalid
+
+-- Database table for GTU drop
+share [mkPersist sqlSettings, mkMigrate "migrateGTURecipient"] [persistLowerCase|
+    GTURecipient
+        account (ByteStringSerialized AccountAddress)  maxlen=32
+        transaction (ByteStringSerialized BareTransaction)
+        UniqueAccount account
+|]
 
 instance YesodPersist Proxy where
     type YesodPersistBackend Proxy = SqlBackend
 
     runDB action = do
-        Proxy _ pool <- getYesod
+        pool <- dbConnectionPool <$> getYesod
         runSqlPool action pool
 
 defaultNetId :: Int
@@ -82,6 +101,7 @@ mkYesod "Proxy" [parseRoutes|
 /submissionStatus/#Text SubmissionStatusR GET
 /submitCredential/ CredentialR PUT
 /submitTransfer/ TransferR PUT
+/testnetGTUDrop/#Text GTUDropR PUT
 |]
 
 respond400Error :: ErrorMessage -> ErrorCode -> Handler TypedContent
@@ -94,7 +114,7 @@ respond400Error err code = do
 
 runGRPC :: ClientMonad IO (Either String a) -> (a -> Handler TypedContent) -> Handler TypedContent
 runGRPC c k = do
-  Proxy cfg _ <- getYesod
+  cfg <- grpcEnvData <$> getYesod
   let
     exHandler :: SomeException -> IO (Either String a)
     exHandler = pure . Left . show
@@ -280,7 +300,7 @@ getAccountTransactionsR addrText = do
                         _ -> (Asc EntryId, "ascending", (>.))
       startId :: Maybe EntryId <- (>>= fromPathPiece) <$> lookupGetParam "from"
       let (startFilter, fromField) = maybe ([], []) (\sid -> ([ordRel EntryId sid], ["from" .= sid])) startId
-      let addrFilter = [EntryAccount ==. S.encode addr]
+      let addrFilter = [EntryAccount ==. ByteStringSerialized addr]
       limit <- maybe 20 (max 0 . min 1000) . (>>= readMaybe . Text.unpack) <$> lookupGetParam "limit"
       entries <- runDB $ selectList (addrFilter <> startFilter) [ordering, LimitTo limit]
       case mapM (formatEntry i addr) entries of
@@ -299,11 +319,11 @@ getAccountTransactionsR addrText = do
 
 formatEntry :: I18n -> AccountAddress -> Entity Entry -> Either String Value
 formatEntry i self = \(Entity key Entry{..}) -> do
-  bHash :: BlockHash <- S.decode entryBlock
-  let blockDetails = ["blockHash" .= bHash, "blockTime" .= entryBlockTime]
+  let bHash = unBSS entryBlock
+  let blockDetails = ["blockHash" .= bHash, "blockTime" .= timestampToSeconds entryBlockTime]
   transactionDetails <- case entryHash of
     Just tHashBS -> do
-      tHash :: TransactionHash <- S.decode tHashBS
+      let tHash = unBSS tHashBS
       TransactionSummary{..} :: TransactionSummary <- AE.eitherDecodeStrict entrySummary
       let (origin, selfOrigin) = case tsSender of
             Just sender
@@ -377,3 +397,141 @@ eventSubtotal self evts = case catMaybes $ eventCost <$> evts of
       (False, True) -> Just (toInteger etAmount)
       (False, False) -> Nothing
     eventCost _ = Nothing
+
+
+
+{-
+1.  Lookup the account on the chain
+        - If it's not finalized, AccountNotFinal
+2.  Lookup the account in the database
+    A. If there is an entry,
+        A.1. Query the send account's last finalized nonce
+        A.2. determine the state of the transaction
+        - finalized, success: report complete
+        - finalized, failed: remove db entry; retry 2.
+        - committed/pending: report in progress (can return transaction hash for query)
+        - absent:
+            - if the transaction is expired or the nonce is below the next nonce, delete the DB entry; retry 2.
+            - otherwise, resend the transaction and report in progress.
+    B. If there is no entry
+        B.1. query the sender's next available nonce
+        B.2. produce/sign the transaction
+        B.3. store the transaction in the database
+            - on failure, retry from 2
+        B.4. submit the transaction and report in progress.
+-}
+
+dropAmount :: Amount
+dropAmount = 1000000
+
+dropEnergy :: Energy
+dropEnergy = 1000
+
+putGTUDropR :: Text -> Handler TypedContent
+putGTUDropR addrText = do
+    i <- internationalize
+    case addressFromText addrText of
+      Left _ -> respond400Error EMMalformedAddress RequestInvalid
+      Right addr -> runGRPC (doGetAccInfo addrText) $ \case
+          -- Account is not finalized
+          Nothing -> sendResponseStatus forbidden403 $ object
+                      ["errorMessage" .= i18n i EMAccountNotFinal,
+                       "error" .= fromEnum RequestInvalid]
+          -- Account is finalized, so try the drop
+          Just _ -> tryDrop addr
+
+  where
+    accountToText = Text.decodeUtf8 . addressToBytes
+    doGetAccInfo :: Text -> ClientMonad IO (Either String (Maybe (Nonce, Amount)))
+    doGetAccInfo t = do
+      status <- either fail return =<< getConsensusStatus
+      lastFinBlock <- liftResult $ parse readLastFinalBlock status
+      ai <- getAccountInfo t lastFinBlock
+      return $ parseMaybe (withObject "account info" $ \o -> (,) <$> (o .: "accountNonce") <*> (o .: "accountAmount")) <$> ai
+    -- Determine if the transaction is or could become
+    -- successfully finalized.  Returns False if the
+    -- transaction is absent or is finalized but failed.
+    doIsTransactionOK trHash = do
+      eitherStatus <- getTransactionStatus (Text.pack $ show trHash)
+      return $
+        eitherStatus >>= \case
+          Null -> return False
+          Object o -> parseEither (.: "status") o >>= \case
+            "received" -> return True
+            "finalized" -> HM.toList <$> parseEither (.: "outcomes") o >>= \case
+              [(_::BlockHash,TransactionSummary{..})] ->
+                case tsResult of
+                  TxSuccess{} -> return True
+                  TxReject{} -> return False
+              _ -> throwError "expected exactly one outcome for a finalized transaction"
+            "committed" -> return True
+            s -> throwError ("unexpected \"status\": " <> s)
+          _ -> throwError "expected null or object"
+    sendTransaction transaction
+      = runGRPC (sendTransactionToBaker (NormalTransaction transaction) defaultNetId) $ \case
+          False -> do -- this case cannot happen at this time
+            $(logError) "Credential rejected by node."
+            respond400Error EMCredentialRejected RequestInvalid
+          True -> 
+            sendResponse (object ["submissionId" .= (getHash (NormalTransaction transaction) :: TransactionHash)])
+    liftResult (Success s) = return s
+    liftResult (Error err) = fail err
+    configErr = do
+      i <- internationalize
+      sendResponseStatus badGateway502 $ object [
+        "errorMessage" .= i18n i EMConfigurationError,
+        "error" .= fromEnum InternalError
+        ]
+    tryDrop addr = do
+      Proxy{..} <- getYesod
+      let getNonce = (>>= parseEither (withObject "nonce" (.: "nonce"))) <$> getNextAccountNonce (accountToText dropAccount)
+      -- Determine if there is already a GTU drop entry for this account
+      rcpRecord <- runDB $ getBy (UniqueAccount (ByteStringSerialized addr))
+      case rcpRecord of
+        -- If there is no entry, try the drop
+        Nothing -> runGRPC getNonce $ \nonce -> do
+          currentTime <- liftIO $ round <$> getPOSIXTime
+          let
+            payload = Transfer (AddressAccount addr) dropAmount
+            btrPayload = encodePayload payload
+            btrHeader = TransactionHeader {
+              thSender = dropAccount,
+              thNonce = nonce,
+              thEnergyAmount = dropEnergy,
+              thPayloadSize = payloadSize btrPayload,
+              thExpiry = TransactionExpiryTime $ currentTime + 300
+            }
+            transaction = signTransaction dropKeys btrHeader btrPayload
+          mk <- runDB $ insertUnique (GTURecipient (ByteStringSerialized addr) (ByteStringSerialized transaction))
+          case mk of
+            -- There is already a transaction, so retry.
+            Nothing -> tryDrop addr
+            Just _ -> sendTransaction transaction
+        Just (Entity key (GTURecipient _ (ByteStringSerialized transaction))) ->
+          runGRPC (doGetAccInfo (accountToText dropAccount)) $ \case
+              Nothing -> do
+                $(logError) $ "Could not get GTU drop account info."
+                configErr
+              Just (lastFinNonce, lastFinAmt) -> do
+                let trHash = getHash (NormalTransaction transaction) :: TransactionHash
+                runGRPC (doIsTransactionOK trHash) $ \case
+                  True -> sendResponse (object ["submissionId" .= trHash])
+                  False
+                    | lastFinAmt < dropAmount + fromIntegral dropEnergy
+                      -> do
+                        $(logError) $ "GTU drop account has insufficient funds"
+                        configErr
+                    | lastFinNonce > thNonce (btrHeader transaction)
+                      -> do
+                        -- Given the nonce, the transaction is no good. Delete and try again.
+                        runDB $ delete key
+                        tryDrop addr
+                    | otherwise
+                      -> do
+                        currentTime <- liftIO $ round <$> getPOSIXTime
+                        if thExpiry (btrHeader transaction) < TransactionExpiryTime currentTime then do
+                          runDB $ delete key
+                          tryDrop addr
+                        else sendTransaction transaction
+
+

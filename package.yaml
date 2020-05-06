@@ -51,7 +51,7 @@ dependencies:
 - http-types >= 0.12
 - yesod >= 1.6
 - warp >= 3.2
-
+- time
 - simple-client
 
 default-extensions:
