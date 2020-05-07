@@ -11,7 +11,7 @@ The wallet proxy provides the following endpoints:
 * `PUT /submitCredential`: deploy a credential/create an account
 * `PUT /submitTransfer`: perform a simple transfer
 * `GET /accTransactions/{accountNumer}`: get the transactions affecting an account
-
+* `PUT /testnetGTUDrop/{accountNumber}`: request a GTU drop to the specified account
 
 ### Errors
 
@@ -348,3 +348,21 @@ $ curl -XGET http://localhost:3000/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8Ajup
   "order": "ascending"
 }
 ```
+
+## Testnet GTU Drop
+
+Request a GTU drop to the specified account.
+On success, this returns a JSON object with the field `submissionId`, which contains a transaction hash that may be used to query the status of the drop transaction via the `/submissionStatus` endpoint.
+
+
+```console
+$ curl -XPUT http://localhost:3000/testnetGTUDrop/3KudzzbqRPyHVFEzZnZCUdK2ixr1SFLRVRm6sTfEvQv2N3A8h6
+{"submissionId":"76031716c829f3e7e95efda77558631d348a483e3317e3d66f3cac3038e5e757"}
+```
+
+The operation is idempotent: only one drop will be issued per account.
+If for some reason the drop fails, subsequent calls could return a new `submissionId`.
+(This is unlikely under normal circumstances, but could result from racing concurrent requests.)
+
+If the account address is well-formed, but the account does not exist in a finalized state on the chain, this call fails with a **404 Not found** status code.
+

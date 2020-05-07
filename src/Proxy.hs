@@ -24,7 +24,7 @@ import qualified Data.Aeson as AE
 import Data.Conduit(connect)
 import qualified Data.Serialize as S
 import Data.Conduit.Attoparsec  (sinkParserEither)
-import Network.HTTP.Types(badRequest400, forbidden403, badGateway502)
+import Network.HTTP.Types(badRequest400, notFound404, badGateway502)
 import Yesod hiding (InternalError)
 import qualified Yesod
 import Database.Persist.Sql
@@ -40,6 +40,7 @@ import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
 import Concordium.Client.GRPC
+import Concordium.Client.Types.Transaction (simpleTransferEnergyCost)
 import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex)
 import Concordium.Crypto.SignatureScheme (KeyPair)
 import Concordium.GlobalState.SQL.AccountTransactionIndex
@@ -175,8 +176,11 @@ getAccountNonceR addrText =
       $(logInfo) "Successfully got nonce."
       sendResponse v
 
+-- |Get the cost of a simple transfer with one signature.
+-- TODO: This currently assumes a conversion factor of 1 from
+-- energy to GTU.
 getSimpleTransferCostR :: Handler TypedContent
-getSimpleTransferCostR = sendResponse $ object ["cost" .= Yesod.Number 59]
+getSimpleTransferCostR = sendResponse $ object ["cost" .= Yesod.Number (fromIntegral (simpleTransferEnergyCost 1))]
 
 putCredentialR :: Handler TypedContent
 putCredentialR = 
@@ -400,32 +404,31 @@ eventSubtotal self evts = case catMaybes $ eventCost <$> evts of
 
 
 
-{-
+dropAmount :: Amount
+dropAmount = 1000000
+
+
+{- | Try to execute a GTU drop to the given account.
+
 1.  Lookup the account on the chain
-        - If it's not finalized, AccountNotFinal
+        - If it's not finalized, return 404 Not Found (account not final)
 2.  Lookup the account in the database
     A. If there is an entry,
-        A.1. Query the send account's last finalized nonce
+        A.1. query the send account's last finalized nonce and balance
+          - on failure, return 502 Bad Gateway (configuration error)
         A.2. determine the state of the transaction
-        - finalized, success: report complete
-        - finalized, failed: remove db entry; retry 2.
-        - committed/pending: report in progress (can return transaction hash for query)
-        - absent:
-            - if the transaction is expired or the nonce is below the next nonce, delete the DB entry; retry 2.
-            - otherwise, resend the transaction and report in progress.
+        - received, committed, or successfully finalized: report transaction hash
+        - absent, or unsuccessfully finalized:
+          - if the GTU drop account has insufficient funds, return 502 Bad Gateway (configuration error)
+          - if the transaction nonce is finalized or the transaction is expired, delete the entry and trety from 2
+          - otherwise, send the transaction to the node and report the transaction hash
     B. If there is no entry
         B.1. query the sender's next available nonce
         B.2. produce/sign the transaction
         B.3. store the transaction in the database
             - on failure, retry from 2
-        B.4. submit the transaction and report in progress.
+        B.4. submit the transaction and report transaction hash
 -}
-
-dropAmount :: Amount
-dropAmount = 1000000
-
-dropEnergy :: Energy
-dropEnergy = 1000
 
 putGTUDropR :: Text -> Handler TypedContent
 putGTUDropR addrText = do
@@ -434,7 +437,7 @@ putGTUDropR addrText = do
       Left _ -> respond400Error EMMalformedAddress RequestInvalid
       Right addr -> runGRPC (doGetAccInfo addrText) $ \case
           -- Account is not finalized
-          Nothing -> sendResponseStatus forbidden403 $ object
+          Nothing -> sendResponseStatus notFound404 $ object
                       ["errorMessage" .= i18n i EMAccountNotFinal,
                        "error" .= fromEnum RequestInvalid]
           -- Account is finalized, so try the drop
@@ -484,6 +487,7 @@ putGTUDropR addrText = do
         ]
     tryDrop addr = do
       Proxy{..} <- getYesod
+      let dropEnergy = simpleTransferEnergyCost (length dropKeys)
       let getNonce = (>>= parseEither (withObject "nonce" (.: "nonce"))) <$> getNextAccountNonce (accountToText dropAccount)
       -- Determine if there is already a GTU drop entry for this account
       rcpRecord <- runDB $ getBy (UniqueAccount (ByteStringSerialized addr))
