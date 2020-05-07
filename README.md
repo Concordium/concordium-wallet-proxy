@@ -268,7 +268,6 @@ It consists of the following fields:
   - `"initContract"`
   - `"update"`
   - `"transfer"`
-  - `"deployEncryptionKey"`
   - `"addBaker"`
   - `"removeBaker"`
   - `"updateBakerAccount"`

@@ -43,7 +43,6 @@ translation = I18n {..}
         i18nTransactionType TTInitContract = "Initialize smart contract"
         i18nTransactionType TTUpdate = "Invoke smart contract"
         i18nTransactionType TTTransfer = "Transfer"
-        i18nTransactionType TTDeployEncryptionKey = "Deploy encryption key"
         i18nTransactionType TTAddBaker = "Add baker"
         i18nTransactionType TTRemoveBaker = "Remove baker"
         i18nTransactionType TTUpdateBakerAccount = "Update baker account"
