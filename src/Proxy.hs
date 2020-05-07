@@ -446,8 +446,7 @@ putGTUDropR addrText = do
     accountToText = Text.decodeUtf8 . addressToBytes
     doGetAccInfo :: Text -> ClientMonad IO (Either String (Maybe (Nonce, Amount)))
     doGetAccInfo t = do
-      status <- either fail return =<< getConsensusStatus
-      lastFinBlock <- liftResult $ parse readLastFinalBlock status
+      lastFinBlock <- getLastFinalBlockHash
       ai <- getAccountInfo t lastFinBlock
       return $ parseMaybe (withObject "account info" $ \o -> (,) <$> (o .: "accountNonce") <*> (o .: "accountAmount")) <$> ai
     -- Determine if the transaction is or could become
@@ -472,12 +471,10 @@ putGTUDropR addrText = do
     sendTransaction transaction
       = runGRPC (sendTransactionToBaker (NormalTransaction transaction) defaultNetId) $ \case
           False -> do -- this case cannot happen at this time
-            $(logError) "Credential rejected by node."
-            respond400Error EMCredentialRejected RequestInvalid
+            $(logError) "GTU drop transaction rejected by node."
+            respond400Error EMConfigurationError RequestInvalid
           True -> 
             sendResponse (object ["submissionId" .= (getHash (NormalTransaction transaction) :: TransactionHash)])
-    liftResult (Success s) = return s
-    liftResult (Error err) = fail err
     configErr = do
       i <- internationalize
       sendResponseStatus badGateway502 $ object [
