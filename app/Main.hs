@@ -7,6 +7,12 @@ import Yesod
 import Database.Persist.Postgresql
 import qualified Network.Wai.Handler.Warp
 import Data.ByteString(ByteString)
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Aeson as AE
+import qualified Data.Aeson.Types as AE
+import qualified Data.HashMap.Strict as HM
+import Concordium.ID.Types (AccountAddress, KeyIndex)
+import Concordium.Crypto.SignatureScheme (KeyPair)
 
 import System.Exit(die)
 import Control.Monad.Except
@@ -16,25 +22,21 @@ import Concordium.Client.GRPC
 import Concordium.Client.Commands
 import Options.Applicative
 
-data DBOptions = DBOptions {
-  dbConnString :: ByteString
-  }
+data ProxyConfig = ProxyConfig {
+  pcGRPC :: GrpcConfig,
+  pcDBConnString :: ByteString,
+  pcGTUAccountFile :: FilePath
+}
 
-dbOptions :: Parser DBOptions
-dbOptions = do
-  let dbString = strOption (long "db" <> metavar "STR" <> help "database connection string")
-  DBOptions <$> dbString
-
-parser :: ParserInfo (Backend, DBOptions)
-parser = info (helper <*> ((,) <$> backendParser <*> dbOptions))
-         (fullDesc <> progDesc "Generate transactions for a fixed contract.")
-
-
-defaultConfig :: GrpcConfig
-defaultConfig = GrpcConfig "localhost" 11109 Nothing Nothing Nothing
-
--- dbConnString :: String
--- dbConnString = "host=localhost port=5432 user=concordium dbname=concordium password=concordium"
+parser :: ParserInfo ProxyConfig
+parser = info (helper <*> parseProxyConfig)
+          (fullDesc <> progDesc "Concordium wallet proxy server.")
+  where
+    parseProxyConfig = mkProxyConfig
+      <$> backendParser
+      <*> strOption (long "db" <> metavar "STR" <> help "database connection string")
+      <*> strOption (long "drop-account" <> metavar "FILE" <> help "file with GTU drop account credentials")
+    mkProxyConfig backend = ProxyConfig $ GrpcConfig (grpcHost backend) (grpcPort backend) (grpcTarget backend) (grpcRetryNum backend) (Just 30)
 
 runSite :: YesodDispatch site => Int -> Network.Wai.Handler.Warp.HostPreference -> site -> IO ()
 runSite port host site = do
@@ -45,13 +47,25 @@ runSite port host site = do
         Network.Wai.Handler.Warp.setHost host $
         Network.Wai.Handler.Warp.defaultSettings)
 
+accountParser :: AE.Value -> AE.Parser (AccountAddress, [(KeyIndex, KeyPair)])
+accountParser = AE.withObject "Account keys" $ \v -> do
+          accountAddr <- v AE..: "address"
+          accountData <- v AE..: "accountData"
+          keyMap <- accountData AE..: "keys"
+          return (accountAddr, HM.toList keyMap) 
+
 main :: IO ()
 main = do
-  (backend, dbOpts) <- execParser parser
+  ProxyConfig{..} <- execParser parser
   let logm s = runStderrLoggingT ($logDebug ("[GRPC]: " <> s))
-  let config = GrpcConfig (grpcHost backend) (grpcPort backend) (grpcTarget backend) (grpcRetryNum backend) (Just 30)
-  runStderrLoggingT $ withPostgresqlPool (dbConnString dbOpts) 10 $ \dbPool -> liftIO $
-    runExceptT (mkGrpcClient config (Just logm)) >>= \case
-      Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
-      Right cfg ->
-        runSite 3000 "0.0.0.0" (Proxy cfg dbPool)
+  keyFile <- LBS.readFile pcGTUAccountFile
+  let getKeys = AE.eitherDecode' keyFile >>= AE.parseEither accountParser
+  case getKeys of
+    Left err -> die $ "Cannot parse account keys: " ++ show err
+    Right (dropAccount, dropKeys) -> 
+      runStderrLoggingT $ withPostgresqlPool pcDBConnString 10 $ \dbConnectionPool -> liftIO $ do
+        runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
+        runExceptT (mkGrpcClient pcGRPC (Just logm)) >>= \case
+          Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
+          Right cfg ->
+            runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg, ..}
