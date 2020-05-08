@@ -12,6 +12,10 @@ if [ -n "$WALLET_PROXY_DATABASE" ];
 then
     ARGS="$ARGS --db $WALLET_PROXY_DATABASE"
 fi
+if [ -n "$WALLET_PROXY_ACCOUNT_FILE" ];
+then
+    ARGS="$ARGS --drop-account $WALLET_PROXY_ACCOUNT_FILE"
+fi
 if [ -n "$DB_SLEEP" ];
 then
     echo "Sleeping for $DB_SLEEP"
