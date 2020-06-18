@@ -21,11 +21,14 @@ import Control.Monad.Logger
 import Concordium.Client.GRPC
 import Concordium.Client.Commands
 import Options.Applicative
+import qualified Data.Text.IO as T
 
 data ProxyConfig = ProxyConfig {
   pcGRPC :: GrpcConfig,
   pcDBConnString :: ByteString,
-  pcGTUAccountFile :: FilePath
+  pcGTUAccountFile :: FilePath,
+  pcGlobal :: FilePath,
+  pcIpInfo :: FilePath
 }
 
 parser :: ParserInfo ProxyConfig
@@ -36,6 +39,8 @@ parser = info (helper <*> parseProxyConfig)
       <$> backendParser
       <*> strOption (long "db" <> metavar "STR" <> help "database connection string")
       <*> strOption (long "drop-account" <> metavar "FILE" <> help "file with GTU drop account credentials")
+      <*> strOption (long "global" <> metavar "FILE" <> help "global.json filepath ")
+      <*> strOption (long "ip-info" <> metavar "FILE" <> help "ip_info.json filepath")
     mkProxyConfig backend = ProxyConfig $ GrpcConfig (grpcHost backend) (grpcPort backend) (grpcTarget backend) (grpcRetryNum backend) (Just 30)
 
 runSite :: YesodDispatch site => Int -> Network.Wai.Handler.Warp.HostPreference -> site -> IO ()
@@ -52,20 +57,22 @@ accountParser = AE.withObject "Account keys" $ \v -> do
           accountAddr <- v AE..: "address"
           accountData <- v AE..: "accountData"
           keyMap <- accountData AE..: "keys"
-          return (accountAddr, HM.toList keyMap) 
+          return (accountAddr, HM.toList keyMap)
 
 main :: IO ()
 main = do
   ProxyConfig{..} <- execParser parser
   let logm s = runStderrLoggingT ($logDebug ("[GRPC]: " <> s))
   keyFile <- LBS.readFile pcGTUAccountFile
+  globalInfo <- T.readFile pcGlobal
+  ipInfo <- T.readFile pcIpInfo
   let getKeys = AE.eitherDecode' keyFile >>= AE.parseEither accountParser
   case getKeys of
     Left err -> die $ "Cannot parse account keys: " ++ show err
-    Right (dropAccount, dropKeys) -> 
+    Right (dropAccount, dropKeys) ->
       runStderrLoggingT $ withPostgresqlPool pcDBConnString 10 $ \dbConnectionPool -> liftIO $ do
         runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
-        runExceptT (mkGrpcClient pcGRPC (Just logm)) >>= \case
+        liftIO $ runExceptT (mkGrpcClient pcGRPC (Just logm)) >>= \case
           Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
           Right cfg ->
-            runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg, ..}
+            runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg,..}
