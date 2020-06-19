@@ -12,6 +12,8 @@ The wallet proxy provides the following endpoints:
 * `PUT /submitTransfer`: perform a simple transfer
 * `GET /accTransactions/{accountNumer}`: get the transactions affecting an account
 * `PUT /testnetGTUDrop/{accountNumber}`: request a GTU drop to the specified account
+* `GET /global`: get the global parameters (serves the file [`global.json`](https://gitlab.com/Concordium/genesis-data/-/blob/master/global.json)).
+* `GET /ip_info`: get the identity providers info (serves the file [`identity_providers_with_metadata.json`](https://gitlab.com/Concordium/genesis-data/-/blob/master/identity-providers-with-metadata.json)).
 
 ### Errors
 
@@ -81,7 +83,7 @@ The `nonce` is always the next nonce that should be used provided all the known 
 - If `allFinal` is `True` then all transactions from this account are finlized and the nonce should be considered reliable.
 - Otherwise there are some pending transactions so the nonce returned is a best guess assuming all transctions will be successful.
 
-In case the wallet is the only user of the account then this nonce tracking is reliable. 
+In case the wallet is the only user of the account then this nonce tracking is reliable.
 If there are other concurrent users of the account then there is a chance the
 nonce returned will be wrong, but then it is up to the user to keep track of that themselves.
 
@@ -364,4 +366,3 @@ If for some reason the drop fails, subsequent calls could return a new `submissi
 (This is unlikely under normal circumstances, but could result from racing concurrent requests.)
 
 If the account address is well-formed, but the account does not exist in a finalized state on the chain, this call fails with a **404 Not found** status code.
-
