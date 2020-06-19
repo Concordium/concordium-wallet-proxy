@@ -20,13 +20,13 @@ if [ -n "$WALLET_SERVER_INFOS_FILE" ];
 then
     ARGS="$ARGS --ip-data $WALLET_SERVER_INFOS_FILE"
 else
-    ARGS="$ARGS --ip-data /wallet-server-data/identity-providers-with-metadata.json"
+    ARGS="$ARGS --ip-data /wallet-proxy-data/identity-providers-with-metadata.json"
 fi
 if [ -n "$WALLET_SERVER_GLOBAL_FILE" ];
 then
     ARGS="$ARGS --global $WALLET_SERVER_GLOBAL_FILE"
 else
-    ARGS="$ARGS --global /wallet-server-data/global.json"
+    ARGS="$ARGS --global /wallet-proxy-data/global.json"
 fi
 if [ -n "$DB_SLEEP" ];
 then
