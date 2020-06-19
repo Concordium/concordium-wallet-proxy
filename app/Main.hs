@@ -80,7 +80,7 @@ main = do
     Right (dropAccount, dropKeys) ->
       runStderrLoggingT $ withPostgresqlPool pcDBConnString 10 $ \dbConnectionPool -> liftIO $ do
         runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
-        liftIO $ runExceptT (mkGrpcClient pcGRPC (Just logm)) >>= \case
+        runExceptT (mkGrpcClient pcGRPC (Just logm)) >>= \case
           Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
           Right cfg ->
-            runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg,..}
+            runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg, ..}
