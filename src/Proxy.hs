@@ -56,8 +56,8 @@ data Proxy = Proxy {
   dbConnectionPool :: ConnectionPool,
   dropAccount :: AccountAddress,
   dropKeys :: [(KeyIndex, KeyPair)],
-  globalInfo :: Text,
-  ipInfo :: Text
+  globalInfo :: Value,
+  ipInfo :: Value
 }
 instance Yesod Proxy where
   errorHandler e = do

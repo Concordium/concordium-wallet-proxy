@@ -18,13 +18,9 @@ import System.Exit(die)
 import Control.Monad.Except
 import Control.Monad.Logger
 
-import Concordium.ID.Parameters
 import Concordium.Client.GRPC
 import Concordium.Client.Commands
 import Options.Applicative
-import qualified Data.Text.IO as T
-import Data.Serialize
-import Data.Text.Encoding (encodeUtf8)
 
 data ProxyConfig = ProxyConfig {
   pcGRPC :: GrpcConfig,
@@ -67,13 +63,8 @@ main = do
   ProxyConfig{..} <- execParser parser
   let logm s = runStderrLoggingT ($logDebug ("[GRPC]: " <> s))
   keyFile <- LBS.readFile pcGTUAccountFile
-  globalInfo <- T.readFile pcGlobal
-  case decode $ encodeUtf8 globalInfo :: Either String GlobalContext of
-    Left err -> die $ "Couldn't decode global file: " ++ show err
-    Right _ -> pure ()
-  -- we currently cannot read the whole file from Haskell, but just single IpInfos
-  -- so we will blindly accept and serve the given file for now.
-  ipInfo <- T.readFile pcIpInfo
+  Right globalInfo <- AE.eitherDecode' <$> LBS.readFile pcGlobal
+  Right ipInfo <- AE.eitherDecode' <$> LBS.readFile pcIpInfo
   let getKeys = AE.eitherDecode' keyFile >>= AE.parseEither accountParser
   case getKeys of
     Left err -> die $ "Cannot parse account keys: " ++ show err
