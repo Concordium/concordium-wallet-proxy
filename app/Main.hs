@@ -39,7 +39,7 @@ parser = info (helper <*> parseProxyConfig)
       <*> strOption (long "db" <> metavar "STR" <> help "database connection string")
       <*> strOption (long "drop-account" <> metavar "FILE" <> help "file with GTU drop account credentials")
       <*> strOption (long "global" <> metavar "FILE" <> help "File with global parameters.")
-      <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and private information on the identity provider.")
+      <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and information on the identity providers, together with metadata.")
     mkProxyConfig backend = ProxyConfig $ GrpcConfig (grpcHost backend) (grpcPort backend) (grpcTarget backend) (grpcRetryNum backend) (Just 30)
 
 runSite :: YesodDispatch site => Int -> Network.Wai.Handler.Warp.HostPreference -> site -> IO ()
