@@ -55,7 +55,9 @@ data Proxy = Proxy {
   grpcEnvData :: !EnvData,
   dbConnectionPool :: ConnectionPool,
   dropAccount :: AccountAddress,
-  dropKeys :: [(KeyIndex, KeyPair)]
+  dropKeys :: [(KeyIndex, KeyPair)],
+  globalInfo :: Value,
+  ipInfo :: Value
 }
 instance Yesod Proxy where
   errorHandler e = do
@@ -103,6 +105,8 @@ mkYesod "Proxy" [parseRoutes|
 /submitCredential/ CredentialR PUT
 /submitTransfer/ TransferR PUT
 /testnetGTUDrop/#Text GTUDropR PUT
+/global GlobalFileR GET
+/ip_info IpsR GET
 |]
 
 respond400Error :: ErrorMessage -> ErrorCode -> Handler TypedContent
@@ -151,7 +155,7 @@ getAccountBalanceR addrText =
     runGRPC doGetBal $ \(lastFinInfo, bestInfo) -> do
       let
           getBal :: Value -> Maybe Integer
-          getBal = parseMaybe (withObject "account info" (.: "accountAmount")) 
+          getBal = parseMaybe (withObject "account info" (.: "accountAmount"))
           lastFinBal = getBal lastFinInfo
           bestBal = getBal bestInfo
       $(logInfo) $ "Retrieved account balance for " <> addrText
@@ -164,7 +168,7 @@ getAccountBalanceR addrText =
       status <- either fail return =<< getConsensusStatus
       lastFinBlock <- liftResult $ parse readLastFinalBlock status
       bestBlock <- liftResult $ parse readBestBlock status
-      lastFinInfo <- either fail return =<< getAccountInfo addrText lastFinBlock      
+      lastFinInfo <- either fail return =<< getAccountInfo addrText lastFinBlock
       bestInfo <- either fail return =<< getAccountInfo addrText bestBlock
       return $ Right (lastFinInfo, bestInfo)
     liftResult (Success s) = return s
@@ -183,7 +187,7 @@ getSimpleTransferCostR :: Handler TypedContent
 getSimpleTransferCostR = sendResponse $ object ["cost" .= Yesod.Number (fromIntegral (simpleTransferEnergyCost 1))]
 
 putCredentialR :: Handler TypedContent
-putCredentialR = 
+putCredentialR =
   connect rawRequestBody (sinkParserEither json') >>= \case
     Left err -> respond400Error (EMParseError (show err)) RequestInvalid
     Right credJSON ->
@@ -194,10 +198,10 @@ putCredentialR =
             False -> do -- this case cannot happen at this time
               $(logError) "Credential rejected by node."
               respond400Error EMCredentialRejected RequestInvalid
-            True -> 
+            True ->
               sendResponse (object ["submissionId" .= (getHash (CredentialDeployment cdi) :: TransactionHash)])
 
--- |Use the serialize instance of a type to deserialize 
+-- |Use the serialize instance of a type to deserialize
 decodeBase16 :: (MonadFail m) => Text.Text -> m BS.ByteString
 decodeBase16 t =
     if BS.null rest then return bs
@@ -207,7 +211,7 @@ decodeBase16 t =
 
 
 putTransferR :: Handler TypedContent
-putTransferR = 
+putTransferR =
   connect rawRequestBody (sinkParserEither json') >>= \case
     Left err -> respond400Error (EMParseError (show err)) RequestInvalid
     Right txJSON ->
@@ -219,7 +223,7 @@ putTransferR =
             False -> do -- this case cannot happen at this time
               $(logError) "Credential rejected by node."
               respond400Error EMCredentialRejected RequestInvalid
-            True -> 
+            True ->
               sendResponse (object ["submissionId" .= (getHash (NormalTransaction tx) :: TransactionHash)])
       where transferParser = withObject "Parse transfer request." $ \obj -> do
               sig :: TransactionSignature <- obj .: "signatures"
@@ -251,7 +255,7 @@ getSimpleTransactionStatus i trHash = do
         _ -> throwError "expected null or object"
   where
     outcomeToPairs :: TransactionSummary -> Either String [Pair]
-    outcomeToPairs TransactionSummary{..} = 
+    outcomeToPairs TransactionSummary{..} =
       (["transactionHash" .= tsHash
       , "sender" .= tsSender
       , "cost" .= tsCost] <>) <$>
@@ -264,7 +268,7 @@ getSimpleTransactionStatus i trHash = do
               return ["outcome" .= String "success"]
             es ->
               Left $ "Unexpected outcome of credential deployment: " ++ show es
-        Just TTTransfer -> 
+        Just TTTransfer ->
           case tsResult of
             TxSuccess [Transferred{etTo = AddressAccount addr,..}] ->
               return ["outcome" .= String "success", "to" .= addr, "amount" .= etAmount]
@@ -473,7 +477,7 @@ putGTUDropR addrText = do
           False -> do -- this case cannot happen at this time
             $(logError) "GTU drop transaction rejected by node."
             respond400Error EMConfigurationError RequestInvalid
-          True -> 
+          True ->
             sendResponse (object ["submissionId" .= (getHash (NormalTransaction transaction) :: TransactionHash)])
     configErr = do
       i <- internationalize
@@ -534,4 +538,8 @@ putGTUDropR addrText = do
                           tryDrop addr
                         else sendTransaction transaction
 
+getGlobalFileR :: Handler TypedContent
+getGlobalFileR = toTypedContent . globalInfo <$> getYesod
 
+getIpsR :: Handler TypedContent
+getIpsR = toTypedContent . ipInfo <$> getYesod
