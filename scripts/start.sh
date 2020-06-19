@@ -16,6 +16,18 @@ if [ -n "$WALLET_PROXY_ACCOUNT_FILE" ];
 then
     ARGS="$ARGS --drop-account $WALLET_PROXY_ACCOUNT_FILE"
 fi
+if [ -n "$WALLET_SERVER_INFOS_FILE" ];
+then
+    ARGS="$ARGS --ip-data $WALLET_SERVER_INFOS_FILE"
+else
+    ARGS="$ARGS --ip-data /wallet-server-data/identity-providers-with-metadata.json"
+fi
+if [ -n "$WALLET_SERVER_GLOBAL_FILE" ];
+then
+    ARGS="$ARGS --global $WALLET_SERVER_GLOBAL_FILE"
+else
+    ARGS="$ARGS --global /wallet-server-data/global.json"
+fi
 if [ -n "$DB_SLEEP" ];
 then
     echo "Sleeping for $DB_SLEEP"
