@@ -22,8 +22,8 @@ COPY --from=wallet-proxy-build /bins/wallet-proxy /wallet-proxy
 COPY --from=wallet-proxy-build /libs/* /usr/lib/
 COPY --from=wallet-proxy-build /build/scripts/start.sh /start.sh
 RUN mkdir -p /wallet-proxy-data
-COPY --from=build /genesis-complementary-bundle/identity-providers-with-metadata.json /wallet-proxy-data/identity-providers-with-metadata.json
-COPY --from=build /genesis-complementary-bundle/global.json /wallet-proxy-data/global.json
+COPY --from=wallet-proxy-build /genesis-complementary-bundle/identity-providers-with-metadata.json /wallet-proxy-data/identity-providers-with-metadata.json
+COPY --from=wallet-proxy-build /genesis-complementary-bundle/global.json /wallet-proxy-data/global.json
 RUN chmod a+x /start.sh
 RUN touch client_session_key.aes
 RUN chmod 0777 client_session_key.aes
