@@ -8,7 +8,7 @@ pipeline {
         }
         stage('build') {
             steps {
-                sh 'VERSION_TAG=$(git rev-parse --verify HEAD) && docker build -t 192549843005.dkr.ecr.eu-west-1.amazonaws.com/concordium/wallet-proxy:$VERSION_TAG -f scripts/Dockerfile . && docker push 192549843005.dkr.ecr.eu-west-1.amazonaws.com/concordium/wallet-proxy:$VERSION_TAG'
+                sh 'VERSION_TAG=$(git rev-parse --verify HEAD) && docker build -t 192549843005.dkr.ecr.eu-west-1.amazonaws.com/concordium/wallet-proxy:$VERSION_TAG -f scripts/Dockerfile --ssh default . --no-cache && docker push 192549843005.dkr.ecr.eu-west-1.amazonaws.com/concordium/wallet-proxy:$VERSION_TAG'
             }
         }
     }
