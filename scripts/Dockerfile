@@ -10,7 +10,7 @@ ENV LD_LIBRARY_PATH=/libs
 RUN stack build --copy-bins --ghc-options -j4 --local-bin-path target
 RUN mkdir -p /bins
 RUN cp target/wallet-proxy-exe /bins/wallet-proxy
-
+RUN mkdir -p -m 0600 ~/.ssh && ssh-keyscan gitlab.com >> ~/.ssh/known_hosts
 RUN --mount=type=ssh git clone git@gitlab.com:Concordium/p2p-client.git
 RUN --mount=type=ssh (cd p2p-client && git checkout develop && git submodule update --init --recursive && ./scripts/download-genesis-complementary-bundle.sh)
 
