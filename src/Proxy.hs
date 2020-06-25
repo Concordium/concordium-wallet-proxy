@@ -310,7 +310,9 @@ getAccountTransactionsR addrText = do
       let (startFilter, fromField) = maybe ([], []) (\sid -> ([ordRel EntryId sid], ["from" .= sid])) startId
       let addrFilter = [EntryAccount ==. ByteStringSerialized addr]
       limit <- maybe 20 (max 0 . min 1000) . (>>= readMaybe . Text.unpack) <$> lookupGetParam "limit"
-      entries <- runDB $ selectList (addrFilter <> startFilter) [ordering, LimitTo limit]
+      entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
+        entries :: [Entity Entry] <- selectList (addrFilter <> startFilter) [ordering, LimitTo limit]
+        mapM (\v@(Entity _ x) ->  (v,) . head <$> selectList [SummaryId ==. entrySummary x] []) entries
       case mapM (formatEntry i addr) entries of
         Left err -> do
           $(logError) $ "Error decoding transaction: " <> Text.pack err
@@ -325,28 +327,41 @@ getAccountTransactionsR addrText = do
           "transactions" .= fentries] <>
           fromField
 
-formatEntry :: I18n -> AccountAddress -> Entity Entry -> Either String Value
-formatEntry i self = \(Entity key Entry{..}) -> do
-  let bHash = unBSS entryBlock
-  let blockDetails = ["blockHash" .= bHash, "blockTime" .= timestampToSeconds entryBlockTime]
-  transactionDetails <- case entryHash of
-    Just tHashBS -> do
-      let tHash = unBSS tHashBS
-      TransactionSummary{..} :: TransactionSummary <- AE.eitherDecodeStrict entrySummary
+formatEntry :: I18n -> AccountAddress -> (Entity Entry, Entity Summary) -> Either String Value
+formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
+  let blockDetails = ["blockHash" .= unBSS summaryBlock]
+  transactionDetails <- case AE.fromJSON summarySummary  :: AE.Result TransactionSummary of
+    AE.Error _ -> -- we got a baking reward
+      case AE.fromJSON summarySummary of
+        AE.Error e -> Left e
+        AE.Success v@BakingReward{..} -> return [
+          "origin" .= object ["type" .= ("reward" :: Text)],
+            "total" .= stoRewardAmount,
+            "details" .= object [
+              "type" .= ("bakingReward" :: Text),
+              "outcome" .= ("success" :: Text),
+              "description" .= i18n i (ShortDescription v),
+              "events" .= [i18n i v]
+              ]
+          ]
+    AE.Success TransactionSummary{..} ->  do
       let (origin, selfOrigin) = case tsSender of
             Just sender
               | sender == self -> (object ["type" .= ("self" :: Text)], True)
               | otherwise -> (object ["type" .= ("account" :: Text), "address" .= sender], False)
             Nothing -> (object ["type" .= ("none" :: Text)], False)
-      let (resultDetails, subtotal) = case tsResult of
+
+          (resultDetails, subtotal) = case tsResult of
             TxSuccess evts -> ((["outcome" .= ("success" :: Text), "events" .= fmap (i18n i) evts]
               <> case (tsType, evts) of
                   (Just TTTransfer, [Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr)]) ->
                     ["transferSource" .= fromAddr, "transferDestination" .= toAddr, "transferAmount" .= amt]
                   _ -> []), eventSubtotal self evts)
             TxReject reason -> (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason], Nothing)
-      let details = object $ ["type" .= renderMaybeTransactionType tsType, "description" .= i18n i tsType] <> resultDetails
-      let costs
+
+          details = object $ ["type" .= renderMaybeTransactionType tsType, "description" .= i18n i tsType] <> resultDetails
+
+          costs
             | selfOrigin = case subtotal of
                 Nothing -> ["cost" .= toInteger tsCost, "total" .= (- toInteger tsCost)]
                 Just st -> ["subtotal" .= st, "cost" .= toInteger tsCost, "total" .= (st - toInteger tsCost)]
@@ -355,19 +370,8 @@ formatEntry i self = \(Entity key Entry{..}) -> do
         "origin" .= origin,
         "energy" .= tsEnergyCost,
         "details" .= details,
-        "transactionHash" .= tHash
+        "transactionHash" .= tsHash
         ] <> costs
-    Nothing -> do
-      sto <- AE.eitherDecodeStrict entrySummary
-      return $ case sto of
-        BakingReward{..} -> [
-          "origin" .= object ["type" .= ("reward" :: Text)],
-          "total" .= stoRewardAmount,
-          "details" .= object [
-            "type" .= ("bakingReward" :: Text),
-            "outcome" .= ("success" :: Text),
-            "description" .= i18n i (ShortDescription sto),
-            "events" .= [i18n i sto]]]
   return $ object $ ["id" .= key] <> blockDetails <> transactionDetails
 
 renderTransactionType :: TransactionType -> Text
