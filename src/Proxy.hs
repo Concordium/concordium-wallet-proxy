@@ -386,6 +386,8 @@ renderTransactionType TTUpdateBakerSignKey = "updateBakerSignKey"
 renderTransactionType TTDelegateStake = "delegateStake"
 renderTransactionType TTUndelegateStake = "undelegateStake"
 renderTransactionType TTUpdateElectionDifficulty = "updateElectionDifficulty"
+renderTransactionType TTUpdateBakerAggregationVerifyKey = "updateBakerAggregationVerifyKey"
+renderTransactionType TTUpdateBakerElectionKey = "updateBakerElectionKey"
 
 renderMaybeTransactionType :: Maybe TransactionType -> Text
 renderMaybeTransactionType (Just tt) = renderTransactionType tt
