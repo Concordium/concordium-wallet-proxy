@@ -30,6 +30,7 @@ import qualified Yesod
 import Database.Persist.Sql
 import Data.Maybe(catMaybes)
 import Data.Time.Clock.POSIX
+import qualified Database.Esqueleto as E
 
 import Data.Text(Text)
 import qualified Data.Text as Text
@@ -304,15 +305,26 @@ getAccountTransactionsR addrText = do
     Right addr -> do
       order <- lookupGetParam "order"
       let (ordering, ordType :: Text, ordRel) = case order of
-                        Just (Text.unpack . Text.toLower -> ('d':_)) -> (Desc EntryId, "descending", (<.))
-                        _ -> (Asc EntryId, "ascending", (>.))
+                        Just (Text.unpack . Text.toLower -> ('d':_)) -> (E.desc, "descending", (E.<.))
+                        _ -> (E.asc, "ascending", (E.>.))
       startId :: Maybe EntryId <- (>>= fromPathPiece) <$> lookupGetParam "from"
-      let (startFilter, fromField) = maybe ([], []) (\sid -> ([ordRel EntryId sid], ["from" .= sid])) startId
-      let addrFilter = [EntryAccount ==. ByteStringSerialized addr]
       limit <- maybe 20 (max 0 . min 1000) . (>>= readMaybe . Text.unpack) <$> lookupGetParam "limit"
       entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
-        entries :: [Entity Entry] <- selectList (addrFilter <> startFilter) [ordering, LimitTo limit]
-        mapM (\v@(Entity _ x) ->  (v,) . head <$> selectList [SummaryId ==. entrySummary x] []) entries
+        E.select $ E.from $ \(e, s) ->  do
+          -- Assert join
+          E.where_ (e E.^. EntrySummary E.==. s E.^. SummaryId)
+          -- Filter by address
+          E.where_ (e E.^. EntryAccount E.==. E.val (ByteStringSerialized addr))
+          -- If specified, start from the given starting id
+          maybe
+            (return ())
+            (\sid -> E.where_ (e E.^. EntryId `ordRel` E.val sid))
+            startId
+          -- sort with the requested method or ascending over EntryId.
+          E.orderBy [ordering (e E.^. EntryId)]
+          -- Limit the number of returned rows
+          E.limit limit
+          return (e, s)
       case mapM (formatEntry i addr) entries of
         Left err -> do
           $(logError) $ "Error decoding transaction: " <> Text.pack err
@@ -325,7 +337,7 @@ getAccountTransactionsR addrText = do
           "order" .= ordType,
           "count" .= length fentries,
           "transactions" .= fentries] <>
-          fromField
+          (maybe [] (\sid -> ["from" .= sid]) startId)
 
 formatEntry :: I18n -> AccountAddress -> (Entity Entry, Entity Summary) -> Either String Value
 formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
