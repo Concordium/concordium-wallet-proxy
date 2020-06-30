@@ -10,6 +10,9 @@ variables:
   STACK_ROOT: "${CI_PROJECT_DIR}/.stack"
   GIT_SUBMODULE_STRATEGY: recursive
 
+before-script:
+    - "git config --global url.https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/.insteadOf ssh://git@gitlab.com:22/"
+
 cache:
   paths:
     - .stack
@@ -18,5 +21,4 @@ cache:
 
 wallet-proxy-build:
   script:
-    - "git config --global url.https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/.insteadOf ssh://git@gitlab.com:22/"
     - "stack build --ghc-options -j4 | ts '[%Y-%m-%d %H:%M:%.S]'"
