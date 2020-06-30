@@ -14,7 +14,7 @@ cache:
   paths:
     - .stack
     - .stack-work
-    - target
+    - deps/simple-client/deps/crypto/rust-src/target
 
 wallet-proxy-build:
   script:
