@@ -30,6 +30,7 @@ import qualified Yesod
 import Database.Persist.Sql
 import Data.Maybe(catMaybes)
 import Data.Time.Clock.POSIX
+import qualified Database.Esqueleto as E
 
 import Data.Text(Text)
 import qualified Data.Text as Text
@@ -304,13 +305,26 @@ getAccountTransactionsR addrText = do
     Right addr -> do
       order <- lookupGetParam "order"
       let (ordering, ordType :: Text, ordRel) = case order of
-                        Just (Text.unpack . Text.toLower -> ('d':_)) -> (Desc EntryId, "descending", (<.))
-                        _ -> (Asc EntryId, "ascending", (>.))
+                        Just (Text.unpack . Text.toLower -> ('d':_)) -> (E.desc, "descending", (E.<.))
+                        _ -> (E.asc, "ascending", (E.>.))
       startId :: Maybe EntryId <- (>>= fromPathPiece) <$> lookupGetParam "from"
-      let (startFilter, fromField) = maybe ([], []) (\sid -> ([ordRel EntryId sid], ["from" .= sid])) startId
-      let addrFilter = [EntryAccount ==. ByteStringSerialized addr]
       limit <- maybe 20 (max 0 . min 1000) . (>>= readMaybe . Text.unpack) <$> lookupGetParam "limit"
-      entries <- runDB $ selectList (addrFilter <> startFilter) [ordering, LimitTo limit]
+      entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
+        E.select $ E.from $ \(e, s) ->  do
+          -- Assert join
+          E.where_ (e E.^. EntrySummary E.==. s E.^. SummaryId)
+          -- Filter by address
+          E.where_ (e E.^. EntryAccount E.==. E.val (ByteStringSerialized addr))
+          -- If specified, start from the given starting id
+          maybe
+            (return ())
+            (\sid -> E.where_ (e E.^. EntryId `ordRel` E.val sid))
+            startId
+          -- sort with the requested method or ascending over EntryId.
+          E.orderBy [ordering (e E.^. EntryId)]
+          -- Limit the number of returned rows
+          E.limit limit
+          return (e, s)
       case mapM (formatEntry i addr) entries of
         Left err -> do
           $(logError) $ "Error decoding transaction: " <> Text.pack err
@@ -323,51 +337,52 @@ getAccountTransactionsR addrText = do
           "order" .= ordType,
           "count" .= length fentries,
           "transactions" .= fentries] <>
-          fromField
+          (maybe [] (\sid -> ["from" .= sid]) startId)
 
-formatEntry :: I18n -> AccountAddress -> Entity Entry -> Either String Value
-formatEntry i self = \(Entity key Entry{..}) -> do
-  let bHash = unBSS entryBlock
-  let blockDetails = ["blockHash" .= bHash, "blockTime" .= timestampToSeconds entryBlockTime]
-  transactionDetails <- case entryHash of
-    Just tHashBS -> do
-      let tHash = unBSS tHashBS
-      TransactionSummary{..} :: TransactionSummary <- AE.eitherDecodeStrict entrySummary
+formatEntry :: I18n -> AccountAddress -> (Entity Entry, Entity Summary) -> Either String Value
+formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
+  let blockDetails = ["blockHash" .= unBSS summaryBlock]
+  transactionDetails <- case AE.fromJSON summarySummary of
+    AE.Error e -> Left e
+    AE.Success (Right v@BakingReward{..}) ->
+      return [
+      "origin" .= object ["type" .= ("reward" :: Text)],
+        "total" .= stoRewardAmount,
+        "details" .= object [
+          "type" .= ("bakingReward" :: Text),
+            "outcome" .= ("success" :: Text),
+            "description" .= i18n i (ShortDescription v),
+            "events" .= [i18n i v]
+          ]
+      ]
+    AE.Success (Left TransactionSummary{..}) -> do
       let (origin, selfOrigin) = case tsSender of
-            Just sender
-              | sender == self -> (object ["type" .= ("self" :: Text)], True)
-              | otherwise -> (object ["type" .= ("account" :: Text), "address" .= sender], False)
-            Nothing -> (object ["type" .= ("none" :: Text)], False)
-      let (resultDetails, subtotal) = case tsResult of
-            TxSuccess evts -> ((["outcome" .= ("success" :: Text), "events" .= fmap (i18n i) evts]
-              <> case (tsType, evts) of
-                  (Just TTTransfer, [Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr)]) ->
-                    ["transferSource" .= fromAddr, "transferDestination" .= toAddr, "transferAmount" .= amt]
-                  _ -> []), eventSubtotal self evts)
-            TxReject reason -> (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason], Nothing)
-      let details = object $ ["type" .= renderMaybeTransactionType tsType, "description" .= i18n i tsType] <> resultDetails
-      let costs
+                                   Just sender
+                                     | sender == self -> (object ["type" .= ("self" :: Text)], True)
+                                     | otherwise -> (object ["type" .= ("account" :: Text), "address" .= sender], False)
+                                   Nothing -> (object ["type" .= ("none" :: Text)], False)
+
+          (resultDetails, subtotal) = case tsResult of
+                                        TxSuccess evts -> ((["outcome" .= ("success" :: Text), "events" .= fmap (i18n i) evts]
+                                                           <> case (tsType, evts) of
+                                                              (Just TTTransfer, [Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr)]) ->
+                                                                ["transferSource" .= fromAddr, "transferDestination" .= toAddr, "transferAmount" .= amt]
+                                                              _ -> []), eventSubtotal self evts)
+                                        TxReject reason -> (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason], Nothing)
+
+          details = object $ ["type" .= renderMaybeTransactionType tsType, "description" .= i18n i tsType] <> resultDetails
+
+          costs
             | selfOrigin = case subtotal of
                 Nothing -> ["cost" .= toInteger tsCost, "total" .= (- toInteger tsCost)]
                 Just st -> ["subtotal" .= st, "cost" .= toInteger tsCost, "total" .= (st - toInteger tsCost)]
             | otherwise = ["total" .= maybe 0 id subtotal]
       return $ [
-        "origin" .= origin,
-        "energy" .= tsEnergyCost,
-        "details" .= details,
-        "transactionHash" .= tHash
-        ] <> costs
-    Nothing -> do
-      sto <- AE.eitherDecodeStrict entrySummary
-      return $ case sto of
-        BakingReward{..} -> [
-          "origin" .= object ["type" .= ("reward" :: Text)],
-          "total" .= stoRewardAmount,
-          "details" .= object [
-            "type" .= ("bakingReward" :: Text),
-            "outcome" .= ("success" :: Text),
-            "description" .= i18n i (ShortDescription sto),
-            "events" .= [i18n i sto]]]
+          "origin" .= origin,
+          "energy" .= tsEnergyCost,
+          "details" .= details,
+          "transactionHash" .= tsHash
+          ] <> costs
   return $ object $ ["id" .= key] <> blockDetails <> transactionDetails
 
 renderTransactionType :: TransactionType -> Text
@@ -382,6 +397,8 @@ renderTransactionType TTUpdateBakerSignKey = "updateBakerSignKey"
 renderTransactionType TTDelegateStake = "delegateStake"
 renderTransactionType TTUndelegateStake = "undelegateStake"
 renderTransactionType TTUpdateElectionDifficulty = "updateElectionDifficulty"
+renderTransactionType TTUpdateBakerAggregationVerifyKey = "updateBakerAggregationVerifyKey"
+renderTransactionType TTUpdateBakerElectionKey = "updateBakerElectionKey"
 
 renderMaybeTransactionType :: Maybe TransactionType -> Text
 renderMaybeTransactionType (Just tt) = renderTransactionType tt
