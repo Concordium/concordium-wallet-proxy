@@ -98,16 +98,16 @@ defaultNetId :: Int
 defaultNetId = 100
 
 mkYesod "Proxy" [parseRoutes|
-/accBalance/#Text AccountBalanceR GET
-/accNonce/#Text AccountNonceR GET
-/accTransactions/#Text AccountTransactionsR GET
-/simpleTransferCost SimpleTransferCostR GET
-/submissionStatus/#Text SubmissionStatusR GET
-/submitCredential/ CredentialR PUT
-/submitTransfer/ TransferR PUT
-/testnetGTUDrop/#Text GTUDropR PUT
-/global GlobalFileR GET
-/ip_info IpsR GET
+/v0/accBalance/#Text AccountBalanceR GET
+/v0/accNonce/#Text AccountNonceR GET
+/v0/accTransactions/#Text AccountTransactionsR GET
+/v0/simpleTransferCost SimpleTransferCostR GET
+/v0/submissionStatus/#Text SubmissionStatusR GET
+/v0/submitCredential/ CredentialR PUT
+/v0/submitTransfer/ TransferR PUT
+/v0/testnetGTUDrop/#Text GTUDropR PUT
+/v0/global GlobalFileR GET
+/v0/ip_info IpsR GET
 |]
 
 respond400Error :: ErrorMessage -> ErrorCode -> Handler TypedContent
