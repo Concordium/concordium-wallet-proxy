@@ -3,4 +3,4 @@
 	url = git@gitlab.com:Concordium/consensus/simple-client.git
 [submodule "deps/globalstate-mockup"]
 	path = deps/globalstate-mockup
-	url = git@gitlab.com:Concordium/consensus/globalstate-mockup
+	url = git@gitlab.com:Concordium/consensus/globalstate-mockup.git
