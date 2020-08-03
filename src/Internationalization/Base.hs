@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Internationalization.Base where
 
-import Data.Text(Text)
+import Data.Text(Text,pack)
 import qualified Data.Text as Text
 import Yesod
 
@@ -44,7 +44,7 @@ descrInstance :: ContractAddress -> Text
 descrInstance = Text.pack . show
 
 descrAmount :: Amount -> Text
-descrAmount = Text.pack . show
+descrAmount amount = pack (amountToString amount)
 
 descrBaker :: BakerId -> Text
 descrBaker = Text.pack . show

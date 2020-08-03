@@ -425,7 +425,7 @@ eventSubtotal self evts = case catMaybes $ eventCost <$> evts of
 
 
 dropAmount :: Amount
-dropAmount = 1000000
+dropAmount = 100000000
 
 
 {- | Try to execute a GTU drop to the given account.
