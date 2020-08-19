@@ -1,3 +1,3 @@
 [submodule "deps/simple-client"]
 	path = deps/simple-client
-	url = git@gitlab.com:Concordium/consensus/simple-client.git
+	url = ../../consensus/simple-client.git
