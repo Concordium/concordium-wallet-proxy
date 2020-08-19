@@ -19,7 +19,7 @@ import Control.Monad.Except
 import Control.Monad.Logger
 
 import Concordium.Client.GRPC
-import Concordium.Client.Commands
+import Concordium.Client.Commands as CMDS
 import Options.Applicative
 
 data ProxyConfig = ProxyConfig {
@@ -41,12 +41,12 @@ parser = info (helper <*> parseProxyConfig)
       <*> strOption (long "global" <> metavar "FILE" <> help "File with global parameters.")
       <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and information on the identity providers, together with metadata.")
     mkProxyConfig backend = ProxyConfig $ GrpcConfig
-      (grpcHost backend)
-      (grpcPort backend)
-      (Concordium.Client.Commands.grpcAuthenticationToken backend)
-      (grpcTarget backend)
-      (grpcRetryNum backend)
-      (Just 30)
+                              (CMDS.grpcHost backend)
+                              (CMDS.grpcPort backend)
+                              (CMDS.grpcAuthenticationToken backend)
+                              (CMDS.grpcTarget backend)
+                              (CMDS.grpcRetryNum backend)
+                              (Just 30)
 
 runSite :: YesodDispatch site => Int -> Network.Wai.Handler.Warp.HostPreference -> site -> IO ()
 runSite port host site = do
