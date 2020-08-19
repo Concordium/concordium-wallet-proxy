@@ -155,8 +155,16 @@ getAccountBalanceR :: Text -> Handler TypedContent
 getAccountBalanceR addrText =
     runGRPC doGetBal $ \(lastFinInfo, bestInfo) -> do
       let
-          getBal :: Value -> Maybe Integer
-          getBal = parseMaybe (withObject "account info" (.: "accountAmount"))
+          getBal :: Value -> Maybe Value
+          -- We're doing it in this low-level way to avoid parsing anything that
+          -- is not needed, especially the encrypted amounts, since those are
+          -- fairly expensive to parse.
+          getBal (Object obj) = do
+            publicAmount <- HM.lookup "accountAmount" obj
+            encryptedAmount <- HM.lookup "accountEncryptedAmount" obj
+            return $ object ["accountAmount" .= publicAmount, "accountEncryptedAmount" .= encryptedAmount]
+          getBal _ = Nothing
+
           lastFinBal = getBal lastFinInfo
           bestBal = getBal bestInfo
       $(logInfo) $ "Retrieved account balance for " <> addrText
@@ -184,6 +192,7 @@ getAccountNonceR addrText =
 -- |Get the cost of a simple transfer with one signature.
 -- TODO: This currently assumes a conversion factor of 1 from
 -- energy to GTU.
+-- FIXME: This should return an Amount type, not an integral value.
 getSimpleTransferCostR :: Handler TypedContent
 getSimpleTransferCostR = sendResponse $ object ["cost" .= Yesod.Number (fromIntegral (simpleTransferEnergyCost 1))]
 
@@ -233,7 +242,7 @@ putTransferR =
                 Left err -> fail err
                 Right tx -> return tx
 
-
+-- TODO: Update this for encrypted transfers.
 getSimpleTransactionStatus :: MonadIO m => I18n -> TransactionHash -> ClientMonad m (Either String Value)
 getSimpleTransactionStatus i trHash = do
     eitherStatus <- getTransactionStatus (Text.pack $ show trHash)
