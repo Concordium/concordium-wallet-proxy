@@ -4,8 +4,8 @@
 
 The wallet proxy provides the following endpoints:
 
-* `GET /accBalance/{account number}`: get the balance on an account
-* `GET /accNonce/{account number}`: get the next nonce for an account
+* `GET /accBalance/{account address}`: get the balance on an account
+* `GET /accNonce/{account address}`: get the next nonce for an account
 * `GET /simpleTransferCost`: get the cost of a simple transfer
 * `GET /submissionStatus/{submissionId}`: get the status of a simple transfer or credential deployment
 * `PUT /submitCredential`: deploy a credential/create an account
@@ -49,17 +49,25 @@ The balance on an account can be queried as in the following example:
 
 ```console
 $ curl -XGET localhost:3000/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
-{"currentBalance":959505,"finalizedBalance":969670}
+{"currentBalance":AccountBalance,"finalizedBalance":AccountBalance}
 ```
 
-The result is a JSON object with two optional fields:
+The result is a JSON object with two __optional__ fields:
 - `currentBalance` is the balance on the account in the current best block;
 - `finalizedBalance` is the balance on the account in the most recently finalized block.
 
 If neither field is present, then the account does not currently exist on the chain.
 If only `currentBalance` is present, then the account has been created, but its creation has not yet been finalized.
 Otherwise, both fields will appear.
-(All amounts are integers in the smallest denomination of GTU.)
+
+The `AccountBalance` value is always an object with the following two fields
+both of which will be present
+* `"accountAmount"` which is an Amount type, i.e., a string containing an integral value.
+* `"accountEncryptedAmount"` which is an object with three (mandatory) fields
+  - `"selfAmount"` of type EncryptedAmount, i.e., a hexadecimal string
+  - `"startIndex"` a non-negative 64-bit integer
+  - `"incomingAmounts"` an array of `EncryptedAmount` values, i.e., an array of
+    hexadecimal strings. The array could be empty, but is always present.
 
 ## Account Nonce
 
