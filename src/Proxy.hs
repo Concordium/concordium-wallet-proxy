@@ -399,6 +399,12 @@ renderTransactionType TTUndelegateStake = "undelegateStake"
 renderTransactionType TTUpdateElectionDifficulty = "updateElectionDifficulty"
 renderTransactionType TTUpdateBakerAggregationVerifyKey = "updateBakerAggregationVerifyKey"
 renderTransactionType TTUpdateBakerElectionKey = "updateBakerElectionKey"
+renderTransactionType TTUpdateAccountKeys = "updateAccountKeys"
+renderTransactionType TTAddAccountKeys = "addAccountKeys"
+renderTransactionType TTRemoveAccountKeys = "removeAccountKeys"
+renderTransactionType TTEncryptedAmountTransfer = "encryptedAmountTransfer"
+renderTransactionType TTTransferToEncrypted = "transferToEncrypted"
+renderTransactionType TTTransferToPublic = "transferToPublic"
 
 renderMaybeTransactionType :: Maybe TransactionType -> Text
 renderMaybeTransactionType (Just tt) = renderTransactionType tt
@@ -513,7 +519,7 @@ putGTUDropR addrText = do
         Nothing -> runGRPC getNonce $ \nonce -> do
           currentTime <- liftIO $ round <$> getPOSIXTime
           let
-            payload = Transfer (AddressAccount addr) dropAmount
+            payload = Transfer addr dropAmount
             btrPayload = encodePayload payload
             btrHeader = TransactionHeader {
               thSender = dropAccount,
