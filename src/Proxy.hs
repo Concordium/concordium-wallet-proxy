@@ -49,7 +49,7 @@ import Concordium.GlobalState.SQL
 
 import Internationalization
 
-data ErrorCode = InternalError | RequestInvalid
+data ErrorCode = InternalError | RequestInvalid | DataNotFound
     deriving(Eq, Show, Enum)
 
 data Proxy = Proxy {
@@ -100,6 +100,7 @@ defaultNetId = 100
 mkYesod "Proxy" [parseRoutes|
 /v0/accBalance/#Text AccountBalanceR GET
 /v0/accNonce/#Text AccountNonceR GET
+/v0/accEncryptionKey/#Text AccountEncryptionKeyR GET
 /v0/accTransactions/#Text AccountTransactionsR GET
 /v0/simpleTransferCost SimpleTransferCostR GET
 /v0/submissionStatus/#Text SubmissionStatusR GET
@@ -116,6 +117,14 @@ respond400Error err code = do
   sendResponseStatus badRequest400 $
     object ["errorMessage" .= i18n i err,
             "error" .= fromEnum code
+           ]
+
+respond404Error :: ErrorMessage -> Handler TypedContent
+respond404Error err = do
+  i <- internationalize
+  sendResponseStatus notFound404 $
+    object ["errorMessage" .= i18n i err,
+            "error" .= fromEnum DataNotFound
            ]
 
 runGRPC :: ClientMonad IO (Either String a) -> (a -> Handler TypedContent) -> Handler TypedContent
@@ -188,6 +197,25 @@ getAccountNonceR addrText =
     runGRPC (getNextAccountNonce addrText) $ \v -> do
       $(logInfo) "Successfully got nonce."
       sendResponse v
+
+-- |Get the account encryption key at the best block.
+-- Return '404' status code if account does not exist in the best block at the moment.
+getAccountEncryptionKeyR :: Text -> Handler TypedContent
+getAccountEncryptionKeyR addrText = do
+  runGRPC doGetEncryptionKey $ \accInfo -> do
+    let encryptionKey :: Maybe Value -- Value in order to avoid parsing the key, which is expensive.
+        encryptionKey = parseMaybe (withObject "AccountInfo" (.: "accountEncryptionKey")) accInfo
+    case encryptionKey of
+      Nothing -> do
+        $(logInfo) $ "Account not found for 'accountEncryptionKey' request: " <> addrText
+        respond404Error EMAccountDoesNotExist
+      Just key -> do
+        $(logInfo) $ "Retrieved account encryption key for " <> addrText
+                <> ": " <> Text.pack (show encryptionKey)
+        sendResponse (object [ "accountEncryptionKey" .= key ])
+
+  where doGetEncryptionKey = withBestBlockHash Nothing (getAccountInfo addrText)
+
 
 -- |Get the cost of a simple transfer with one signature.
 -- TODO: This currently assumes a conversion factor of 1 from
