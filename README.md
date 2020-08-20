@@ -4,18 +4,18 @@
 
 The wallet proxy provides the following endpoints:
 
-* `GET /accBalance/{account address}`: get the balance on an account
-* `GET /accNonce/{account address}`: get the next nonce for an account
-* `GET /accEncryptionKey/{account address}`: get the public encryption key of
+* `GET /v0/accBalance/{account address}`: get the balance on an account
+* `GET /v0/accNonce/{account address}`: get the next nonce for an account
+* `GET /v0/accEncryptionKey/{account address}`: get the public encryption key of
   the account
-* `GET /simpleTransferCost`: get the cost of a simple transfer
-* `GET /submissionStatus/{submissionId}`: get the status of a simple transfer or credential deployment
-* `PUT /submitCredential`: deploy a credential/create an account
-* `PUT /submitTransfer`: perform a simple transfer
-* `GET /accTransactions/{accountNumer}`: get the transactions affecting an account
-* `PUT /testnetGTUDrop/{accountNumber}`: request a GTU drop to the specified account
-* `GET /global`: get the global parameters (serves the file [`global.json`](https://gitlab.com/Concordium/genesis-data/-/blob/master/global.json)).
-* `GET /ip_info`: get the identity providers info (serves the file [`identity_providers_with_metadata.json`](https://gitlab.com/Concordium/genesis-data/-/blob/master/identity-providers-with-metadata.json)).
+* `GET /v0/simpleTransferCost`: get the cost of a simple transfer
+* `GET /v0/submissionStatus/{submissionId}`: get the status of a simple transfer or credential deployment
+* `PUT /v0/submitCredential`: deploy a credential/create an account
+* `PUT /v0/submitTransfer`: perform a simple transfer
+* `GET /v0/accTransactions/{accountNumer}`: get the transactions affecting an account
+* `PUT /v0/testnetGTUDrop/{accountNumber}`: request a GTU drop to the specified account
+* `GET /v0/global`: get the global parameters (serves the file [`global.json`](https://gitlab.com/Concordium/genesis-data/-/blob/master/global.json)).
+* `GET /v0/ip_info`: get the identity providers info (serves the file [`identity_providers_with_metadata.json`](https://gitlab.com/Concordium/genesis-data/-/blob/master/identity-providers-with-metadata.json)).
 
 ### Errors
 
@@ -46,6 +46,23 @@ Where the error codes currently returned are
 Error messages and textual descriptions will be localized by the proxy based on the `Accept-Language` header.
 (Currently, only `en` is available.)
 Languages can also be specified with the `_LANG` GET-parameter and/or a `_LANG` cookie; these have higher precedence than `Accept-Language`.
+
+## Identity provider information
+
+The data served on the `v0/ip_info` endpoint is a JSON array of objects. Each
+object is of the form
+```json
+{
+    "ipInfo": {...},
+    "arsInfos": {...},
+    "metadata": {
+        "issuanceStart": URL,
+        "icon": "base64 encoded png image"
+    }
+}
+```
+All fields are mandatory.
+The "ipInfo" and "arsInfos" objects are needed when creating identity object requests, and identity objects.
 
 ## Account Balance
 
