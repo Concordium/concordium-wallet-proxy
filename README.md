@@ -6,6 +6,8 @@ The wallet proxy provides the following endpoints:
 
 * `GET /accBalance/{account address}`: get the balance on an account
 * `GET /accNonce/{account address}`: get the next nonce for an account
+* `GET /accEncryptionKey/{account address}`: get the public encryption key of
+  the account
 * `GET /simpleTransferCost`: get the cost of a simple transfer
 * `GET /submissionStatus/{submissionId}`: get the status of a simple transfer or credential deployment
 * `PUT /submitCredential`: deploy a credential/create an account
@@ -36,6 +38,8 @@ Where the error codes currently returned are
   ```json
   {"error":1,"errorMessage":"Malformed transaction hash."}
   ```
+- 2 for when the request is well-formed, but the requested object could not be
+  found, e.g., the account does not exist in the expected place.
 
 ### Language & localization
 
@@ -94,6 +98,24 @@ The `nonce` is always the next nonce that should be used provided all the known 
 In case the wallet is the only user of the account then this nonce tracking is reliable.
 If there are other concurrent users of the account then there is a chance the
 nonce returned will be wrong, but then it is up to the user to keep track of that themselves.
+
+## Account Encryption key
+
+Returns the public key of the account that can be used when making encrypted
+transfers. If the request is invalid, i.e., malformed address, the status code
+in 500+ range is returned, if the request is valid, but the account does not
+exist, a status code 404 is returned. In both these cases the returned object is
+of the form of a generic error object, described above.
+
+In case of success, the return code is 200, and the return value is an object of
+the form
+
+```json
+{
+  "accountEncryptionKey": String,
+}
+```
+The field is mandatory, and the value will always be a hex-encoded public key.
 
 ## Simple Transfer Cost
 
