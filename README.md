@@ -8,7 +8,7 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/accNonce/{account address}`: get the next nonce for an account
 * `GET /v0/accEncryptionKey/{account address}`: get the public encryption key of
   the account
-* `GET /v0/simpleTransferCost`: get the cost of a simple transfer
+* `GET /v0/transactionCost`: get the cost of a simple transfer
 * `GET /v0/submissionStatus/{submissionId}`: get the status of a simple transfer or credential deployment
 * `PUT /v0/submitCredential`: deploy a credential/create an account
 * `PUT /v0/submitTransfer`: perform a simple transfer
@@ -134,17 +134,16 @@ the form
 ```
 The field is mandatory, and the value will always be a hex-encoded public key.
 
-## Simple Transfer Cost
+## Transaction cost.
 
-The cost for a simple transfer using one signature can be obtained as follows:
-
-```console
-$ curl -XGET localhost:3000/simpleTransferCost
-{"cost":59}
-```
-
-The result is a JSON object with one field `cost` that gives the current estimated cost of such a transaction in the smallest denomination of GTU.
-
+The cost for a transaction, both in energy and GTU is obtained on the
+`v0/transctionCost` endpoint. The request must have a parameter `type`, and an
+optional parameter `numSignatures`, which defaults to `1`. The currently
+supported types are `simpleTransfer` and `encryptedTransfer`. In case of success
+the response will always be a JSON object with required fields
+- `"cost"` which is an Amount of GTU this transfer will cost at current
+  conversion rates
+- `"energy"` which is the energy that is required be supplied for execution of this transaction.
 
 ## Submission Status
 

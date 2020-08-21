@@ -118,3 +118,4 @@ translation = I18n {..}
         i18nErrorMessage EMAccountNotFinal = "Account creation is not finalized"
         i18nErrorMessage EMConfigurationError = "Server configuration error"
         i18nErrorMessage EMAccountDoesNotExist = "Account does not exist"
+        i18nErrorMessage EMMissingParameter = "Missing parameter"

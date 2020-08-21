@@ -23,6 +23,7 @@ data ErrorMessage
     | EMAccountNotFinal
     | EMConfigurationError
     | EMAccountDoesNotExist
+    | EMMissingParameter
 
 data I18n = I18n {
     i18nRejectReason :: RejectReason -> Text,

@@ -28,7 +28,7 @@ import Network.HTTP.Types(badRequest400, notFound404, badGateway502)
 import Yesod hiding (InternalError)
 import qualified Yesod
 import Database.Persist.Sql
-import Data.Maybe(catMaybes)
+import Data.Maybe(catMaybes, fromMaybe)
 import Data.Time.Clock.POSIX
 import qualified Database.Esqueleto as E
 
@@ -102,7 +102,7 @@ mkYesod "Proxy" [parseRoutes|
 /v0/accNonce/#Text AccountNonceR GET
 /v0/accEncryptionKey/#Text AccountEncryptionKeyR GET
 /v0/accTransactions/#Text AccountTransactionsR GET
-/v0/simpleTransferCost SimpleTransferCostR GET
+/v0/transactionCost TransactionCostR GET
 /v0/submissionStatus/#Text SubmissionStatusR GET
 /v0/submitCredential/ CredentialR PUT
 /v0/submitTransfer/ TransferR PUT
@@ -217,12 +217,33 @@ getAccountEncryptionKeyR addrText = do
   where doGetEncryptionKey = withBestBlockHash Nothing (getAccountInfo addrText)
 
 
--- |Get the cost of a simple transfer with one signature.
--- TODO: This currently assumes a conversion factor of 1 from
+-- |Get the cost of a transaction, based on its type. The transaction type is
+-- given as a "type" parameter. An additional parameter is "numSignatures" that
+-- defaults to one if not present.
+-- 
+-- TODO: This currently assumes a conversion factor of 100 from
 -- energy to GTU.
--- FIXME: This should return an Amount type, not an integral value.
-getSimpleTransferCostR :: Handler TypedContent
-getSimpleTransferCostR = sendResponse $ object ["cost" .= Yesod.Number (fromIntegral (simpleTransferEnergyCost 1))]
+getTransactionCostR :: Handler TypedContent
+getTransactionCostR = do
+  numSignatures <- fromMaybe "1" <$> lookupGetParam "numSignatures"
+  case readMaybe (Text.unpack numSignatures) of
+    Just x | x > 0 -> handleTransactionCost x
+    _ -> respond400Error (EMParseError "Could not parse `numSignatures` value.") RequestInvalid
+
+  where handleTransactionCost x = do
+          lookupGetParam "type" >>= \case
+            Nothing -> respond400Error EMMissingParameter RequestInvalid
+            Just tty -> case Text.unpack tty of
+              "simpleTransfer" -> sendResponse $ object ["cost" .= Amount (100 * fromIntegral (simpleTransferEnergyCost x))
+                                                       , "energy" .= simpleTransferEnergyCost x
+                                                       ]
+              "encryptedTransfer" -> do
+                -- FIXME: Dummy values for a prototype 
+                let dummyCost :: Energy = 30000 -- roughly 30ms of energy
+                sendResponse $ object ["cost" .= Amount (100 * fromIntegral dummyCost)
+                                      , "energy" .= dummyCost
+                                      ]
+              tty' -> respond400Error (EMParseError $ "Could not parse transaction type: " <> tty') RequestInvalid
 
 putCredentialR :: Handler TypedContent
 putCredentialR =
