@@ -87,6 +87,9 @@ both of which will be present
 * `"accountEncryptedAmount"` which is an object with three (mandatory) fields
   - `"selfAmount"` of type EncryptedAmount, i.e., a hexadecimal string
   - `"startIndex"` a non-negative 64-bit integer
+  - `"numAggregated"` (optional) a positive (i.e., >= 1) number indicating how many amounts
+    are aggregated together in the first amount (see section at the end for an
+    explanation). If not present the first amount in the list is a pure incoming amount.
   - `"incomingAmounts"` an array of `EncryptedAmount` values, i.e., an array of
     hexadecimal strings. The array could be empty, but is always present.
 
