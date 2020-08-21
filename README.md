@@ -292,8 +292,24 @@ This is the hash of the transaction.
 This is not present for special transactions, such as rewards.
 
 #### `subtotal` (optional)
-The change in the account's balance due to this transaction, not including the transaction fee.
+The change in the account's public balance due to this transaction, not including the transaction fee.
 This is only present if the origin type is `"self"` and the transaction involves a transfer to or from the account other than the transaction fee.
+
+### `encrypted` (optional)
+The change in the encrypted balance of the account. This is only present if the
+encrypted balance was changed. 
+- If the `origin` field is `account` then this field is an object with required fields
+  - `"encryptedAmount"` which is always a hexadecimal encoding of an encrypted
+    amount, i.e., it is a string.
+  - `"index"` which is always a non-negative integer
+- If the `origin` field is `self` then this field is an object with
+  fields
+  - `"newSelfBalance"` (required) which is always a hexadecimal encoding of an encrypted
+    amount, i.e., it is a string.
+  - `"newStartIndex"` (optional) which, if present, is a non-negative integer
+    that indicates which encrypted amounts were used in this transfer. This is
+    only present if the transaction type is an encrypted amount transfer, or a
+    transfer from secret to public balance.
 
 #### `cost` (optional)
 The cost of performing the transaction, if this cost is paid by the account.
@@ -301,7 +317,7 @@ This is only present if the origin type is `"self"` (since otherwise the account
 When present, this is always a positive value.
 
 #### `total` (required)
-The total change in the account's balance due to the transaction and associated fees.
+The total change in the account's public balance due to the transaction and associated fees.
 A negative value indicates a debit from the account, while a positive value indicates a credit to the account.
 
 #### `energy` (optional)
@@ -413,3 +429,47 @@ If for some reason the drop fails, subsequent calls could return a new `submissi
 (This is unlikely under normal circumstances, but could result from racing concurrent requests.)
 
 If the account address is well-formed, but the account does not exist in a finalized state on the chain, this call fails with a **404 Not found** status code.
+
+
+## Notes on account balances.
+
+Suppose that at time t₀ you query the account balance and get a structure
+```json
+{
+   "selfAmount": s₀
+   "startIndex": i₀
+   "numAggregated": n₀
+   "incomingAmounts": a_{i₀} .. a_{iₙ}
+}
+```
+
+Next time we query we get the account balance like
+
+```json
+{
+   "selfAmount": t₀
+   "startIndex": j₀
+   "numAggregated": m₀
+   "incomingAmounts": b_{j₀} .. b_{jₙ}
+}
+```
+
+The first amounts in the respective lists are aggregation of `n₀` (respectively
+`m₀`) amounts. They are amounts with indices `a_{i₀-m},..,a_{i₀}`
+
+### Case where `selfAmounts` are the same
+
+The only change then would have been the arrival of new incoming encrypted
+amounts. In this case then `j₀ ≥ i₀` and `m₀ ≥ i₀`.
+
+The amount `b_{j₀}` might not yet be seen, however we know that it is the
+aggregation of amounts with indices `b_{j₀-m},..,a_{j₀}`, which we already
+have (partially) decrypted, and then we can count those towards the public
+balance already, while continuing to decrypt the remaining ones.
+
+### Case when `selfAmount` are different
+
+In this case the wallet must have made some action to cause this (or the user
+has used account externally), in both of these cases you can do a similar
+analysis with indices to determine the partial balance that you have already
+decrypted, but of course in this case it will change.
