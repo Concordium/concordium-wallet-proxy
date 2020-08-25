@@ -239,7 +239,7 @@ getTransactionCostR = do
               "simpleTransfer" -> sendResponse $ object ["cost" .= Amount (100 * fromIntegral (simpleTransferEnergyCost x))
                                                        , "energy" .= simpleTransferEnergyCost x
                                                        ]
-              "encryptedTransfer" -> do
+              x | x == "encryptedTransfer" || x == "transferToSecret" || x == "transferToPublic" -> do
                 -- FIXME: Dummy values for a prototype
                 let dummyCost :: Energy = 30000 -- roughly 30ms of energy
                 sendResponse $ object ["cost" .= Amount (100 * fromIntegral dummyCost)
@@ -249,17 +249,6 @@ getTransactionCostR = do
 
 getEncryptedTransferCostR :: Handler TypedContent
 getEncryptedTransferCostR = sendResponse $ object ["cost" .= Yesod.Number (fromIntegral (encryptedTransferEnergyCost 1))]
-
-getTransactionCostR :: Handler TypedContent
-getTransactionCostR = do
-  typeOfTransaction <- lookupGetParam "type"
-  case Text.unpack <$> typeOfTransaction of
-    Just "simpleTransfer" -> sendCost simpleTransferEnergyCost
-    Just "encryptedTransfer" -> sendCost encryptedTransferEnergyCost
-    Just "transferToSecret" -> sendCost encryptedTransferEnergyCost
-    Just "transferToPublic" -> sendCost encryptedTransferEnergyCost
-    _ -> respond400Error (EMParseError "Missing `type` parameter on request") RequestInvalid
- where sendCost cost = sendResponse $ object ["cost" .= Yesod.Number (fromIntegral (cost 1))]
 
 putCredentialR :: Handler TypedContent
 putCredentialR =
