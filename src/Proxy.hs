@@ -102,7 +102,6 @@ mkYesod "Proxy" [parseRoutes|
 /v0/accNonce/#Text AccountNonceR GET
 /v0/accEncryptionKey/#Text AccountEncryptionKeyR GET
 /v0/accTransactions/#Text AccountTransactionsR GET
-/v0/simpleTransferCost SimpleTransferCostR GET
 /v0/encryptedTransferCost EncryptedTransferCostR GET
 /v0/transactionCost TransactionCostR GET
 /v0/submissionStatus/#Text SubmissionStatusR GET
@@ -239,7 +238,7 @@ getTransactionCostR = do
               "simpleTransfer" -> sendResponse $ object ["cost" .= Amount (100 * fromIntegral (simpleTransferEnergyCost x))
                                                        , "energy" .= simpleTransferEnergyCost x
                                                        ]
-              x | x == "encryptedTransfer" || x == "transferToSecret" || x == "transferToPublic" -> do
+              y | y == "encryptedTransfer" || y == "transferToSecret" || y == "transferToPublic" -> do
                 -- FIXME: Dummy values for a prototype
                 let dummyCost :: Energy = 30000 -- roughly 30ms of energy
                 sendResponse $ object ["cost" .= Amount (100 * fromIntegral dummyCost)
