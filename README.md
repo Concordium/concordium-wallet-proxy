@@ -286,8 +286,8 @@ The hash of the block in which the transaction occurs.
 
 #### `blockTime` (required)
 The nominal time at which the block was baked.
-The time is given in seconds since the UNIX epoch.
-(Currently, it is always an integer, although in future this may have a sub-second resolution.)
+The time is given in seconds since the UNIX epoch, given as a fractional number,
+i.e., floating point number.
 
 #### `transactionHash` (optional)
 This is the hash of the transaction.
