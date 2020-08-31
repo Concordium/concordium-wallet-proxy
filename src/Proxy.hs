@@ -449,7 +449,7 @@ formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
                                      | otherwise -> (object ["type" .= ("account" :: Text), "address" .= sender], False)
                                    Nothing -> (object ["type" .= ("none" :: Text)], False)
 
-          (resultDetails, subtotal, encryptedPart) = case tsResult of
+          (resultDetails, subtotal) = case tsResult of
                                         TxSuccess evts -> ((["outcome" .= ("success" :: Text), "events" .= fmap (i18n i) evts]
                                                            <> case (tsType, evts) of
                                                               (Just TTTransfer, [Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr)]) ->
@@ -460,18 +460,17 @@ formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
                                                                 ["newAmount" .= earNewAmount]
                                                               (Just TTTransferToEncrypted, [EncryptedSelfAmountAdded{..}]) ->
                                                                 ["newAmount" .= eaaNewAmount]
-                                                              _ -> []), eventSubtotal self evts, encryptedUpdate tsType evts )
-                                        TxReject reason -> (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason], Nothing, Nothing)
+                                                              _ -> []), eventSubtotal self evts )
+                                        TxReject reason -> (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason], Nothing)
 
           details = object $ ["type" .= renderMaybeTransactionType tsType, "description" .= i18n i tsType] <> resultDetails
 
           costs
             | selfOrigin = case subtotal of
-                Nothing -> let total = object (["public" .= (- toInteger tsCost)] ++ maybe [] (\x -> ["encrypted" .= x]) encryptedPart) in ["cost" .= toInteger tsCost, "total" .= total]
-                Just st -> let total = object (["public" .= (st - toInteger tsCost)] ++ maybe [] (\x -> ["encrypted" .= x]) encryptedPart)
-                               st' = object (["public" .= st] ++ maybe [] (\x -> ["encrypted" .= x]) encryptedPart) in
-                                ["subtotal" .= st', "cost" .= toInteger tsCost, "total" .= total]
-            | otherwise = ["total" .= maybe 0 id subtotal]
+                Nothing -> let total = - toInteger tsCost in ["cost" .= show (toInteger tsCost), "total" .= show total]
+                Just st -> let total = st - toInteger tsCost
+                          in ["subtotal" .= show st, "cost" .= show (toInteger tsCost), "total" .= show total]
+            | otherwise = ["total" .= show (maybe 0 id subtotal)]
       return $ [
           "origin" .= origin,
           "energy" .= tsEnergyCost,
@@ -522,15 +521,6 @@ eventSubtotal self evts = case catMaybes $ eventCost <$> evts of
       (False, True) -> Just (toInteger etAmount)
       (False, False) -> Nothing
     eventCost _ = Nothing
-
-encryptedUpdate :: Maybe TransactionType -> [Event] -> Maybe Value
-encryptedUpdate (Just TTEncryptedAmountTransfer) [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}] =
-  Just $ object ["added" .= neaEncryptedAmount, "index" .= neaNewIndex, "newSelfBalance" .= earNewAmount]
-encryptedUpdate (Just TTTransferToPublic) [EncryptedAmountsRemoved{..}] =
-  Just $ object ["newSelfBalance" .= earNewAmount]
-encryptedUpdate (Just TTTransferToEncrypted) [EncryptedSelfAmountAdded{..}] =
-  Just $ object ["newSelfBalance" .= eaaNewAmount]
-encryptedUpdate _ _ = Nothing
 
 dropAmount :: Amount
 dropAmount = 100000000
