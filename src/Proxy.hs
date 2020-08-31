@@ -44,6 +44,7 @@ import Concordium.Client.GRPC
 import Concordium.Client.Types.Transaction (simpleTransferEnergyCost, encryptedTransferEnergyCost)
 import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex)
 import Concordium.Crypto.SignatureScheme (KeyPair)
+import Concordium.Common.Version
 import Concordium.GlobalState.SQL.AccountTransactionIndex
 import Concordium.GlobalState.SQL
 
@@ -256,13 +257,14 @@ putCredentialR =
     Right credJSON ->
       case fromJSON credJSON of
         Error err -> respond400Error (EMParseError err) RequestInvalid
-        Success cdi -> do
-          runGRPC (sendTransactionToBaker (CredentialDeployment cdi) defaultNetId) $ \case
+        Success Versioned{..} | vVersion == 0 -> do
+          runGRPC (sendTransactionToBaker (CredentialDeployment vValue) defaultNetId) $ \case
             False -> do -- this case cannot happen at this time
               $(logError) "Credential rejected by node."
               respond400Error EMCredentialRejected RequestInvalid
             True ->
-              sendResponse (object ["submissionId" .= (getHash (CredentialDeployment cdi) :: TransactionHash)])
+              sendResponse (object ["submissionId" .= (getHash (CredentialDeployment vValue) :: TransactionHash)])
+                              | otherwise -> respond400Error (EMParseError $ "Invalid version number " ++ show vVersion) RequestInvalid
 
 -- |Use the serialize instance of a type to deserialize
 decodeBase16 :: (MonadFail m) => Text.Text -> m BS.ByteString
