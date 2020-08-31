@@ -12,6 +12,7 @@ module Proxy where
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString as BS
 
+import qualified Data.Ratio as Rational
 import qualified Data.HashMap.Strict as HM
 import Text.Read hiding (String)
 import Control.Arrow (left)
@@ -419,9 +420,15 @@ getAccountTransactionsR addrText = do
           "transactions" .= fentries] <>
           (maybe [] (\sid -> ["from" .= sid]) startId)
 
+-- |Convert a timestamp to seconds since the unix epoch. A timestamp can be a fractional number, e.g., 17.5.
+timestampToFracSeconds :: Timestamp -> Double
+timestampToFracSeconds Timestamp{..} = fromRational (toInteger tsMillis Rational.% 1000)
+
 formatEntry :: I18n -> AccountAddress -> (Entity Entry, Entity Summary) -> Either String Value
 formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
-  let blockDetails = ["blockHash" .= unBSS summaryBlock]
+  let blockDetails = ["blockHash" .= unBSS summaryBlock,
+                      "blockTime" .= timestampToFracSeconds summaryTimestamp
+                     ]
   transactionDetails <- case AE.fromJSON summarySummary of
     AE.Error e -> Left e
     AE.Success (Right v@BakingReward{..}) ->
