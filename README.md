@@ -294,12 +294,12 @@ This is the hash of the transaction.
 This is not present for special transactions, such as rewards.
 
 #### `subtotal` (optional)
-The change in the account's public balance due to this transaction, not including the transaction fee.
+The change in the account's __public__ balance due to this transaction, not including the transaction fee.
 This is only present if the origin type is `"self"` and the transaction involves a transfer to or from the account other than the transaction fee.
 
 ### `encrypted` (optional)
 The change in the encrypted balance of the account. This is only present if the
-encrypted balance was changed. 
+encrypted balance was changed.
 - If the `origin` field is `account` then this field is an object with required fields
   - `"encryptedAmount"` which is always a hexadecimal encoding of an encrypted
     amount, i.e., it is a string.
@@ -312,6 +312,9 @@ encrypted balance was changed.
     that indicates which encrypted amounts were used in this transfer. This is
     only present if the transaction type is an encrypted amount transfer, or a
     transfer from secret to public balance.
+  - `"encryptedAmount"` (optional) in case of encrypted transfer, the amount
+    that was sent. In public to secret and secret to public transfers this field
+    will not be present.
 
 #### `cost` (optional)
 The cost of performing the transaction, if this cost is paid by the account.
