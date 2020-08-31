@@ -103,7 +103,6 @@ mkYesod "Proxy" [parseRoutes|
 /v0/accNonce/#Text AccountNonceR GET
 /v0/accEncryptionKey/#Text AccountEncryptionKeyR GET
 /v0/accTransactions/#Text AccountTransactionsR GET
-/v0/encryptedTransferCost EncryptedTransferCostR GET
 /v0/transactionCost TransactionCostR GET
 /v0/submissionStatus/#Text SubmissionStatusR GET
 /v0/submitCredential/ CredentialR PUT
@@ -232,23 +231,20 @@ getTransactionCostR = do
     Just x | x > 0 -> handleTransactionCost x
     _ -> respond400Error (EMParseError "Could not parse `numSignatures` value.") RequestInvalid
 
-  where handleTransactionCost x = do
+  where handleTransactionCost numSignatures = do
           lookupGetParam "type" >>= \case
             Nothing -> respond400Error EMMissingParameter RequestInvalid
             Just tty -> case Text.unpack tty of
-              "simpleTransfer" -> sendResponse $ object ["cost" .= Amount (100 * fromIntegral (simpleTransferEnergyCost x))
-                                                       , "energy" .= simpleTransferEnergyCost x
+              "simpleTransfer" -> sendResponse $ object ["cost" .= Amount (100 * fromIntegral (simpleTransferEnergyCost numSignatures))
+                                                       , "energy" .= simpleTransferEnergyCost numSignatures
                                                        ]
               y | y == "encryptedTransfer" || y == "transferToSecret" || y == "transferToPublic" -> do
                 -- FIXME: Dummy values for a prototype
-                let dummyCost :: Energy = 30000 -- roughly 30ms of energy
+                let dummyCost = encryptedTransferEnergyCost numSignatures -- roughly 30ms of energy
                 sendResponse $ object ["cost" .= Amount (100 * fromIntegral dummyCost)
                                       , "energy" .= dummyCost
                                       ]
               tty' -> respond400Error (EMParseError $ "Could not parse transaction type: " <> tty') RequestInvalid
-
-getEncryptedTransferCostR :: Handler TypedContent
-getEncryptedTransferCostR = sendResponse $ object ["cost" .= Yesod.Number (fromIntegral (encryptedTransferEnergyCost 1))]
 
 putCredentialR :: Handler TypedContent
 putCredentialR =

@@ -69,7 +69,7 @@ The "ipInfo" and "arsInfos" objects are needed when creating identity object req
 The balance on an account can be queried as in the following example:
 
 ```console
-$ curl -XGET localhost:3000/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
+$ curl -XGET localhost:3000/v0/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
 {"currentBalance":AccountBalance,"finalizedBalance":AccountBalance}
 ```
 
@@ -107,7 +107,7 @@ which will always return a JSON object (unless there is an internal server error
 
 Example:
 ```console
-$ curl -XGET localhost:3000/accNonce/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
+$ curl -XGET localhost:3000/v0/accNonce/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
 {"allFinal":true,"nonce":3}
 ```
 
@@ -228,9 +228,9 @@ Using the example credential in [examples/cdi.json](examples/cdi.json) the
 following displays an interaction that leads to credential deployment.
 
 ```console
-$ curl -XPUT -d "@examples/cdi.json" localhost:3000/submitCredential
+$ curl -XPUT -d "@examples/cdi.json" localhost:3000/v0/submitCredential
 {
-  "submissionId": "f1a3a3c17e3bc70a4dad3f409265f8a1fca07c607b732e11cf279dd2e891e0af"
+  "submissionId": "e02852599926f00a52572ed80afbade4955ce7f1256bd116b1109d5a43ece455"
 }
 ```
 
@@ -361,7 +361,7 @@ A transactions of type `"transfer"` is not considered a simple transfer if the d
 ### Example
 
 ```console
-$ curl -XGET http://localhost:3000/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL?limit=2&from=4&order=a
+$ curl -XGET http://localhost:3000/v0/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL?limit=2&from=4&order=a
 ```
 ```JSON
 {
@@ -422,7 +422,7 @@ On success, this returns a JSON object with the field `submissionId`, which cont
 
 
 ```console
-$ curl -XPUT http://localhost:3000/testnetGTUDrop/3KudzzbqRPyHVFEzZnZCUdK2ixr1SFLRVRm6sTfEvQv2N3A8h6
+$ curl -XPUT http://localhost:3000/v0/testnetGTUDrop/3KudzzbqRPyHVFEzZnZCUdK2ixr1SFLRVRm6sTfEvQv2N3A8h6
 {"submissionId":"76031716c829f3e7e95efda77558631d348a483e3317e3d66f3cac3038e5e757"}
 ```
 
