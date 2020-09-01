@@ -87,7 +87,7 @@ both of which will be present
 * `"accountEncryptedAmount"` which is an object with three (mandatory) fields
   - `"selfAmount"` of type EncryptedAmount, i.e., a hexadecimal string
   - `"startIndex"` a non-negative 64-bit integer
-  - `"numAggregated"` (optional) a positive (i.e., >= 1) number indicating how many amounts
+  - `"numAggregated"` (optional) a number >= 2 indicating how many amounts
     are aggregated together in the first amount (see section at the end for an
     explanation). If not present the first amount in the list is a pure incoming amount.
   - `"incomingAmounts"` an array of `EncryptedAmount` values, i.e., an array of
@@ -475,6 +475,11 @@ Suppose that at time t₀ you query the account balance and get a structure
 }
 ```
 
+This implies that the amount `a_{i₀}` is not an incoming amount directly, i.e.,
+it is not on any of the incoming transactions, but it is an aggregate of
+incoming amounts `i₀ + 1 - n₀`, ..., up to `i₀`. All of the rest of the amounts
+are pure incoming amounts, as sent by other accounts.
+
 Next time we query we get the account balance like
 
 ```json
@@ -487,7 +492,7 @@ Next time we query we get the account balance like
 ```
 
 The first amounts in the respective lists are aggregation of `n₀` (respectively
-`m₀`) amounts. They are amounts with indices `a_{i₀-m},..,a_{i₀}`
+`m₀`) amounts. They are amounts with indices `a_{i₀+1-m},..,a_{i₀}`
 
 ### Case where `selfAmounts` are the same
 
@@ -495,7 +500,7 @@ The only change then would have been the arrival of new incoming encrypted
 amounts. In this case then `j₀ ≥ i₀` and `m₀ ≥ i₀`.
 
 The amount `b_{j₀}` might not yet be seen, however we know that it is the
-aggregation of amounts with indices `b_{j₀-m},..,a_{j₀}`, which we already
+aggregation of amounts with indices `b_{j₀+1-m},..,a_{j₀}`, which we already
 have (partially) decrypted, and then we can count those towards the public
 balance already, while continuing to decrypt the remaining ones.
 
