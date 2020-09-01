@@ -28,7 +28,7 @@ In case of a non 200 return code the return value will always be a JSON object w
 ```
 
 Where the error codes currently returned are
-- 0 for internal server error, most likely the server could not communicate with the the baker:
+- 0 for internal server error, most likely the server could not communicate with the baker:
   ```json
   {"error":0,"errorMessage":"Error accessing the GRPC endpoint"}
   ```
@@ -160,7 +160,7 @@ On success, the response is of the following form:
   "to": "3J6vgTViNgjc4gxSgTkZWa2aspuitVCRrkkaTqQjFXHnkENaSk",
   "cost": 165,
   "transactionHash": "52277a488216a8914bf3d575a644a98b5592b62da2b91a45ca16302478e0583a",
-  "outcome": "transferSuccess",
+  "outcome": "success",
   "blockHashes": [
     "b8b24624ca089a31a63afd5934a666c7a8e198c1e18970721ff0cf8b606fc16d"
   ]
@@ -221,6 +221,20 @@ This field is present if the `status` field is `committed` or `finalized`.
 The value is a (non-empty) array of the hashes of all (live) blocks in which the transaction appears.
 If the `status` is `finalized`, the array will only have one element.
 
+#### `newSelfEncryptedAmount` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is one of the three encrypted transactions. The value has a subtle different meaning depending on the transaction:
+* `TransferToPublic`: The value is the resulting self encrypted amount after possibly combining incoming amounts and subtracting the amount wanted to be transferred.
+* `TransferToEncrypted`: The value is the resulting self encrypted amount after adding the amount wanted to be transferred.
+* `EncryptedAmountTransfer`: The value is the resulting self encrypted amount on the sender's balance that results after possibly combining incoming amounts and subtracting the encrypted amount wanted to be transferred.
+
+#### `aggregatedIndex` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is either `EncryptedAmountTransfer` or `TransferToPublic`. The value is the index up to which the self encrypted amounts have been combined during the operation that was performed.
+
+#### `newIndex`  (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is an `EncryptedAmountTransfer`. The value is the new index on the incoming amounts vector of the receiver account that will be associated with the transferred amount.
+
+#### `amountAdded`/`amountSubtracted` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`. For a `TransferToPublic`, the field will be named `amountAdded` and it represents the plaintext amount that is added to the public balance of the sender. For a `TransferToEncrypted`, the field will be named `amountSubtracted` and it represents the paintext amount that is subtracted from the public balance of the sender.
 
 ## Credential deployment/account creation
 
@@ -239,9 +253,9 @@ the baker node is alive the server will respond with a submission id which can
 be queried via the `/submissionStatus` endpoint.
 
 
-## Simple transfer
+## Submit transfer
 
-When submitting a simple transfer you should make a PUT request to `/submitTransfer` endpoint.
+When submitting a transfer you should make a PUT request to `/submitTransfer` endpoint.
 The data that should be sent is as the one returned from the library provided as part of the crypto repository.
 After submission of the transaction the responses are the same as for the submission of the credential. If successful
 a submission id is returned, which can be used to query the status of the transfer via the `/submissionStatus` endpoint.
@@ -297,16 +311,16 @@ This is not present for special transactions, such as rewards.
 The change in the account's __public__ balance due to this transaction, not including the transaction fee.
 This is only present if the origin type is `"self"` and the transaction involves a transfer to or from the account other than the transaction fee.
 
-### `encrypted` (optional)
+#### `encrypted` (optional)
 The change in the encrypted balance of the account. This is only present if the
 encrypted balance was changed.
 - If the `origin` field is `account` then this field is an object with required fields
   - `"encryptedAmount"` which is always a hexadecimal encoding of an encrypted
     amount, i.e., it is a string.
-  - `"index"` which is always a non-negative integer
+  - `"newIndex"` which is always a non-negative integer
 - If the `origin` field is `self` then this field is an object with
   fields
-  - `"newSelfBalance"` (required) which is always a hexadecimal encoding of an encrypted
+  - `"newSelfEncryptedAmount"` (required) which is always a hexadecimal encoding of an encrypted
     amount, i.e., it is a string.
   - `"newStartIndex"` (optional) which, if present, is a non-negative integer
     that indicates which encrypted amounts were used in this transfer. This is
@@ -322,7 +336,7 @@ This is only present if the origin type is `"self"` (since otherwise the account
 When present, this is always a positive value.
 
 #### `total` (required)
-The total change in the account's public balance due to the transaction and associated fees.
+The total change in the account's __public__ balance due to the transaction and associated fees.
 A negative value indicates a debit from the account, while a positive value indicates a credit to the account.
 
 #### `energy` (optional)
@@ -347,6 +361,9 @@ It consists of the following fields:
   - `"updateElectionDifficulty"`
   - `"deployCredential"`
   - `"bakingReward"`
+  - `encryptedAmountTransfer`
+  - `transferToEncrypted`
+  - `transferToPublic`
 - `description` (required): a brief localized description of the type of the transaction
 - `outcome` (required):
   - `"success"` if the transaction was executed successfully
@@ -357,10 +374,23 @@ It consists of the following fields:
   - `transferSource`: account address of the source of the transfer
   - `transferDestination`: account address of the destination of the transfer
   - `transferAmount`: amount of the transfer
+- The following fields are present if the transaction is an encrypted amount transfer:
+  - `transferSource`: account address of the source of the transfer
+  - `transferDestination`: account address of the destination of the transfer
+  - `encryptedAmount`: the encrypted amount that is transferred in the trasnaction in hexadecimal encoding.
+  - `aggregatedIndex`: the index up to which incoming amounts on the sender account have been combined during this operation.
+  - `newIndex`: the index on the receiver's incomingAmounts that will be assigned to the transferred amount.
+  - `newSelfEncryptedAmount`: the resulting self encrypted amount in the sender's account.
+- The following fields are present if the transaction is a transfer to public transaction:
+  - `amountAdded`: the plaintext of the amount that is added to the sender's public balance.
+  - `aggregatedIndex`: the index up to which incoming amounts on the sender account have been combined during this operation.
+  - `newSelfEncryptedAmount`: the resulting self encrypted amount in the sender's account.
+- The following fields are present if the transaction is a transfer to encrypted transaction:
+  - `amountSubtracted`: the plaintext of the amount that is subtracted from the sender's public balance.
+  - `newSelfEncryptedAmount`: the resulting self encrypted amount in the sender's account.
 
 For the purposes of the above, a simple transfer is a transaction of type `"transfer"` which transfers funds from one account to another.
 A transactions of type `"transfer"` is not considered a simple transfer if the destination is a smart contract instance.
-
 ### Example
 
 ```console
