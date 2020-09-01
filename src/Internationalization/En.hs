@@ -42,6 +42,7 @@ translation = I18n {..}
         i18nRejectReason InvalidAccountKeySignThreshold = "The requested sign threshold would exceed the number of keys on the account."
         i18nRejectReason InvalidEncryptedAmountTransferProof = "The encrypted amount transfer has an invalid proof."
         i18nRejectReason (EncryptedAmountSelfTransfer _) = "Encrypted amount transfer from account A to account A is not allowed."
+        i18nRejectReason InvalidTransferToPublicProof  = "The secret to public transfer has an invalid proof."
 
         i18nTransactionType TTDeployModule = "Deploy module"
         i18nTransactionType TTInitContract = "Initialize smart contract"
