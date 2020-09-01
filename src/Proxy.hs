@@ -239,7 +239,9 @@ getTransactionCostR = do
               "simpleTransfer" -> sendResponse $ object ["cost" .= Amount (100 * fromIntegral (simpleTransferEnergyCost numSignatures))
                                                        , "energy" .= simpleTransferEnergyCost numSignatures
                                                        ]
-              y | y == "encryptedTransfer" || y == "transferToSecret" || y == "transferToPublic" -> do
+              y | y == "encryptedTransfer" ||
+                  y == "transferToSecret" ||
+                  y == "transferToPublic" -> do
                 -- FIXME: Dummy values for a prototype
                 let dummyCost = encryptedTransferEnergyCost numSignatures -- roughly 30ms of energy
                 sendResponse $ object ["cost" .= Amount (100 * fromIntegral dummyCost)
@@ -332,28 +334,43 @@ getSimpleTransactionStatus i trHash = do
         Just TTTransfer ->
           case tsResult of
             TxSuccess [Transferred{etTo = AddressAccount addr,..}] ->
-              return ["outcome" .= String "success", "to" .= addr, "amount" .= etAmount]
+              return ["outcome" .= String "success",
+                      "to" .= addr,
+                      "amount" .= etAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
               Left $ "Unexpected outcome of simple transfer: " ++ show es
         Just TTEncryptedAmountTransfer ->
           case tsResult of
             TxSuccess [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}] ->
-              return ["outcome" .= String "success", "to" .= neaAccount, "newAmount" .= neaEncryptedAmount]
+              return ["outcome" .= String "success",
+                      "sender" .= earAccount,
+                      "to" .= neaAccount,
+                      "encryptedAmount" .= neaEncryptedAmount,
+                      "aggregatedIndex" .= earUpToIndex,
+                      "newIndex" .= neaNewIndex,
+                      "newSelfEncryptedAmount" .= earNewAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
               Left $ "Unexpected outcome of encrypted transfer: " ++ show es
         Just TTTransferToPublic ->
           case tsResult of
-            TxSuccess [EncryptedAmountsRemoved{..}] ->
-              return ["outcome" .= String "success", "sender" .= earAccount, "newAmount" .= earNewAmount]
+            TxSuccess [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}] ->
+              return ["outcome" .= String "success",
+                      "sender" .= earAccount,
+                      "newSelfEncryptedAmount" .= earNewAmount,
+                      "aggregatedIndex" .= earUpToIndex,
+                      "amountAdded" .= aabdAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
               Left $ "Unexpected outcome of secret to public transfer: " ++ show es
         Just TTTransferToEncrypted ->
           case tsResult of
             TxSuccess [EncryptedSelfAmountAdded{..}] ->
-              return ["outcome" .= String "success", "sender" .= eaaAccount, "newAmount" .= eaaNewAmount]
+              return ["outcome" .= String "success",
+                      "sender" .= eaaAccount,
+                      "newSelfEncryptedAmount" .= eaaNewAmount,
+                      "amountSubtracted" .= eaaAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
               Left $ "Unexpected outcome of public to secret transfer: " ++ show es
@@ -450,18 +467,30 @@ formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
                                    Nothing -> (object ["type" .= ("none" :: Text)], False)
 
           (resultDetails, subtotal) = case tsResult of
-                                        TxSuccess evts -> ((["outcome" .= ("success" :: Text), "events" .= fmap (i18n i) evts]
-                                                           <> case (tsType, evts) of
-                                                              (Just TTTransfer, [Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr)]) ->
-                                                                ["transferSource" .= fromAddr, "transferDestination" .= toAddr, "transferAmount" .= amt]
-                                                              (Just TTEncryptedAmountTransfer, [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
-                                                                ["transferDestination" .= neaAccount, "amount" .= neaEncryptedAmount, "index" .= neaNewIndex]
-                                                              (Just TTTransferToPublic, [EncryptedAmountsRemoved{..}]) ->
-                                                                ["newAmount" .= earNewAmount]
-                                                              (Just TTTransferToEncrypted, [EncryptedSelfAmountAdded{..}]) ->
-                                                                ["newAmount" .= eaaNewAmount]
-                                                              _ -> []), eventSubtotal self evts )
-                                        TxReject reason -> (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason], Nothing)
+            TxSuccess evts -> ((["outcome" .= ("success" :: Text), "events" .= fmap (i18n i) evts]
+                                <> case (tsType, evts) of
+                                     (Just TTTransfer, [Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr)]) ->
+                                       ["transferSource" .= fromAddr,
+                                        "transferDestination" .= toAddr,
+                                        "transferAmount" .= amt]
+                                     (Just TTEncryptedAmountTransfer, [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
+                                       ["transferSource" .= earAccount,
+                                        "transferDestination" .= neaAccount,
+                                        "encryptedAmount" .= neaEncryptedAmount,
+                                        "aggregatedIndex" .= earUpToIndex,
+                                        "newIndex" .= neaNewIndex,
+                                        "newSelfEncryptedAmount" .= earNewAmount]
+                                     (Just TTTransferToPublic, [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}]) ->
+                                       ["transferSource" .= earAccount,
+                                        "amountAdded" .= aabdAmount,
+                                        "aggregatedIndex" .= earUpToIndex,
+                                        "newSelfEncryptedAmount" .= earNewAmount]
+                                     (Just TTTransferToEncrypted, [EncryptedSelfAmountAdded{..}]) ->
+                                       ["transferSource" .= eaaAccount,
+                                        "amountSubtracted" .= eaaAmount,
+                                        "newSelfEncryptedAmount" .= eaaNewAmount]
+                                     _ -> []), eventSubtotal self evts )
+            TxReject reason -> (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason], Nothing)
 
           details = object $ ["type" .= renderMaybeTransactionType tsType, "description" .= i18n i tsType] <> resultDetails
 
@@ -471,12 +500,33 @@ formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
                 Just st -> let total = st - toInteger tsCost
                           in ["subtotal" .= show st, "cost" .= show (toInteger tsCost), "total" .= show total]
             | otherwise = ["total" .= show (maybe 0 id subtotal)]
+
+          encryptedCost = case tsSender of
+            Just sender
+              | sender == self -> case (tsType, tsResult) of
+                  (Just TTEncryptedAmountTransfer, TxSuccess [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
+                    ["encrypted" .= object ["encryptedAmount" .= neaEncryptedAmount,
+                                            "newStartIndex" .= earUpToIndex,
+                                            "newSelfEncryptedAmount" .= earNewAmount]]
+                  (Just TTTransferToPublic, TxSuccess [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}]) ->
+                    ["encrypted" .= object ["newStartIndex" .= earUpToIndex,
+                                            "newSelfEncryptedAmount" .= earNewAmount]]
+                  (Just TTTransferToEncrypted, TxSuccess [EncryptedSelfAmountAdded{..}]) ->
+                    ["encrypted" .= object ["newSelfEncryptedAmount" .= eaaNewAmount]]
+                  _ -> []
+              | otherwise -> case (tsType, tsResult) of
+                  (Just TTEncryptedAmountTransfer, TxSuccess [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
+                    ["encrypted" .= object ["encryptedAmount" .= neaEncryptedAmount,
+                                            "newIndex" .= neaNewIndex]]
+                  _ -> []
+
+            Nothing -> []
       return $ [
           "origin" .= origin,
           "energy" .= tsEnergyCost,
           "details" .= details,
           "transactionHash" .= tsHash
-          ] <> costs
+          ] <> costs <> encryptedCost
   return $ object $ ["id" .= key] <> blockDetails <> transactionDetails
 
 renderTransactionType :: TransactionType -> Text
@@ -520,6 +570,8 @@ eventSubtotal self evts = case catMaybes $ eventCost <$> evts of
       (True, False) -> Just (- toInteger etAmount)
       (False, True) -> Just (toInteger etAmount)
       (False, False) -> Nothing
+    eventCost AmountAddedByDecryption{..} = Just $ toInteger aabdAmount
+    eventCost EncryptedSelfAmountAdded{..} = Just $ - toInteger eaaAmount
     eventCost _ = Nothing
 
 dropAmount :: Amount

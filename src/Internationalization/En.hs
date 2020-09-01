@@ -98,6 +98,7 @@ translation = I18n {..}
         i18nEvent NewEncryptedAmount{..} = "New encrypted amount added with index = " <> descrEncryptedAmountIndex neaNewIndex
         i18nEvent EncryptedAmountsRemoved{..} = "Encrypted amounts up to index = " <> descrEncryptedAmountAggIndex earUpToIndex <> " removed"
         i18nEvent EncryptedSelfAmountAdded{} = "New encrypted self-amount"
+        i18nEvent AmountAddedByDecryption{..} = "Amount added to the public balance by decryption = " <> descrAmount aabdAmount
 
         i18nSpecialEvent BakingReward{..} = "Award " <> descrAmount stoRewardAmount <> " to baker " <> descrBaker stoBakerId <> " at " <> descrAccount stoBakerAccount
 
