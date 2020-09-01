@@ -348,7 +348,6 @@ getSimpleTransactionStatus i trHash = do
                       "to" .= neaAccount,
                       "encryptedAmount" .= neaEncryptedAmount,
                       "aggregatedIndex" .= earUpToIndex,
-                      "newIndex" .= neaNewIndex,
                       "newSelfEncryptedAmount" .= earNewAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->

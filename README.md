@@ -222,10 +222,7 @@ The value is a (non-empty) array of the hashes of all (live) blocks in which the
 If the `status` is `finalized`, the array will only have one element.
 
 #### `newSelfEncryptedAmount` (optional)
-This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is one of the three encrypted transactions. The value has a subtle different meaning depending on the transaction:
-* `TransferToPublic`: The value is the resulting self encrypted amount after possibly combining incoming amounts and subtracting the amount wanted to be transferred.
-* `TransferToEncrypted`: The value is the resulting self encrypted amount after adding the amount wanted to be transferred.
-* `EncryptedAmountTransfer`: The value is the resulting self encrypted amount on the sender's balance that results after possibly combining incoming amounts and subtracting the encrypted amount wanted to be transferred.
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is one of the three encrypted transactions. The value is the new self encrypted amount on the account.
 
 #### `aggregatedIndex` (optional)
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is either `EncryptedAmountTransfer` or `TransferToPublic`. The value is the index up to which the self encrypted amounts have been combined during the operation that was performed.
