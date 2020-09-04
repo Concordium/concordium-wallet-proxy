@@ -140,7 +140,7 @@ The field is mandatory, and the value will always be a hex-encoded public key.
 ## Transaction cost.
 
 The cost for a transaction, both in energy and GTU is obtained on the
-`v0/transctionCost` endpoint. The request must have a parameter `type`, and an
+`v0/transactionCost` endpoint. The request must have a parameter `type`, and an
 optional parameter `numSignatures`, which defaults to `1`. The currently
 supported types are `simpleTransfer` and `encryptedTransfer`. In case of success
 the response will always be a JSON object with required fields
