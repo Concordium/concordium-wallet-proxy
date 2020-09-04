@@ -255,7 +255,7 @@ be queried via the `/submissionStatus` endpoint.
 When submitting a transfer you should make a PUT request to `/v0/submitTransfer` endpoint.
 The data that should be sent is as the one returned from the library provided as part of the crypto repository.
 After submission of the transaction the responses are the same as for the submission of the credential. If successful
-a submission id is returned, which can be used to query the status of the transfer via the `/submissionStatus` endpoint.
+a submission id is returned, which can be used to query the status of the transfer via the `/v0/submissionStatus` endpoint.
 
 
 ## Get transactions
