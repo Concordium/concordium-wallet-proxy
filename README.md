@@ -155,7 +155,7 @@ On success, the response is of the following form:
 ```
 {
   "status": "finalized",
-  "amount": 20000,
+  "amount": "20000",
   "sender": "4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8",
   "to": "3J6vgTViNgjc4gxSgTkZWa2aspuitVCRrkkaTqQjFXHnkENaSk",
   "cost": 165,
@@ -298,7 +298,8 @@ The hash of the block in which the transaction occurs.
 #### `blockTime` (required)
 The nominal time at which the block was baked.
 The time is given in seconds since the UNIX epoch, given as a fractional number,
-i.e., floating point number.
+i.e., floating point number. Note that on JSON if a float number has no decimals, it is
+outputted as an Int instead of having `.00` or something like that.
 
 #### `transactionHash` (optional)
 This is the hash of the transaction.
@@ -398,7 +399,7 @@ $ curl -XGET http://localhost:3000/v0/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8A
   "transactions": [
     {
       "id": 5,
-      "blockTime": 1587646256,
+      "blockTime": 1587646256.25,
       "origin": {
         "type": "self"
       },
@@ -408,7 +409,7 @@ $ curl -XGET http://localhost:3000/v0/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8A
       "transactionHash": "84bf1e2ef8d3af3063cdb681932990f71ddb3949655f55307a266e5d687b414f",
       "blockHash": "013c6d2dd67affd6f39b9a7b255d244055b53d68fe8b0add4839a20e911d04cb",
       "details": {
-        "transferAmount": 123,
+        "transferAmount": "123",
         "events": [
           "Transferred 123 from 4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL to 4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL"
         ],
@@ -422,7 +423,7 @@ $ curl -XGET http://localhost:3000/v0/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8A
     },
     {
       "id": 7,
-      "blockTime": 1587646300,
+      "blockTime": 1587646300.02,
       "origin": {
         "type": "reward"
       },
