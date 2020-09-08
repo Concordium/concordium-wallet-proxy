@@ -4,16 +4,18 @@
 
 The wallet proxy provides the following endpoints:
 
-* `GET /accBalance/{account number}`: get the balance on an account
-* `GET /accNonce/{account number}`: get the next nonce for an account
-* `GET /simpleTransferCost`: get the cost of a simple transfer
-* `GET /submissionStatus/{submissionId}`: get the status of a simple transfer or credential deployment
-* `PUT /submitCredential`: deploy a credential/create an account
-* `PUT /submitTransfer`: perform a simple transfer
-* `GET /accTransactions/{accountNumer}`: get the transactions affecting an account
-* `PUT /testnetGTUDrop/{accountNumber}`: request a GTU drop to the specified account
-* `GET /global`: get the global parameters (serves the file [`global.json`](https://gitlab.com/Concordium/genesis-data/-/blob/master/global.json)).
-* `GET /ip_info`: get the identity providers info (serves the file [`identity_providers_with_metadata.json`](https://gitlab.com/Concordium/genesis-data/-/blob/master/identity-providers-with-metadata.json)).
+* `GET /v0/accBalance/{account address}`: get the balance on an account
+* `GET /v0/accNonce/{account address}`: get the next nonce for an account
+* `GET /v0/accEncryptionKey/{account address}`: get the public encryption key of
+  the account
+* `GET /v0/transactionCost`: get the cost of a simple transfer
+* `GET /v0/submissionStatus/{submissionId}`: get the status of a simple transfer or credential deployment
+* `PUT /v0/submitCredential`: deploy a credential/create an account
+* `PUT /v0/submitTransfer`: perform a simple transfer
+* `GET /v0/accTransactions/{accountNumer}`: get the transactions affecting an account
+* `PUT /v0/testnetGTUDrop/{accountNumber}`: request a GTU drop to the specified account
+* `GET /v0/global`: get the global parameters (serves the file [`global.json`](https://gitlab.com/Concordium/genesis-data/-/blob/master/global.json)).
+* `GET /v0/ip_info`: get the identity providers info (serves the file [`identity_providers_with_metadata.json`](https://gitlab.com/Concordium/genesis-data/-/blob/master/identity-providers-with-metadata.json)).
 
 ### Errors
 
@@ -26,7 +28,7 @@ In case of a non 200 return code the return value will always be a JSON object w
 ```
 
 Where the error codes currently returned are
-- 0 for internal server error, most likely the server could not communicate with the the baker:
+- 0 for internal server error, most likely the server could not communicate with the baker:
   ```json
   {"error":0,"errorMessage":"Error accessing the GRPC endpoint"}
   ```
@@ -36,6 +38,8 @@ Where the error codes currently returned are
   ```json
   {"error":1,"errorMessage":"Malformed transaction hash."}
   ```
+- 2 for when the request is well-formed, but the requested object could not be
+  found, e.g., the account does not exist in the expected place.
 
 ### Language & localization
 
@@ -43,23 +47,51 @@ Error messages and textual descriptions will be localized by the proxy based on 
 (Currently, only `en` is available.)
 Languages can also be specified with the `_LANG` GET-parameter and/or a `_LANG` cookie; these have higher precedence than `Accept-Language`.
 
+## Identity provider information
+
+The data served on the `v0/ip_info` endpoint is a JSON array of objects. Each
+object is of the form
+```json
+{
+    "ipInfo": {...},
+    "arsInfos": {...},
+    "metadata": {
+        "issuanceStart": URL,
+        "icon": "base64 encoded png image"
+    }
+}
+```
+All fields are mandatory.
+The "ipInfo" and "arsInfos" objects are needed when creating identity object requests, and identity objects.
+
 ## Account Balance
 
 The balance on an account can be queried as in the following example:
 
 ```console
-$ curl -XGET localhost:3000/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
-{"currentBalance":959505,"finalizedBalance":969670}
+$ curl -XGET localhost:3000/v0/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
+{"currentBalance":AccountBalance,"finalizedBalance":AccountBalance}
 ```
 
-The result is a JSON object with two optional fields:
+The result is a JSON object with two __optional__ fields:
 - `currentBalance` is the balance on the account in the current best block;
 - `finalizedBalance` is the balance on the account in the most recently finalized block.
 
 If neither field is present, then the account does not currently exist on the chain.
 If only `currentBalance` is present, then the account has been created, but its creation has not yet been finalized.
 Otherwise, both fields will appear.
-(All amounts are integers in the smallest denomination of GTU.)
+
+The `AccountBalance` value is always an object with the following two fields
+both of which will be present
+* `"accountAmount"` which is an Amount type, i.e., a string containing an integral value.
+* `"accountEncryptedAmount"` which is an object with three (mandatory) fields
+  - `"selfAmount"` of type EncryptedAmount, i.e., a hexadecimal string
+  - `"startIndex"` a non-negative 64-bit integer
+  - `"numAggregated"` (optional) a number >= 2 indicating how many amounts
+    are aggregated together in the first amount (see section at the end for an
+    explanation). If not present the first amount in the list is a pure incoming amount.
+  - `"incomingAmounts"` an array of `EncryptedAmount` values, i.e., an array of
+    hexadecimal strings. The array could be empty, but is always present.
 
 ## Account Nonce
 
@@ -75,7 +107,7 @@ which will always return a JSON object (unless there is an internal server error
 
 Example:
 ```console
-$ curl -XGET localhost:3000/accNonce/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
+$ curl -XGET localhost:3000/v0/accNonce/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
 {"allFinal":true,"nonce":3}
 ```
 
@@ -87,17 +119,34 @@ In case the wallet is the only user of the account then this nonce tracking is r
 If there are other concurrent users of the account then there is a chance the
 nonce returned will be wrong, but then it is up to the user to keep track of that themselves.
 
-## Simple Transfer Cost
+## Account Encryption key
 
-The cost for a simple transfer using one signature can be obtained as follows:
+Returns the public key of the account that can be used when making encrypted
+transfers. If the request is invalid, i.e., malformed address, the status code
+in 500+ range is returned, if the request is valid, but the account does not
+exist, a status code 404 is returned. In both these cases the returned object is
+of the form of a generic error object, described above.
 
-```console
-$ curl -XGET localhost:3000/simpleTransferCost
-{"cost":59}
+In case of success, the return code is 200, and the return value is an object of
+the form
+
+```json
+{
+  "accountEncryptionKey": String,
+}
 ```
+The field is mandatory, and the value will always be a hex-encoded public key.
 
-The result is a JSON object with one field `cost` that gives the current estimated cost of such a transaction in the smallest denomination of GTU.
+## Transaction cost.
 
+The cost for a transaction, both in energy and GTU is obtained on the
+`v0/transactionCost` endpoint. The request must have a parameter `type`, and an
+optional parameter `numSignatures`, which defaults to `1`. The currently
+supported types are `simpleTransfer` and `encryptedTransfer`. In case of success
+the response will always be a JSON object with required fields
+- `"cost"` which is an Amount of GTU this transfer will cost at current
+  conversion rates
+- `"energy"` which is the energy that is required be supplied for execution of this transaction.
 
 ## Submission Status
 
@@ -106,12 +155,12 @@ On success, the response is of the following form:
 ```
 {
   "status": "finalized",
-  "amount": 20000,
+  "amount": "20000",
   "sender": "4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8",
   "to": "3J6vgTViNgjc4gxSgTkZWa2aspuitVCRrkkaTqQjFXHnkENaSk",
   "cost": 165,
   "transactionHash": "52277a488216a8914bf3d575a644a98b5592b62da2b91a45ca16302478e0583a",
-  "outcome": "transferSuccess",
+  "outcome": "success",
   "blockHashes": [
     "b8b24624ca089a31a63afd5934a666c7a8e198c1e18970721ff0cf8b606fc16d"
   ]
@@ -172,6 +221,17 @@ This field is present if the `status` field is `committed` or `finalized`.
 The value is a (non-empty) array of the hashes of all (live) blocks in which the transaction appears.
 If the `status` is `finalized`, the array will only have one element.
 
+#### `newSelfEncryptedAmount` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is one of the three encrypted transactions. The value is the new self encrypted amount on the account.
+
+#### `aggregatedIndex` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is either `EncryptedAmountTransfer` or `TransferToPublic`. The value is the index up to which the self encrypted amounts have been combined during the operation that was performed.
+
+#### `newIndex`  (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is an `EncryptedAmountTransfer`. The value is the new index on the incoming amounts vector of the receiver account that will be associated with the transferred amount.
+
+#### `amountAdded`/`amountSubtracted` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`. For a `TransferToPublic`, the field will be named `amountAdded` and it represents the plaintext amount that is added to the public balance of the sender. For a `TransferToEncrypted`, the field will be named `amountSubtracted` and it represents the paintext amount that is subtracted from the public balance of the sender.
 
 ## Credential deployment/account creation
 
@@ -179,9 +239,9 @@ Using the example credential in [examples/cdi.json](examples/cdi.json) the
 following displays an interaction that leads to credential deployment.
 
 ```console
-$ curl -XPUT -d "@examples/cdi.json" localhost:3000/submitCredential
+$ curl -XPUT -d "@examples/cdi.json" localhost:3000/v0/submitCredential
 {
-  "submissionId": "f1a3a3c17e3bc70a4dad3f409265f8a1fca07c607b732e11cf279dd2e891e0af"
+  "submissionId": "e02852599926f00a52572ed80afbade4955ce7f1256bd116b1109d5a43ece455"
 }
 ```
 
@@ -190,12 +250,12 @@ the baker node is alive the server will respond with a submission id which can
 be queried via the `/submissionStatus` endpoint.
 
 
-## Simple transfer
+## Submit transfer
 
-When submitting a simple transfer you should make a PUT request to `/submitTransfer` endpoint.
+When submitting a transfer you should make a PUT request to `/v0/submitTransfer` endpoint.
 The data that should be sent is as the one returned from the library provided as part of the crypto repository.
 After submission of the transaction the responses are the same as for the submission of the credential. If successful
-a submission id is returned, which can be used to query the status of the transfer via the `/submissionStatus` endpoint.
+a submission id is returned, which can be used to query the status of the transfer via the `/v0/submissionStatus` endpoint.
 
 
 ## Get transactions
@@ -237,16 +297,36 @@ The hash of the block in which the transaction occurs.
 
 #### `blockTime` (required)
 The nominal time at which the block was baked.
-The time is given in seconds since the UNIX epoch.
-(Currently, it is always an integer, although in future this may have a sub-second resolution.)
+The time is given in seconds since the UNIX epoch, given as a fractional number,
+i.e., floating point number. Note that on JSON if a float number has no decimals, it is
+outputted as an Int instead of having `.00` or something like that.
 
 #### `transactionHash` (optional)
 This is the hash of the transaction.
 This is not present for special transactions, such as rewards.
 
 #### `subtotal` (optional)
-The change in the account's balance due to this transaction, not including the transaction fee.
+The change in the account's __public__ balance due to this transaction, not including the transaction fee.
 This is only present if the origin type is `"self"` and the transaction involves a transfer to or from the account other than the transaction fee.
+
+#### `encrypted` (optional)
+The change in the encrypted balance of the account. This is only present if the
+encrypted balance was changed.
+- If the `origin` field is `account` then this field is an object with required fields
+  - `"encryptedAmount"` which is always a hexadecimal encoding of an encrypted
+    amount, i.e., it is a string.
+  - `"newIndex"` which is always a non-negative integer
+- If the `origin` field is `self` then this field is an object with
+  fields
+  - `"newSelfEncryptedAmount"` (required) which is always a hexadecimal encoding of an encrypted
+    amount, i.e., it is a string.
+  - `"newStartIndex"` (optional) which, if present, is a non-negative integer
+    that indicates which encrypted amounts were used in this transfer. This is
+    only present if the transaction type is an encrypted amount transfer, or a
+    transfer from secret to public balance.
+  - `"encryptedAmount"` (optional) in case of encrypted transfer, the amount
+    that was sent. In public to secret and secret to public transfers this field
+    will not be present.
 
 #### `cost` (optional)
 The cost of performing the transaction, if this cost is paid by the account.
@@ -254,7 +334,7 @@ This is only present if the origin type is `"self"` (since otherwise the account
 When present, this is always a positive value.
 
 #### `total` (required)
-The total change in the account's balance due to the transaction and associated fees.
+The total change in the account's __public__ balance due to the transaction and associated fees.
 A negative value indicates a debit from the account, while a positive value indicates a credit to the account.
 
 #### `energy` (optional)
@@ -279,6 +359,9 @@ It consists of the following fields:
   - `"updateElectionDifficulty"`
   - `"deployCredential"`
   - `"bakingReward"`
+  - `encryptedAmountTransfer`
+  - `transferToEncrypted`
+  - `transferToPublic`
 - `description` (required): a brief localized description of the type of the transaction
 - `outcome` (required):
   - `"success"` if the transaction was executed successfully
@@ -289,21 +372,34 @@ It consists of the following fields:
   - `transferSource`: account address of the source of the transfer
   - `transferDestination`: account address of the destination of the transfer
   - `transferAmount`: amount of the transfer
+- The following fields are present if the transaction is an encrypted amount transfer:
+  - `transferSource`: account address of the source of the transfer
+  - `transferDestination`: account address of the destination of the transfer
+  - `encryptedAmount`: the encrypted amount that is transferred in the trasnaction in hexadecimal encoding.
+  - `aggregatedIndex`: the index up to which incoming amounts on the sender account have been combined during this operation.
+  - `newIndex`: the index on the receiver's incomingAmounts that will be assigned to the transferred amount.
+  - `newSelfEncryptedAmount`: the resulting self encrypted amount in the sender's account.
+- The following fields are present if the transaction is a transfer to public transaction:
+  - `amountAdded`: the plaintext of the amount that is added to the sender's public balance.
+  - `aggregatedIndex`: the index up to which incoming amounts on the sender account have been combined during this operation.
+  - `newSelfEncryptedAmount`: the resulting self encrypted amount in the sender's account.
+- The following fields are present if the transaction is a transfer to encrypted transaction:
+  - `amountSubtracted`: the plaintext of the amount that is subtracted from the sender's public balance.
+  - `newSelfEncryptedAmount`: the resulting self encrypted amount in the sender's account.
 
 For the purposes of the above, a simple transfer is a transaction of type `"transfer"` which transfers funds from one account to another.
 A transactions of type `"transfer"` is not considered a simple transfer if the destination is a smart contract instance.
-
 ### Example
 
 ```console
-$ curl -XGET http://localhost:3000/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL?limit=2&from=4&order=a
+$ curl -XGET http://localhost:3000/v0/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL?limit=2&from=4&order=a
 ```
 ```JSON
 {
   "transactions": [
     {
       "id": 5,
-      "blockTime": 1587646256,
+      "blockTime": 1587646256.25,
       "origin": {
         "type": "self"
       },
@@ -313,7 +409,7 @@ $ curl -XGET http://localhost:3000/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8Ajup
       "transactionHash": "84bf1e2ef8d3af3063cdb681932990f71ddb3949655f55307a266e5d687b414f",
       "blockHash": "013c6d2dd67affd6f39b9a7b255d244055b53d68fe8b0add4839a20e911d04cb",
       "details": {
-        "transferAmount": 123,
+        "transferAmount": "123",
         "events": [
           "Transferred 123 from 4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL to 4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL"
         ],
@@ -327,7 +423,7 @@ $ curl -XGET http://localhost:3000/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8Ajup
     },
     {
       "id": 7,
-      "blockTime": 1587646300,
+      "blockTime": 1587646300.02,
       "origin": {
         "type": "reward"
       },
@@ -357,7 +453,7 @@ On success, this returns a JSON object with the field `submissionId`, which cont
 
 
 ```console
-$ curl -XPUT http://localhost:3000/testnetGTUDrop/3KudzzbqRPyHVFEzZnZCUdK2ixr1SFLRVRm6sTfEvQv2N3A8h6
+$ curl -XPUT http://localhost:3000/v0/testnetGTUDrop/3KudzzbqRPyHVFEzZnZCUdK2ixr1SFLRVRm6sTfEvQv2N3A8h6
 {"submissionId":"76031716c829f3e7e95efda77558631d348a483e3317e3d66f3cac3038e5e757"}
 ```
 
@@ -366,3 +462,52 @@ If for some reason the drop fails, subsequent calls could return a new `submissi
 (This is unlikely under normal circumstances, but could result from racing concurrent requests.)
 
 If the account address is well-formed, but the account does not exist in a finalized state on the chain, this call fails with a **404 Not found** status code.
+
+
+## Notes on account balances.
+
+Suppose that at time t₀ you query the account balance and get a structure
+```json
+{
+   "selfAmount": s₀
+   "startIndex": i₀
+   "numAggregated": n₀
+   "incomingAmounts": a_{i₀} .. a_{iₙ}
+}
+```
+
+This implies that the amount `a_{i₀}` is not an incoming amount directly, i.e.,
+it is not on any of the incoming transactions, but it is an aggregate of
+incoming amounts `i₀ + 1 - n₀`, ..., up to `i₀`. All of the rest of the amounts
+are pure incoming amounts, as sent by other accounts.
+
+Next time we query we get the account balance like
+
+```json
+{
+   "selfAmount": t₀
+   "startIndex": j₀
+   "numAggregated": m₀
+   "incomingAmounts": b_{j₀} .. b_{jₙ}
+}
+```
+
+The first amounts in the respective lists are aggregation of `n₀` (respectively
+`m₀`) amounts. They are amounts with indices `a_{i₀+1-m},..,a_{i₀}`
+
+### Case where `selfAmounts` are the same
+
+The only change then would have been the arrival of new incoming encrypted
+amounts. In this case then `j₀ ≥ i₀` and `m₀ ≥ i₀`.
+
+The amount `b_{j₀}` might not yet be seen, however we know that it is the
+aggregation of amounts with indices `b_{j₀+1-m},..,a_{j₀}`, which we already
+have (partially) decrypted, and then we can count those towards the public
+balance already, while continuing to decrypt the remaining ones.
+
+### Case when `selfAmount` are different
+
+In this case the wallet must have made some action to cause this (or the user
+has used account externally), in both of these cases you can do a similar
+analysis with indices to determine the partial balance that you have already
+decrypted, but of course in this case it will change.

@@ -43,11 +43,8 @@ packages:
 
 extra-deps:
 - ./deps/simple-client/deps/crypto/
-- ./deps/simple-client/deps/acorn
 - ./deps/simple-client/deps/globalstate-types
-- ./deps/simple-client/deps/globalstate-mockup/globalstate
-- ./deps/simple-client/deps/globalstate-mockup/deps/lmdb-simple-cereal
-- ./deps/simple-client/deps/globalstate-mockup/deps/haskell-lmdb
+- ./deps/globalstate-mockup/globalstate
 - ./deps/simple-client/
 
 - github: lucasdicioccio/http2-client
@@ -56,12 +53,8 @@ extra-deps:
 - http2-grpc-types-0.5.0.0
 - http2-grpc-proto-lens-0.1.0.0
 
-# th-utilities was removed in LTS 15.0
-- th-utilities-0.2.4.0
-
 extra-lib-dirs:
-- ./deps/simple-client/deps/crypto/rust-src/target/release
-
+- ./deps/simple-client/deps/crypto/lib
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
@@ -86,4 +79,3 @@ extra-lib-dirs:
 #
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor
-
