@@ -45,7 +45,6 @@ extra-deps:
 - ./deps/simple-client/deps/crypto/
 - ./deps/simple-client/deps/globalstate-types
 - ./deps/globalstate-mockup/globalstate
-- ./deps/globalstate-mockup/deps/haskell-lmdb
 - ./deps/simple-client/
 
 - github: lucasdicioccio/http2-client
@@ -80,4 +79,3 @@ extra-lib-dirs:
 #
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor
-
