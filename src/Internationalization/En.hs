@@ -14,12 +14,8 @@ translation :: I18n
 translation = I18n {..}
     where
         i18nRejectReason ModuleNotWF = "Typechecking of module failed"
-        i18nRejectReason MissingImports = "Module has missing imports"
         i18nRejectReason (ModuleHashAlreadyExists mref) = "A module with the hash " <> descrModule mref <> " already exists"
-        i18nRejectReason MessageTypeError = "Typechecking of smart contract message failed"
-        i18nRejectReason ParamsTypeError = "Typechecking of smart contract initial parameters failed"
         i18nRejectReason (InvalidAccountReference addr) = "The account " <> descrAccount addr <> " does not exist"
-        i18nRejectReason (InvalidContractReference mref tyname) = "Invalid smart contract reference: " <> descrContractRef mref tyname
         i18nRejectReason (InvalidModuleReference mref) = "Module does not exist: " <> descrModule mref
         i18nRejectReason (InvalidContractAddress caddr) = "No smart contract instance exists with address " <> descrInstance caddr
         i18nRejectReason (ReceiverAccountNoCredential addr) = "The receiving account (" <> descrAccount addr <> ") has has no valid credential"
@@ -37,6 +33,17 @@ translation = I18n {..}
         i18nRejectReason (DuplicateSignKey _) = "Duplicate baker signature key"
         i18nRejectReason (NotFromBakerAccount _ _) = "Sender is not the baker's designated account"
         i18nRejectReason NotFromSpecialAccount = "Sender is not authorized to perform chain control actions"
+        i18nRejectReason (InvalidInitMethod mref initName) = "Init method " <> descrInitName initName <> " does not exist in module " <> descrModule mref <> "."
+        i18nRejectReason (InvalidReceiveMethod mref receiveName) = "Receive method " <> descrReceiveName receiveName <> " does not exist for module " <> descrModule mref <> "."
+        i18nRejectReason RuntimeFailure = "Runtime failure when executing smart contract."
+        i18nRejectReason (DuplicateAggregationKey _) = "Duplicate aggregation key."
+        i18nRejectReason NonExistentAccountKey = "The account key with the specified index does not exist."
+        i18nRejectReason KeyIndexAlreadyInUse = "The requested key index is already in use."
+        i18nRejectReason InvalidAccountKeySignThreshold = "The requested sign threshold would exceed the number of keys on the account."
+        i18nRejectReason InvalidEncryptedAmountTransferProof = "The encrypted amount transfer has an invalid proof."
+        i18nRejectReason (EncryptedAmountSelfTransfer _) = "An encrypted amount transfer from the account to itself is not allowed."
+        i18nRejectReason InvalidTransferToPublicProof  = "The secret to public transfer has an invalid proof."
+        i18nRejectReason InvalidIndexOnEncryptedTransfer = "The provided encryped amount index is out of bounds."
 
         i18nTransactionType TTDeployModule = "Deploy module"
         i18nTransactionType TTInitContract = "Initialize smart contract"
@@ -49,12 +56,31 @@ translation = I18n {..}
         i18nTransactionType TTDelegateStake = "Delegate stake"
         i18nTransactionType TTUndelegateStake = "Undelegate stake"
         i18nTransactionType TTUpdateElectionDifficulty = "Set chain parameter"
+        i18nTransactionType TTUpdateBakerAggregationVerifyKey = "Update baker aggregation key"
+        i18nTransactionType TTUpdateBakerElectionKey = "Update baker election key"
+        i18nTransactionType TTUpdateAccountKeys = "Update account keys"
+        i18nTransactionType TTAddAccountKeys = "Add account keys"
+        i18nTransactionType TTRemoveAccountKeys = "Remove account keys"
+        i18nTransactionType TTEncryptedAmountTransfer = "Transfer of encrypted amount"
+        i18nTransactionType TTTransferToEncrypted = "Transfer from public to encrypted balance"
+        i18nTransactionType TTTransferToPublic = "Transfer from encrypted to public balance"
 
         i18nDeployCredential = "Deploy account credential"
 
         i18nEvent (ModuleDeployed mref) = "Deployed module " <> descrModule mref
-        i18nEvent (ContractInitialized mref tyname caddr amt) = "Initialized smart contract " <> descrContractRef mref tyname <> " at address " <> descrInstance caddr <> " with balance " <> descrAmount amt
-        i18nEvent (Updated target src amt msg) = "Invoked smart contract: source=" <> descrAddress src <> ", target=" <> descrInstance target <> ", amount=" <> descrAmount amt <> ", message=" <> Text.pack (show msg)
+        i18nEvent ContractInitialized{..} =
+          "Initialized smart contract " <>
+          descrModule ecRef <>
+          " at address " <> descrInstance ecAddress <>
+          " with balance " <>
+          descrAmount ecAmount <>
+          ". " <>
+          Text.pack (show (length ecEvents)) <> " events were logged"
+        i18nEvent Updated{..} =
+          "Invoked smart contract: source=" <> descrAddress euInstigator <>
+          ", target=" <> descrInstance euAddress <>
+          ", amount=" <> descrAmount euAmount <>
+          ", message=" <> Text.pack (show euMessage)
         i18nEvent (Transferred sender amt recv) = "Transferred " <> descrAmount amt <> " from " <> descrAddress sender <> " to " <> descrAddress recv
         i18nEvent (AccountCreated addr) = "Created account with address " <> descrAccount addr
         i18nEvent (CredentialDeployed _ addr) = "Deployed a credential to account " <> descrAccount addr
@@ -66,6 +92,15 @@ translation = I18n {..}
         i18nEvent (StakeDelegated _ bid) = "Delegated stake to baker " <> descrBaker bid
         i18nEvent (StakeUndelegated _ _) = "Undelegated stake"
         i18nEvent (ElectionDifficultyUpdated diff) = "Updated leadership election difficulty to " <> Text.pack (show diff)
+        i18nEvent (BakerAggregationKeyUpdated bid _) = "Updated aggregation key for baker " <> descrBaker bid
+        i18nEvent AccountKeysUpdated = "Updated account keys"
+        i18nEvent AccountKeysAdded = "Added account keys"
+        i18nEvent AccountKeysRemoved = "Removed account keys"
+        i18nEvent AccountKeysSignThresholdUpdated = "Signature threshold updated"
+        i18nEvent NewEncryptedAmount{..} = "New encrypted amount added with index = " <> descrEncryptedAmountIndex neaNewIndex
+        i18nEvent EncryptedAmountsRemoved{..} = "Encrypted amounts up to index = " <> descrEncryptedAmountAggIndex earUpToIndex <> " removed"
+        i18nEvent EncryptedSelfAmountAdded{} = "New encrypted self-amount"
+        i18nEvent AmountAddedByDecryption{..} = "Amount added to the public balance by decryption = " <> descrAmount aabdAmount
 
         i18nSpecialEvent BakingReward{..} = "Award " <> descrAmount stoRewardAmount <> " to baker " <> descrBaker stoBakerId <> " at " <> descrAccount stoBakerAccount
 
@@ -85,3 +120,5 @@ translation = I18n {..}
         i18nErrorMessage EMDatabaseError = "Database error"
         i18nErrorMessage EMAccountNotFinal = "Account creation is not finalized"
         i18nErrorMessage EMConfigurationError = "Server configuration error"
+        i18nErrorMessage EMAccountDoesNotExist = "Account does not exist"
+        i18nErrorMessage EMMissingParameter = "Missing parameter"

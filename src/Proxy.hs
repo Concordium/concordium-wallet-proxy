@@ -12,6 +12,7 @@ module Proxy where
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString as BS
 
+import qualified Data.Ratio as Rational
 import qualified Data.HashMap.Strict as HM
 import Text.Read hiding (String)
 import Control.Arrow (left)
@@ -28,7 +29,7 @@ import Network.HTTP.Types(badRequest400, notFound404, badGateway502)
 import Yesod hiding (InternalError)
 import qualified Yesod
 import Database.Persist.Sql
-import Data.Maybe(catMaybes)
+import Data.Maybe(catMaybes, fromMaybe)
 import Data.Time.Clock.POSIX
 import qualified Database.Esqueleto as E
 
@@ -41,15 +42,19 @@ import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
 import Concordium.Client.GRPC
-import Concordium.Client.Types.Transaction (simpleTransferEnergyCost)
+import Concordium.Client.Types.Transaction(simpleTransferEnergyCost,
+                                           encryptedTransferEnergyCost,
+                                           accountEncryptEnergyCost,
+                                           accountDecryptEnergyCost)
 import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex)
 import Concordium.Crypto.SignatureScheme (KeyPair)
+import Concordium.Common.Version
 import Concordium.GlobalState.SQL.AccountTransactionIndex
 import Concordium.GlobalState.SQL
 
 import Internationalization
 
-data ErrorCode = InternalError | RequestInvalid
+data ErrorCode = InternalError | RequestInvalid | DataNotFound
     deriving(Eq, Show, Enum)
 
 data Proxy = Proxy {
@@ -98,16 +103,17 @@ defaultNetId :: Int
 defaultNetId = 100
 
 mkYesod "Proxy" [parseRoutes|
-/accBalance/#Text AccountBalanceR GET
-/accNonce/#Text AccountNonceR GET
-/accTransactions/#Text AccountTransactionsR GET
-/simpleTransferCost SimpleTransferCostR GET
-/submissionStatus/#Text SubmissionStatusR GET
-/submitCredential/ CredentialR PUT
-/submitTransfer/ TransferR PUT
-/testnetGTUDrop/#Text GTUDropR PUT
-/global GlobalFileR GET
-/ip_info IpsR GET
+/v0/accBalance/#Text AccountBalanceR GET
+/v0/accNonce/#Text AccountNonceR GET
+/v0/accEncryptionKey/#Text AccountEncryptionKeyR GET
+/v0/accTransactions/#Text AccountTransactionsR GET
+/v0/transactionCost TransactionCostR GET
+/v0/submissionStatus/#Text SubmissionStatusR GET
+/v0/submitCredential/ CredentialR PUT
+/v0/submitTransfer/ TransferR PUT
+/v0/testnetGTUDrop/#Text GTUDropR PUT
+/v0/global GlobalFileR GET
+/v0/ip_info IpsR GET
 |]
 
 respond400Error :: ErrorMessage -> ErrorCode -> Handler TypedContent
@@ -116,6 +122,14 @@ respond400Error err code = do
   sendResponseStatus badRequest400 $
     object ["errorMessage" .= i18n i err,
             "error" .= fromEnum code
+           ]
+
+respond404Error :: ErrorMessage -> Handler TypedContent
+respond404Error err = do
+  i <- internationalize
+  sendResponseStatus notFound404 $
+    object ["errorMessage" .= i18n i err,
+            "error" .= fromEnum DataNotFound
            ]
 
 runGRPC :: ClientMonad IO (Either String a) -> (a -> Handler TypedContent) -> Handler TypedContent
@@ -155,8 +169,16 @@ getAccountBalanceR :: Text -> Handler TypedContent
 getAccountBalanceR addrText =
     runGRPC doGetBal $ \(lastFinInfo, bestInfo) -> do
       let
-          getBal :: Value -> Maybe Integer
-          getBal = parseMaybe (withObject "account info" (.: "accountAmount"))
+          getBal :: Value -> Maybe Value
+          -- We're doing it in this low-level way to avoid parsing anything that
+          -- is not needed, especially the encrypted amounts, since those are
+          -- fairly expensive to parse.
+          getBal (Object obj) = do
+            publicAmount <- HM.lookup "accountAmount" obj
+            encryptedAmount <- HM.lookup "accountEncryptedAmount" obj
+            return $ object ["accountAmount" .= publicAmount, "accountEncryptedAmount" .= encryptedAmount]
+          getBal _ = Nothing
+
           lastFinBal = getBal lastFinInfo
           bestBal = getBal bestInfo
       $(logInfo) $ "Retrieved account balance for " <> addrText
@@ -181,11 +203,61 @@ getAccountNonceR addrText =
       $(logInfo) "Successfully got nonce."
       sendResponse v
 
--- |Get the cost of a simple transfer with one signature.
--- TODO: This currently assumes a conversion factor of 1 from
+-- |Get the account encryption key at the best block.
+-- Return '404' status code if account does not exist in the best block at the moment.
+getAccountEncryptionKeyR :: Text -> Handler TypedContent
+getAccountEncryptionKeyR addrText = do
+  runGRPC doGetEncryptionKey $ \accInfo -> do
+    let encryptionKey :: Maybe Value -- Value in order to avoid parsing the key, which is expensive.
+        encryptionKey = parseMaybe (withObject "AccountInfo" (.: "accountEncryptionKey")) accInfo
+    case encryptionKey of
+      Nothing -> do
+        $(logInfo) $ "Account not found for 'accountEncryptionKey' request: " <> addrText
+        respond404Error EMAccountDoesNotExist
+      Just key -> do
+        $(logInfo) $ "Retrieved account encryption key for " <> addrText
+                <> ": " <> Text.pack (show encryptionKey)
+        sendResponse (object [ "accountEncryptionKey" .= key ])
+
+  where doGetEncryptionKey = withBestBlockHash Nothing (getAccountInfo addrText)
+
+
+-- |Get the cost of a transaction, based on its type. The transaction type is
+-- given as a "type" parameter. An additional parameter is "numSignatures" that
+-- defaults to one if not present.
+--
+-- TODO: This currently assumes a conversion factor of 100 from
 -- energy to GTU.
-getSimpleTransferCostR :: Handler TypedContent
-getSimpleTransferCostR = sendResponse $ object ["cost" .= Yesod.Number (fromIntegral (simpleTransferEnergyCost 1))]
+getTransactionCostR :: Handler TypedContent
+getTransactionCostR = do
+  numSignatures <- fromMaybe "1" <$> lookupGetParam "numSignatures"
+  case readMaybe (Text.unpack numSignatures) of
+    Just x | x > 0 -> handleTransactionCost x
+    _ -> respond400Error (EMParseError "Could not parse `numSignatures` value.") RequestInvalid
+
+  where handleTransactionCost numSignatures = do
+          lookupGetParam "type" >>= \case
+            Nothing -> respond400Error EMMissingParameter RequestInvalid
+            Just tty -> case Text.unpack tty of
+              "simpleTransfer" -> sendResponse $ object ["cost" .= Amount (100 * fromIntegral (simpleTransferEnergyCost numSignatures))
+                                                       , "energy" .= simpleTransferEnergyCost numSignatures
+                                                       ]
+              y | y == "encryptedTransfer" -> do
+                let energyCost = encryptedTransferEnergyCost numSignatures
+                sendResponse $ object ["cost" .= Amount (100 * fromIntegral energyCost)
+                                      , "energy" .= energyCost
+                                      ]
+                | y == "transferToSecret" -> do
+                    let energyCost = accountEncryptEnergyCost numSignatures
+                    sendResponse $ object ["cost" .= Amount (100 * fromIntegral energyCost)
+                                          , "energy" .= energyCost
+                                          ]
+                | y == "transferToPublic" -> do
+                    let energyCost = accountDecryptEnergyCost numSignatures
+                    sendResponse $ object ["cost" .= Amount (100 * fromIntegral energyCost)
+                                          , "energy" .= energyCost
+                                          ]
+              tty' -> respond400Error (EMParseError $ "Could not parse transaction type: " <> tty') RequestInvalid
 
 putCredentialR :: Handler TypedContent
 putCredentialR =
@@ -194,13 +266,14 @@ putCredentialR =
     Right credJSON ->
       case fromJSON credJSON of
         Error err -> respond400Error (EMParseError err) RequestInvalid
-        Success cdi -> do
-          runGRPC (sendTransactionToBaker (CredentialDeployment cdi) defaultNetId) $ \case
+        Success Versioned{..} | vVersion == 0 -> do
+          runGRPC (sendTransactionToBaker (CredentialDeployment vValue) defaultNetId) $ \case
             False -> do -- this case cannot happen at this time
               $(logError) "Credential rejected by node."
               respond400Error EMCredentialRejected RequestInvalid
             True ->
-              sendResponse (object ["submissionId" .= (getHash (CredentialDeployment cdi) :: TransactionHash)])
+              sendResponse (object ["submissionId" .= (getHash (CredentialDeployment vValue) :: TransactionHash)])
+                              | otherwise -> respond400Error (EMParseError $ "Invalid version number " ++ show vVersion) RequestInvalid
 
 -- |Use the serialize instance of a type to deserialize
 decodeBase16 :: (MonadFail m) => Text.Text -> m BS.ByteString
@@ -232,7 +305,6 @@ putTransferR =
               case S.decode ((S.encode sig) <> body) of
                 Left err -> fail err
                 Right tx -> return tx
-
 
 getSimpleTransactionStatus :: MonadIO m => I18n -> TransactionHash -> ClientMonad m (Either String Value)
 getSimpleTransactionStatus i trHash = do
@@ -272,10 +344,45 @@ getSimpleTransactionStatus i trHash = do
         Just TTTransfer ->
           case tsResult of
             TxSuccess [Transferred{etTo = AddressAccount addr,..}] ->
-              return ["outcome" .= String "success", "to" .= addr, "amount" .= etAmount]
+              return ["outcome" .= String "success",
+                      "to" .= addr,
+                      "amount" .= etAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
               Left $ "Unexpected outcome of simple transfer: " ++ show es
+        Just TTEncryptedAmountTransfer ->
+          case tsResult of
+            TxSuccess [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}] ->
+              return ["outcome" .= String "success",
+                      "sender" .= earAccount,
+                      "to" .= neaAccount,
+                      "encryptedAmount" .= neaEncryptedAmount,
+                      "aggregatedIndex" .= earUpToIndex,
+                      "newSelfEncryptedAmount" .= earNewAmount]
+            TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
+            es ->
+              Left $ "Unexpected outcome of encrypted transfer: " ++ show es
+        Just TTTransferToPublic ->
+          case tsResult of
+            TxSuccess [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}] ->
+              return ["outcome" .= String "success",
+                      "sender" .= earAccount,
+                      "newSelfEncryptedAmount" .= earNewAmount,
+                      "aggregatedIndex" .= earUpToIndex,
+                      "amountAdded" .= aabdAmount]
+            TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
+            es ->
+              Left $ "Unexpected outcome of secret to public transfer: " ++ show es
+        Just TTTransferToEncrypted ->
+          case tsResult of
+            TxSuccess [EncryptedSelfAmountAdded{..}] ->
+              return ["outcome" .= String "success",
+                      "sender" .= eaaAccount,
+                      "newSelfEncryptedAmount" .= eaaNewAmount,
+                      "amountSubtracted" .= eaaAmount]
+            TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
+            es ->
+              Left $ "Unexpected outcome of public to secret transfer: " ++ show es
         _ ->
           Left "Unsupported transaction type for simple statuses."
     outcomesToPairs :: [TransactionSummary] -> Either String [Pair]
@@ -339,9 +446,15 @@ getAccountTransactionsR addrText = do
           "transactions" .= fentries] <>
           (maybe [] (\sid -> ["from" .= sid]) startId)
 
+-- |Convert a timestamp to seconds since the unix epoch. A timestamp can be a fractional number, e.g., 17.5.
+timestampToFracSeconds :: Timestamp -> Double
+timestampToFracSeconds Timestamp{..} = fromRational (toInteger tsMillis Rational.% 1000)
+
 formatEntry :: I18n -> AccountAddress -> (Entity Entry, Entity Summary) -> Either String Value
 formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
-  let blockDetails = ["blockHash" .= unBSS summaryBlock]
+  let blockDetails = ["blockHash" .= unBSS summaryBlock,
+                      "blockTime" .= timestampToFracSeconds summaryTimestamp
+                     ]
   transactionDetails <- case AE.fromJSON summarySummary of
     AE.Error e -> Left e
     AE.Success (Right v@BakingReward{..}) ->
@@ -363,26 +476,66 @@ formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
                                    Nothing -> (object ["type" .= ("none" :: Text)], False)
 
           (resultDetails, subtotal) = case tsResult of
-                                        TxSuccess evts -> ((["outcome" .= ("success" :: Text), "events" .= fmap (i18n i) evts]
-                                                           <> case (tsType, evts) of
-                                                              (Just TTTransfer, [Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr)]) ->
-                                                                ["transferSource" .= fromAddr, "transferDestination" .= toAddr, "transferAmount" .= amt]
-                                                              _ -> []), eventSubtotal self evts)
-                                        TxReject reason -> (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason], Nothing)
+            TxSuccess evts -> ((["outcome" .= ("success" :: Text), "events" .= fmap (i18n i) evts]
+                                <> case (tsType, evts) of
+                                     (Just TTTransfer, [Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr)]) ->
+                                       ["transferSource" .= fromAddr,
+                                        "transferDestination" .= toAddr,
+                                        "transferAmount" .= amt]
+                                     (Just TTEncryptedAmountTransfer, [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
+                                       ["transferSource" .= earAccount,
+                                        "transferDestination" .= neaAccount,
+                                        "encryptedAmount" .= neaEncryptedAmount,
+                                        "aggregatedIndex" .= earUpToIndex,
+                                        "newIndex" .= neaNewIndex,
+                                        "newSelfEncryptedAmount" .= earNewAmount]
+                                     (Just TTTransferToPublic, [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}]) ->
+                                       ["transferSource" .= earAccount,
+                                        "amountAdded" .= aabdAmount,
+                                        "aggregatedIndex" .= earUpToIndex,
+                                        "newSelfEncryptedAmount" .= earNewAmount]
+                                     (Just TTTransferToEncrypted, [EncryptedSelfAmountAdded{..}]) ->
+                                       ["transferSource" .= eaaAccount,
+                                        "amountSubtracted" .= eaaAmount,
+                                        "newSelfEncryptedAmount" .= eaaNewAmount]
+                                     _ -> []), eventSubtotal self evts )
+            TxReject reason -> (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason], Nothing)
 
           details = object $ ["type" .= renderMaybeTransactionType tsType, "description" .= i18n i tsType] <> resultDetails
 
           costs
             | selfOrigin = case subtotal of
-                Nothing -> ["cost" .= toInteger tsCost, "total" .= (- toInteger tsCost)]
-                Just st -> ["subtotal" .= st, "cost" .= toInteger tsCost, "total" .= (st - toInteger tsCost)]
-            | otherwise = ["total" .= maybe 0 id subtotal]
+                Nothing -> let total = - toInteger tsCost in ["cost" .= show (toInteger tsCost), "total" .= show total]
+                Just st -> let total = st - toInteger tsCost
+                          in ["subtotal" .= show st, "cost" .= show (toInteger tsCost), "total" .= show total]
+            | otherwise = ["total" .= show (maybe 0 id subtotal)]
+
+          encryptedCost = case tsSender of
+            Just sender
+              | sender == self -> case (tsType, tsResult) of
+                  (Just TTEncryptedAmountTransfer, TxSuccess [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
+                    ["encrypted" .= object ["encryptedAmount" .= neaEncryptedAmount,
+                                            "newStartIndex" .= earUpToIndex,
+                                            "newSelfEncryptedAmount" .= earNewAmount]]
+                  (Just TTTransferToPublic, TxSuccess [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}]) ->
+                    ["encrypted" .= object ["newStartIndex" .= earUpToIndex,
+                                            "newSelfEncryptedAmount" .= earNewAmount]]
+                  (Just TTTransferToEncrypted, TxSuccess [EncryptedSelfAmountAdded{..}]) ->
+                    ["encrypted" .= object ["newSelfEncryptedAmount" .= eaaNewAmount]]
+                  _ -> []
+              | otherwise -> case (tsType, tsResult) of
+                  (Just TTEncryptedAmountTransfer, TxSuccess [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
+                    ["encrypted" .= object ["encryptedAmount" .= neaEncryptedAmount,
+                                            "newIndex" .= neaNewIndex]]
+                  _ -> []
+
+            Nothing -> []
       return $ [
           "origin" .= origin,
           "energy" .= tsEnergyCost,
           "details" .= details,
           "transactionHash" .= tsHash
-          ] <> costs
+          ] <> costs <> encryptedCost
   return $ object $ ["id" .= key] <> blockDetails <> transactionDetails
 
 renderTransactionType :: TransactionType -> Text
@@ -399,6 +552,12 @@ renderTransactionType TTUndelegateStake = "undelegateStake"
 renderTransactionType TTUpdateElectionDifficulty = "updateElectionDifficulty"
 renderTransactionType TTUpdateBakerAggregationVerifyKey = "updateBakerAggregationVerifyKey"
 renderTransactionType TTUpdateBakerElectionKey = "updateBakerElectionKey"
+renderTransactionType TTUpdateAccountKeys = "updateAccountKeys"
+renderTransactionType TTAddAccountKeys = "addAccountKeys"
+renderTransactionType TTRemoveAccountKeys = "removeAccountKeys"
+renderTransactionType TTEncryptedAmountTransfer = "encryptedAmountTransfer"
+renderTransactionType TTTransferToEncrypted = "transferToEncrypted"
+renderTransactionType TTTransferToPublic = "transferToPublic"
 
 renderMaybeTransactionType :: Maybe TransactionType -> Text
 renderMaybeTransactionType (Just tt) = renderTransactionType tt
@@ -420,12 +579,12 @@ eventSubtotal self evts = case catMaybes $ eventCost <$> evts of
       (True, False) -> Just (- toInteger etAmount)
       (False, True) -> Just (toInteger etAmount)
       (False, False) -> Nothing
+    eventCost AmountAddedByDecryption{..} = Just $ toInteger aabdAmount
+    eventCost EncryptedSelfAmountAdded{..} = Just $ - toInteger eaaAmount
     eventCost _ = Nothing
 
-
-
 dropAmount :: Amount
-dropAmount = 1000000
+dropAmount = 100000000
 
 
 {- | Try to execute a GTU drop to the given account.
@@ -513,7 +672,7 @@ putGTUDropR addrText = do
         Nothing -> runGRPC getNonce $ \nonce -> do
           currentTime <- liftIO $ round <$> getPOSIXTime
           let
-            payload = Transfer (AddressAccount addr) dropAmount
+            payload = Transfer addr dropAmount
             btrPayload = encodePayload payload
             btrHeader = TransactionHeader {
               thSender = dropAccount,

@@ -34,9 +34,6 @@ dependencies:
 - vector >= 0.12
 - split
 - directory >= 1.3
-- acorn
-- lmdb-simple >= 0.4
-- lmdb
 - either
 - filepath >= 1.4
 - random >= 1.1
