@@ -42,7 +42,10 @@ import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
 import Concordium.Client.GRPC
-import Concordium.Client.Types.Transaction (simpleTransferEnergyCost, encryptedTransferEnergyCost)
+import Concordium.Client.Types.Transaction(simpleTransferEnergyCost,
+                                           encryptedTransferEnergyCost,
+                                           accountEncryptEnergyCost,
+                                           accountDecryptEnergyCost)
 import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex)
 import Concordium.Crypto.SignatureScheme (KeyPair)
 import Concordium.Common.Version
@@ -239,14 +242,21 @@ getTransactionCostR = do
               "simpleTransfer" -> sendResponse $ object ["cost" .= Amount (100 * fromIntegral (simpleTransferEnergyCost numSignatures))
                                                        , "energy" .= simpleTransferEnergyCost numSignatures
                                                        ]
-              y | y == "encryptedTransfer" ||
-                  y == "transferToSecret" ||
-                  y == "transferToPublic" -> do
-                -- FIXME: Dummy values for a prototype
-                let dummyCost = encryptedTransferEnergyCost numSignatures -- roughly 30ms of energy
-                sendResponse $ object ["cost" .= Amount (100 * fromIntegral dummyCost)
-                                      , "energy" .= dummyCost
+              y | y == "encryptedTransfer" -> do
+                let energyCost = encryptedTransferEnergyCost numSignatures
+                sendResponse $ object ["cost" .= Amount (100 * fromIntegral energyCost)
+                                      , "energy" .= energyCost
                                       ]
+                | y == "transferToSecret" -> do
+                    let energyCost = accountEncryptEnergyCost numSignatures
+                    sendResponse $ object ["cost" .= Amount (100 * fromIntegral energyCost)
+                                          , "energy" .= energyCost
+                                          ]
+                | y == "transferToPublic" -> do
+                    let energyCost = accountDecryptEnergyCost numSignatures
+                    sendResponse $ object ["cost" .= Amount (100 * fromIntegral energyCost)
+                                          , "energy" .= energyCost
+                                          ]
               tty' -> respond400Error (EMParseError $ "Could not parse transaction type: " <> tty') RequestInvalid
 
 putCredentialR :: Handler TypedContent

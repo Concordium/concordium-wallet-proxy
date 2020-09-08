@@ -54,12 +54,8 @@ extra-deps:
 - http2-grpc-types-0.5.0.0
 - http2-grpc-proto-lens-0.1.0.0
 
-# th-utilities was removed in LTS 15.0
-- th-utilities-0.2.4.0
-
 extra-lib-dirs:
-- ./deps/simple-client/deps/crypto/rust-src/target/release
-
+- ./deps/simple-client/deps/crypto/lib
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
