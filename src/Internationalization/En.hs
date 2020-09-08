@@ -43,6 +43,7 @@ translation = I18n {..}
         i18nRejectReason InvalidEncryptedAmountTransferProof = "The encrypted amount transfer has an invalid proof."
         i18nRejectReason (EncryptedAmountSelfTransfer _) = "Encrypted amount transfer from account A to account A is not allowed."
         i18nRejectReason InvalidTransferToPublicProof  = "The secret to public transfer has an invalid proof."
+        i18nRejectReason InvalidIndexOnEncryptedTransfer = "The provided index is below the start index or above `startIndex + length incomingAmounts`."
 
         i18nTransactionType TTDeployModule = "Deploy module"
         i18nTransactionType TTInitContract = "Initialize smart contract"
