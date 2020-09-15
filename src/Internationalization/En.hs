@@ -61,9 +61,9 @@ translation = I18n {..}
         i18nTransactionType TTUpdateAccountKeys = "Update account keys"
         i18nTransactionType TTAddAccountKeys = "Add account keys"
         i18nTransactionType TTRemoveAccountKeys = "Remove account keys"
-        i18nTransactionType TTEncryptedAmountTransfer = "Transfer of encrypted amount"
-        i18nTransactionType TTTransferToEncrypted = "Transfer from public to encrypted balance"
-        i18nTransactionType TTTransferToPublic = "Transfer from encrypted to public balance"
+        i18nTransactionType TTEncryptedAmountTransfer = "Shielded transfer"
+        i18nTransactionType TTTransferToEncrypted = "Shielded amount"
+        i18nTransactionType TTTransferToPublic = "Unshielded amount"
 
         i18nDeployCredential = "Deploy account credential"
 
