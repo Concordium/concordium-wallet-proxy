@@ -88,7 +88,7 @@ instance Yesod Proxy where
 share [mkPersist sqlSettings, mkMigrate "migrateGTURecipient"] [persistLowerCase|
     GTURecipient
         account (ByteStringSerialized AccountAddress)  maxlen=32
-        transaction (ByteStringSerialized BareTransaction)
+        transaction (ByteStringSerialized AccountTransaction)
         UniqueAccount account
 |]
 
@@ -553,7 +553,6 @@ renderTransactionType TTUpdateBakerAccount = "updateBakerAccount"
 renderTransactionType TTUpdateBakerSignKey = "updateBakerSignKey"
 renderTransactionType TTDelegateStake = "delegateStake"
 renderTransactionType TTUndelegateStake = "undelegateStake"
-renderTransactionType TTUpdateElectionDifficulty = "updateElectionDifficulty"
 renderTransactionType TTUpdateBakerAggregationVerifyKey = "updateBakerAggregationVerifyKey"
 renderTransactionType TTUpdateBakerElectionKey = "updateBakerElectionKey"
 renderTransactionType TTUpdateAccountKeys = "updateAccountKeys"
@@ -677,15 +676,15 @@ putGTUDropR addrText = do
           currentTime <- liftIO $ round <$> getPOSIXTime
           let
             payload = Transfer addr dropAmount
-            btrPayload = encodePayload payload
-            btrHeader = TransactionHeader {
+            atrPayload = encodePayload payload
+            atrHeader = TransactionHeader {
               thSender = dropAccount,
               thNonce = nonce,
               thEnergyAmount = dropEnergy,
-              thPayloadSize = payloadSize btrPayload,
-              thExpiry = TransactionExpiryTime $ currentTime + 300
+              thPayloadSize = payloadSize atrPayload,
+              thExpiry = TransactionTime $ currentTime + 300
             }
-            transaction = signTransaction dropKeys btrHeader btrPayload
+            transaction = signTransaction dropKeys atrHeader atrPayload
           mk <- runDB $ insertUnique (GTURecipient (ByteStringSerialized addr) (ByteStringSerialized transaction))
           case mk of
             -- There is already a transaction, so retry.
@@ -705,7 +704,7 @@ putGTUDropR addrText = do
                       -> do
                         $(logError) $ "GTU drop account has insufficient funds"
                         configErr
-                    | lastFinNonce > thNonce (btrHeader transaction)
+                    | lastFinNonce > thNonce (atrHeader transaction)
                       -> do
                         -- Given the nonce, the transaction is no good. Delete and try again.
                         runDB $ delete key
@@ -713,7 +712,7 @@ putGTUDropR addrText = do
                     | otherwise
                       -> do
                         currentTime <- liftIO $ round <$> getPOSIXTime
-                        if thExpiry (btrHeader transaction) < TransactionExpiryTime currentTime then do
+                        if thExpiry (atrHeader transaction) < TransactionTime currentTime then do
                           runDB $ delete key
                           tryDrop addr
                         else sendTransaction transaction
