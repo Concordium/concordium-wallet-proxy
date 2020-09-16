@@ -55,7 +55,6 @@ translation = I18n {..}
         i18nTransactionType TTUpdateBakerSignKey = "Update baker key"
         i18nTransactionType TTDelegateStake = "Delegate stake"
         i18nTransactionType TTUndelegateStake = "Undelegate stake"
-        i18nTransactionType TTUpdateElectionDifficulty = "Set chain parameter"
         i18nTransactionType TTUpdateBakerAggregationVerifyKey = "Update baker aggregation key"
         i18nTransactionType TTUpdateBakerElectionKey = "Update baker election key"
         i18nTransactionType TTUpdateAccountKeys = "Update account keys"
@@ -91,7 +90,6 @@ translation = I18n {..}
         i18nEvent (BakerElectionKeyUpdated bid _) = "Updated election key for baker " <> descrBaker bid
         i18nEvent (StakeDelegated _ bid) = "Delegated stake to baker " <> descrBaker bid
         i18nEvent (StakeUndelegated _ _) = "Undelegated stake"
-        i18nEvent (ElectionDifficultyUpdated diff) = "Updated leadership election difficulty to " <> Text.pack (show diff)
         i18nEvent (BakerAggregationKeyUpdated bid _) = "Updated aggregation key for baker " <> descrBaker bid
         i18nEvent AccountKeysUpdated = "Updated account keys"
         i18nEvent AccountKeysAdded = "Added account keys"
@@ -101,6 +99,7 @@ translation = I18n {..}
         i18nEvent EncryptedAmountsRemoved{..} = "Encrypted amounts up to index = " <> descrEncryptedAmountAggIndex earUpToIndex <> " removed"
         i18nEvent EncryptedSelfAmountAdded{} = "New encrypted self-amount"
         i18nEvent AmountAddedByDecryption{..} = "Amount added to the public balance by decryption = " <> descrAmount aabdAmount
+        i18nEvent UpdateEnqueued{..} = "Chain update event enqueued."
 
         i18nSpecialEvent BakingReward{..} = "Award " <> descrAmount stoRewardAmount <> " to baker " <> descrBaker stoBakerId <> " at " <> descrAccount stoBakerAccount
 
