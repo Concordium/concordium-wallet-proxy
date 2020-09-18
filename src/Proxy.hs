@@ -631,7 +631,10 @@ putGTUDropR addrText = do
     doGetAccInfo t = do
       lastFinBlock <- getLastFinalBlockHash
       ai <- getAccountInfo t lastFinBlock
-      return $ parseMaybe (withObject "account info" $ \o -> (,) <$> (o .: "accountNonce") <*> (o .: "accountAmount")) <$> ai
+      case ai of
+        Right Null -> return $ Right Nothing
+        Right val -> return $ Just <$> parseEither (withObject "account info" $ \o -> (,) <$> (o .: "accountNonce") <*> (o .: "accountAmount")) val
+        Left err -> return $ Left err
     -- Determine if the transaction is or could become
     -- successfully finalized.  Returns False if the
     -- transaction is absent or is finalized but failed.
@@ -693,7 +696,7 @@ putGTUDropR addrText = do
         Just (Entity key (GTURecipient _ (ByteStringSerialized transaction))) ->
           runGRPC (doGetAccInfo (accountToText dropAccount)) $ \case
               Nothing -> do
-                $(logError) $ "Could not get GTU drop account info."
+                $(logError) $ "Could not get GTU drop account ('" <> accountToText dropAccount  <> "') info."
                 configErr
               Just (lastFinNonce, lastFinAmt) -> do
                 let trHash = getHash (NormalTransaction transaction) :: TransactionHash
