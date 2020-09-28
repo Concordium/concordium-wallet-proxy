@@ -361,6 +361,7 @@ getSimpleTransactionStatus i trHash = do
                       "sender" .= earAccount,
                       "to" .= neaAccount,
                       "encryptedAmount" .= neaEncryptedAmount,
+                      "inputEncryptedAmount" .= earInputAmount,
                       "aggregatedIndex" .= earUpToIndex,
                       "newSelfEncryptedAmount" .= earNewAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
@@ -372,6 +373,7 @@ getSimpleTransactionStatus i trHash = do
               return ["outcome" .= String "success",
                       "sender" .= earAccount,
                       "newSelfEncryptedAmount" .= earNewAmount,
+                      "inputEncryptedAmount" .= earInputAmount,
                       "aggregatedIndex" .= earUpToIndex,
                       "amountAdded" .= aabdAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
@@ -491,12 +493,14 @@ formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
                                         "transferDestination" .= neaAccount,
                                         "encryptedAmount" .= neaEncryptedAmount,
                                         "aggregatedIndex" .= earUpToIndex,
+                                        "inputEncryptedAmount" .= earInputAmount,
                                         "newIndex" .= neaNewIndex,
                                         "newSelfEncryptedAmount" .= earNewAmount]
                                      (Just TTTransferToPublic, [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}]) ->
                                        ["transferSource" .= earAccount,
                                         "amountAdded" .= aabdAmount,
                                         "aggregatedIndex" .= earUpToIndex,
+                                        "inputEncryptedAmount" .= earInputAmount,
                                         "newSelfEncryptedAmount" .= earNewAmount]
                                      (Just TTTransferToEncrypted, [EncryptedSelfAmountAdded{..}]) ->
                                        ["transferSource" .= eaaAccount,
