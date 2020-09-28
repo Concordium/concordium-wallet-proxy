@@ -95,10 +95,10 @@ translation = I18n {..}
         i18nEvent AccountKeysAdded = "Added account keys"
         i18nEvent AccountKeysRemoved = "Removed account keys"
         i18nEvent AccountKeysSignThresholdUpdated = "Signature threshold updated"
-        i18nEvent NewEncryptedAmount{..} = "New encrypted amount added with index = " <> descrEncryptedAmountIndex neaNewIndex
-        i18nEvent EncryptedAmountsRemoved{..} = "Encrypted amounts up to index = " <> descrEncryptedAmountAggIndex earUpToIndex <> " removed"
-        i18nEvent EncryptedSelfAmountAdded{} = "New encrypted self-amount"
-        i18nEvent AmountAddedByDecryption{..} = "Amount added to the public balance by decryption = " <> descrAmount aabdAmount
+        i18nEvent NewEncryptedAmount{..} = "New encrypted amount added to account " <> descrAccount neaAccount
+        i18nEvent EncryptedAmountsRemoved{..} = "Consumed encrypted amounts on account " <> descrAccount earAccount
+        i18nEvent EncryptedSelfAmountAdded{..} = "Updated shielded balance of account " <> descrAccount eaaAccount
+        i18nEvent AmountAddedByDecryption{..} = "Unshielded " <> descrAmount aabdAmount <> " on account " <> descrAccount aabdAccount
         i18nEvent UpdateEnqueued{..} = "Chain update event enqueued."
 
         i18nSpecialEvent BakingReward{..} = "Award " <> descrAmount stoRewardAmount <> " to baker " <> descrBaker stoBakerId <> " at " <> descrAccount stoBakerAccount
