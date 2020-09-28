@@ -224,6 +224,13 @@ If the `status` is `finalized`, the array will only have one element.
 #### `newSelfEncryptedAmount` (optional)
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is one of the three encrypted transactions. The value is the new self encrypted amount on the account.
 
+#### `inputEncryptedAmount` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and
+the outcome field is `success`, and thre transaction is either an encrypted
+transfer, or encrypted to public transfer, i.e., unshielding. The value is the
+input encrypted amount that was removed from the sender's account.
+
+
 #### `aggregatedIndex` (optional)
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is either `EncryptedAmountTransfer` or `TransferToPublic`. The value is the index up to which the self encrypted amounts have been combined during the operation that was performed.
 
@@ -376,6 +383,7 @@ It consists of the following fields:
   - `transferSource`: account address of the source of the transfer
   - `transferDestination`: account address of the destination of the transfer
   - `encryptedAmount`: the encrypted amount that is transferred in the trasnaction in hexadecimal encoding.
+  - `inputEncryptedAmount`: the encrypted amount that was used by the sender as input to the transaction, i.e., consumed
   - `aggregatedIndex`: the index up to which incoming amounts on the sender account have been combined during this operation.
   - `newIndex`: the index on the receiver's incomingAmounts that will be assigned to the transferred amount.
   - `newSelfEncryptedAmount`: the resulting self encrypted amount in the sender's account.
@@ -383,6 +391,7 @@ It consists of the following fields:
   - `amountAdded`: the plaintext of the amount that is added to the sender's public balance.
   - `aggregatedIndex`: the index up to which incoming amounts on the sender account have been combined during this operation.
   - `newSelfEncryptedAmount`: the resulting self encrypted amount in the sender's account.
+  - `inputEncryptedAmount`: the encrypted amount that was used by the sender as input to the transaction, i.e., consumed
 - The following fields are present if the transaction is a transfer to encrypted transaction:
   - `amountSubtracted`: the plaintext of the amount that is subtracted from the sender's public balance.
   - `newSelfEncryptedAmount`: the resulting self encrypted amount in the sender's account.
