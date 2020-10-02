@@ -81,8 +81,8 @@ If neither field is present, then the account does not currently exist on the ch
 If only `currentBalance` is present, then the account has been created, but its creation has not yet been finalized.
 Otherwise, both fields will appear.
 
-The `AccountBalance` value is always an object with the following two fields
-both of which will be present
+The `AccountBalance` value is always an object with the following three fields
+all of which will be present
 * `"accountAmount"` which is an Amount type, i.e., a string containing an integral value.
 * `"accountEncryptedAmount"` which is an object with three (mandatory) fields
   - `"selfAmount"` of type EncryptedAmount, i.e., a hexadecimal string
@@ -92,6 +92,8 @@ both of which will be present
     explanation). If not present the first amount in the list is a pure incoming amount.
   - `"incomingAmounts"` an array of `EncryptedAmount` values, i.e., an array of
     hexadecimal strings. The array could be empty, but is always present.
+* `"accountNonce"` the nonce of the account matching the balance. This is the
+  nonce of the next transaction that is not yet included in the balance.
 
 ## Account Nonce
 
