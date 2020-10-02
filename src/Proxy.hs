@@ -176,7 +176,10 @@ getAccountBalanceR addrText =
           getBal (Object obj) = do
             publicAmount <- HM.lookup "accountAmount" obj
             encryptedAmount <- HM.lookup "accountEncryptedAmount" obj
-            return $ object ["accountAmount" .= publicAmount, "accountEncryptedAmount" .= encryptedAmount]
+            nnce <- HM.lookup "accountNonce" obj
+            return $ object ["accountAmount" .= publicAmount,
+                             "accountEncryptedAmount" .= encryptedAmount,
+                             "accountNonce" .= nnce]
           getBal _ = Nothing
 
           lastFinBal = getBal lastFinInfo
