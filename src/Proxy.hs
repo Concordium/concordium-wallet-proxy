@@ -51,6 +51,8 @@ import Concordium.Crypto.SignatureScheme (KeyPair)
 import Concordium.Common.Version
 import Concordium.GlobalState.SQL.AccountTransactionIndex
 import Concordium.GlobalState.SQL
+import Concordium.GlobalState.Basic.BlockState.Updates
+import Concordium.GlobalState.Parameters
 
 import Internationalization
 
@@ -232,39 +234,48 @@ getAccountEncryptionKeyR addrText = do
 -- TODO: This currently assumes a conversion factor of 100 from
 -- energy to GTU.
 getTransactionCostR :: Handler TypedContent
-getTransactionCostR = do
+getTransactionCostR = withExchangeRate $ \rate -> do
   numSignatures <- fromMaybe "1" <$> lookupGetParam "numSignatures"
   case readMaybe (Text.unpack numSignatures) of
-    Just x | x > 0 -> handleTransactionCost x
+    Just x | x > 0 -> handleTransactionCost rate x
     _ -> respond400Error (EMParseError "Could not parse `numSignatures` value.") RequestInvalid
 
-  where handleTransactionCost numSignatures = do
+  where
+      handleTransactionCost rate numSignatures = do
           lookupGetParam "type" >>= \case
             Nothing -> respond400Error EMMissingParameter RequestInvalid
             Just tty -> case Text.unpack tty of
-              "simpleTransfer" -> sendResponse $ object ["cost" .= Amount (100 * fromIntegral (simpleTransferEnergyCost numSignatures))
+              "simpleTransfer" -> sendResponse $ object ["cost" .= computeCost rate (simpleTransferEnergyCost numSignatures)
                                                        , "energy" .= simpleTransferEnergyCost numSignatures
                                                        ]
               y | y == "encryptedTransfer" -> do
                 -- FIXME: Once the size handling in simple-client is better remove the 11+
                 -- The 11+ is to account for the size of the transaction.
                 let energyCost = 11 + encryptedTransferEnergyCost numSignatures
-                sendResponse $ object ["cost" .= Amount (100 * fromIntegral energyCost)
+                sendResponse $ object ["cost" .= computeCost rate energyCost
                                       , "energy" .= energyCost
                                       ]
                 | y == "transferToSecret" -> do
                     let energyCost = accountEncryptEnergyCost numSignatures
-                    sendResponse $ object ["cost" .= Amount (100 * fromIntegral energyCost)
+                    sendResponse $ object ["cost" .= computeCost rate energyCost
                                           , "energy" .= energyCost
                                           ]
                 | y == "transferToPublic" -> do
                     -- FIXME: Once the size handling in simple-client is better remove the 11+
                     -- The 6+ is to account for the size of the transaction.
                     let energyCost = 6 + accountDecryptEnergyCost numSignatures
-                    sendResponse $ object ["cost" .= Amount (100 * fromIntegral energyCost)
+                    sendResponse $ object ["cost" .= computeCost rate energyCost
                                           , "energy" .= energyCost
                                           ]
               tty' -> respond400Error (EMParseError $ "Could not parse transaction type: " <> tty') RequestInvalid
+      fetchUpdates :: ClientMonad IO (Either String Updates)
+      fetchUpdates = do
+          bbh <- getBestBlockHash
+          summary <- getBlockSummary bbh
+          return $ parseEither (AE.withObject "Block summary" (AE..: "updates")) =<< summary
+      withExchangeRate cont = runGRPC fetchUpdates $ \upd -> do
+          now <- utcTimeToTimestamp <$> liftIO getCurrentTime
+          cont $ _cpEnergyRate $ _currentParameters $ processUpdateQueues now upd
 
 putCredentialR :: Handler TypedContent
 putCredentialR =
