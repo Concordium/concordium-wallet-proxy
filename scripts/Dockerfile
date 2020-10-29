@@ -16,11 +16,13 @@ RUN cp target/wallet-proxy-exe /bins/wallet-proxy
 # Fetch identity-providers-with-metadata.json and global.json from genesis data.
 WORKDIR /
 RUN mkdir -p -m 0600 ~/.ssh && ssh-keyscan gitlab.com >> ~/.ssh/known_hosts
-# Clone master branch of genesis-data. The only files that are needed are `identity-providers-with-metadata.json` and `global.json`.
+# Clone specified ref of genesis-data (master by default).
+# The only files that are needed are `identity-providers-with-metadata.json` and `global.json`.
 # These change rarely and are always manually generated and curated.
 # It is important that those files match the identity providers and global parameters of the network
 # the wallet-proxy will connect to. This needs to be ensured manually.
-RUN --mount=type=ssh git clone --depth 1 --branch master git@gitlab.com:Concordium/genesis-data.git
+ARG GENESIS_REF=master
+RUN --mount=type=ssh git clone --depth 1 --branch ${GENESIS_REF} git@gitlab.com:Concordium/genesis-data.git
 
 # Collect build artifacts in fresh image.
 FROM ubuntu:20.04
