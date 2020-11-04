@@ -286,7 +286,7 @@ putCredentialR =
         Error err -> respond400Error (EMParseError err) RequestInvalid
         Success Versioned{..} | vVersion == 0 -> do
           runGRPC (sendTransactionToBaker (CredentialDeployment vValue) defaultNetId) $ \case
-            False -> do -- this case cannot happen at this time
+            False -> do -- this happens if the request is duplicate, stale, or malformed.
               $(logError) "Credential rejected by node."
               respond400Error EMCredentialRejected RequestInvalid
             True ->
