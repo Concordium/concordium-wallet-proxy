@@ -98,8 +98,19 @@ all of which will be present
 * `"accountNonce"` the nonce of the account matching the balance. This is the
   nonce of the next transaction that is not yet included in the balance.
 * `"accountReleaseSchedule"` the release schedule for this account consisting on:
-  - `"schedule"`: a list of lists of 2 items (tuples) of timestamp (in milliseconds) and amount that will be released at said timestamp.
+  - `"schedule"`: a list of lists of 2 items (tuples) of timestamp (in milliseconds) and amount (plus a list of
+    transaction hashes that created said amount) that will be released at said timestamp.
   - `"total"`: The sum of all the pending amounts, to be used when calculating the available amount.
+  More explicitly, the format of `"accountReleaseSchedule"` is:
+  ```
+    { "schedule": [
+        [ timestamp1, [ amount1, [ txHash11, txHash12...] ] ],
+        [ timestamp2, [ amount2, [ txHash21...] ] ],
+        ...
+        ],
+      "total" : totalamount
+    }
+ ```
 
 ## Account Nonce
 
