@@ -581,6 +581,7 @@ renderTransactionType TTRemoveAccountKeys = "removeAccountKeys"
 renderTransactionType TTEncryptedAmountTransfer = "encryptedAmountTransfer"
 renderTransactionType TTTransferToEncrypted = "transferToEncrypted"
 renderTransactionType TTTransferToPublic = "transferToPublic"
+renderTransactionType TTTransferWithSchedule = "transferWithSchedule"
 
 renderMaybeTransactionType :: Maybe TransactionType -> Text
 renderMaybeTransactionType (Just tt) = renderTransactionType tt

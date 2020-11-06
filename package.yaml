@@ -25,6 +25,7 @@ dependencies:
 - concordium-crypto
 - cereal >= 0.5.7
 - unordered-containers >= 0.2.9
+- containers >= 0.6
 - globalstate-types
 - mtl >= 2.2.2
 - aeson >= 1.4.2
@@ -81,6 +82,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -dynamic
     dependencies:
     - wallet-proxy
     - optparse-applicative
