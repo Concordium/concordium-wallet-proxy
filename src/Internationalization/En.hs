@@ -44,6 +44,10 @@ translation = I18n {..}
         i18nRejectReason (EncryptedAmountSelfTransfer _) = "An encrypted amount transfer from the account to itself is not allowed."
         i18nRejectReason InvalidTransferToPublicProof  = "The secret to public transfer has an invalid proof."
         i18nRejectReason InvalidIndexOnEncryptedTransfer = "The provided encryped amount index is out of bounds."
+        i18nRejectReason ZeroScheduledAmount = "Attempt to transfer 0 GTU with schedule."
+        i18nRejectReason NonIncreasingSchedule = "Attempt to transfer amount with non-increasing schedule."
+        i18nRejectReason FirstScheduledReleaseExpired = "The first scheduled release is in the past."
+        i18nRejectReason (ScheduledSelfTransfer _) = "Attempt to transfer from account A to A with schedule."
 
         i18nTransactionType TTDeployModule = "Deploy module"
         i18nTransactionType TTInitContract = "Initialize smart contract"
@@ -63,6 +67,7 @@ translation = I18n {..}
         i18nTransactionType TTEncryptedAmountTransfer = "Shielded transfer"
         i18nTransactionType TTTransferToEncrypted = "Shielded amount"
         i18nTransactionType TTTransferToPublic = "Unshielded amount"
+        i18nTransactionType TTTransferWithSchedule = "Transfer with schedule"
 
         i18nDeployCredential = "Deploy account credential"
 
@@ -100,6 +105,7 @@ translation = I18n {..}
         i18nEvent EncryptedSelfAmountAdded{..} = "Updated shielded balance of account " <> descrAccount eaaAccount
         i18nEvent AmountAddedByDecryption{..} = "Unshielded " <> descrAmount aabdAmount <> " on account " <> descrAccount aabdAccount
         i18nEvent UpdateEnqueued{..} = "Chain update event enqueued."
+        i18nEvent TransferredWithSchedule{..} = "Transferred with schedule from " <> descrAccount etwsTo <> " to " <> descrAccount etwsTo
 
         i18nSpecialEvent BakingReward{..} = "Award " <> descrAmount stoRewardAmount <> " to baker " <> descrBaker stoBakerId <> " at " <> descrAccount stoBakerAccount
 
