@@ -84,6 +84,9 @@ Otherwise, both fields will appear.
 The `AccountBalance` value is always an object with the following three fields
 all of which will be present
 * `"accountAmount"` which is an Amount type, i.e., a string containing an integral value.
+  This amount represents the total amount owned by the account, no matter if it is locked up or not.
+  It does not however include the encrypted amounts. To compute the available amount we have to calculate:
+  `accountAmount - lockedUpBalance` (from the last point of this list).
 * `"accountEncryptedAmount"` which is an object with three (mandatory) fields
   - `"selfAmount"` of type EncryptedAmount, i.e., a hexadecimal string
   - `"startIndex"` a non-negative 64-bit integer
@@ -94,6 +97,24 @@ all of which will be present
     hexadecimal strings. The array could be empty, but is always present.
 * `"accountNonce"` the nonce of the account matching the balance. This is the
   nonce of the next transaction that is not yet included in the balance.
+* `"accountReleaseSchedule"` the release schedule for this account consisting on:
+  - `"schedule"`: a list of pairs of a 
+    * timestamp (in milliseconds since Unix Epoch)
+    * a pair of amount and a list of transaction hashes that contribute to
+      the amount) that will be released at the given timestamp.
+  
+    Thus each list element is of the form `[timestamp, [amount, [hash1, hash2, ..]]]`
+  - `"total"`: The sum of all the pending amounts, to be used when calculating the available amount.
+  More explicitly, the format of `"accountReleaseSchedule"` is:
+  ```
+    { "schedule": [
+        [ timestamp1, [ amount1, [ txHash11, txHash12...] ] ],
+        [ timestamp2, [ amount2, [ txHash21...] ] ],
+        ...
+        ],
+      "total" : totalamount
+    }
+ ```
 
 ## Account Nonce
 
