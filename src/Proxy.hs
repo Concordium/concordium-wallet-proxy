@@ -179,9 +179,11 @@ getAccountBalanceR addrText =
             publicAmount <- HM.lookup "accountAmount" obj
             encryptedAmount <- HM.lookup "accountEncryptedAmount" obj
             nnce <- HM.lookup "accountNonce" obj
+            releases <- HM.lookup "accountReleaseSchedule" obj
             return $ object ["accountAmount" .= publicAmount,
                              "accountEncryptedAmount" .= encryptedAmount,
-                             "accountNonce" .= nnce]
+                             "accountNonce" .= nnce,
+                             "accountReleaseSchedule" .= releases]
           getBal _ = Nothing
 
           lastFinBal = getBal lastFinInfo
@@ -579,6 +581,7 @@ renderTransactionType TTRemoveAccountKeys = "removeAccountKeys"
 renderTransactionType TTEncryptedAmountTransfer = "encryptedAmountTransfer"
 renderTransactionType TTTransferToEncrypted = "transferToEncrypted"
 renderTransactionType TTTransferToPublic = "transferToPublic"
+renderTransactionType TTTransferWithSchedule = "transferWithSchedule"
 
 renderMaybeTransactionType :: Maybe TransactionType -> Text
 renderMaybeTransactionType (Just tt) = renderTransactionType tt
