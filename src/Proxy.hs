@@ -32,6 +32,7 @@ import Database.Persist.Sql
 import Data.Maybe(catMaybes, fromMaybe)
 import Data.Time.Clock.POSIX
 import qualified Database.Esqueleto as E
+import System.Random
 
 import Data.Text(Text)
 import qualified Data.Text as Text
@@ -42,7 +43,7 @@ import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
 import Concordium.Client.GRPC
-import Concordium.Client.Types.Transaction(simpleTransferEnergyCost,
+import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost, simpleTransferEnergyCost,
                                            encryptedTransferEnergyCost,
                                            accountEncryptEnergyCost,
                                            accountDecryptEnergyCost)
@@ -633,6 +634,17 @@ dropAmount = 100000000
         B.4. submit the transaction and report transaction hash
 -}
 
+data DropSchedule = Scheduled | Normal
+
+instance FromJSON DropSchedule where
+  parseJSON = withObject "Drop schedule" $ \obj -> do
+    ty <- obj .: "type"
+    if ty == Text.pack "scheduled" then
+      return Scheduled
+    else if ty == Text.pack "normal" then
+      return Normal
+    else fail "Unsupported drop type."
+
 putGTUDropR :: Text -> Handler TypedContent
 putGTUDropR addrText = do
     i <- internationalize
@@ -644,7 +656,14 @@ putGTUDropR addrText = do
                       ["errorMessage" .= i18n i EMAccountNotFinal,
                        "error" .= fromEnum RequestInvalid]
           -- Account is finalized, so try the drop
-          Just _ -> tryDrop addr
+          Just _ -> do
+            connect rawRequestBody (sinkParserEither json') >>= \case
+              Left _ -> tryDrop addr Normal -- malformed or empty body, we assume normal drop.
+              Right v -> case fromJSON v of
+                          AE.Success x -> tryDrop addr x
+                          AE.Error e -> do
+                            $(logWarn) (Text.pack e)
+                            respond400Error EMConfigurationError RequestInvalid
 
   where
     accountToText = Text.decodeUtf8 . addressToBytes
@@ -688,9 +707,8 @@ putGTUDropR addrText = do
         "errorMessage" .= i18n i EMConfigurationError,
         "error" .= fromEnum InternalError
         ]
-    tryDrop addr = do
+    tryDrop addr dropType = do
       Proxy{..} <- getYesod
-      let dropEnergy = simpleTransferEnergyCost (length dropKeys)
       let getNonce = (>>= parseEither (withObject "nonce" (.: "nonce"))) <$> getNextAccountNonce (accountToText dropAccount)
       -- Determine if there is already a GTU drop entry for this account
       rcpRecord <- runDB $ getBy (UniqueAccount (ByteStringSerialized addr))
@@ -698,21 +716,32 @@ putGTUDropR addrText = do
         -- If there is no entry, try the drop
         Nothing -> runGRPC getNonce $ \nonce -> do
           currentTime <- liftIO $ round <$> getPOSIXTime
+          (payload, thEnergyAmount) <- case dropType of
+            Normal -> return (Transfer addr dropAmount, simpleTransferEnergyCost (length dropKeys))
+            Scheduled -> do
+              -- sample a random release schedule spaced by 5min.
+              numRels <- liftIO $ randomRIO (1::Word,15)
+              let start = Timestamp {tsMillis = currentTime * 1000 + 300 * 1000}
+                  (releaseAmount, remainder) = (fromIntegral dropAmount :: Word) `divMod` fromIntegral numRels
+                  releases = [(addDuration start (fromIntegral i * 300 * 1000),
+                               if i == 1
+                               then fromIntegral (remainder + releaseAmount)
+                               else fromIntegral releaseAmount) | i <- [1 .. numRels]]
+              return (TransferWithSchedule addr releases, transferWithScheduleEnergyCost (fromIntegral numRels) (length dropKeys))
           let
-            payload = Transfer addr dropAmount
             atrPayload = encodePayload payload
             atrHeader = TransactionHeader {
               thSender = dropAccount,
               thNonce = nonce,
-              thEnergyAmount = dropEnergy,
               thPayloadSize = payloadSize atrPayload,
-              thExpiry = TransactionTime $ currentTime + 300
+              thExpiry = TransactionTime $ currentTime + 300,
+              ..
             }
             transaction = signTransaction dropKeys atrHeader atrPayload
           mk <- runDB $ insertUnique (GTURecipient (ByteStringSerialized addr) (ByteStringSerialized transaction))
           case mk of
             -- There is already a transaction, so retry.
-            Nothing -> tryDrop addr
+            Nothing -> tryDrop addr dropType
             Just _ -> sendTransaction transaction
         Just (Entity key (GTURecipient _ (ByteStringSerialized transaction))) ->
           runGRPC (doGetAccInfo (accountToText dropAccount)) $ \case
@@ -724,21 +753,21 @@ putGTUDropR addrText = do
                 runGRPC (doIsTransactionOK trHash) $ \case
                   True -> sendResponse (object ["submissionId" .= trHash])
                   False
-                    | lastFinAmt < dropAmount + fromIntegral dropEnergy
+                    | lastFinAmt < dropAmount + 1000000 -- FIXME: This is outdated.
                       -> do
-                        $(logError) $ "GTU drop account has insufficient funds"
+                        $(logError) "GTU drop account has insufficient funds"
                         configErr
                     | lastFinNonce > thNonce (atrHeader transaction)
                       -> do
                         -- Given the nonce, the transaction is no good. Delete and try again.
                         runDB $ delete key
-                        tryDrop addr
+                        tryDrop addr dropType
                     | otherwise
                       -> do
                         currentTime <- liftIO $ round <$> getPOSIXTime
                         if thExpiry (atrHeader transaction) < TransactionTime currentTime then do
                           runDB $ delete key
-                          tryDrop addr
+                          tryDrop addr dropType
                         else sendTransaction transaction
 
 getGlobalFileR :: Handler TypedContent
