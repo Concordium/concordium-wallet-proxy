@@ -22,12 +22,6 @@ then
 else
     ARGS="$ARGS --ip-data /wallet-proxy-data/identity-providers-with-metadata.json"
 fi
-if [ -n "$WALLET_SERVER_GLOBAL_FILE" ];
-then
-    ARGS="$ARGS --global $WALLET_SERVER_GLOBAL_FILE"
-else
-    ARGS="$ARGS --global /wallet-proxy-data/global.json"
-fi
 if [ -n "$DB_SLEEP" ];
 then
     echo "Sleeping for $DB_SLEEP"
