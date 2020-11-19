@@ -26,7 +26,6 @@ data ProxyConfig = ProxyConfig {
   pcGRPC :: GrpcConfig,
   pcDBConnString :: ByteString,
   pcGTUAccountFile :: FilePath,
-  pcGlobal :: FilePath,
   pcIpInfo :: FilePath
 }
 
@@ -38,8 +37,7 @@ parser = info (helper <*> parseProxyConfig)
       <$> backendParser
       <*> strOption (long "db" <> metavar "STR" <> help "database connection string")
       <*> strOption (long "drop-account" <> metavar "FILE" <> help "file with GTU drop account credentials")
-      <*> strOption (long "global" <> metavar "FILE" <> help "File with global parameters.")
-      <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and information on the identity providers, together with metadata.")
+      <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and private information on the identity providers, together with metadata.")
     mkProxyConfig backend = ProxyConfig $ GrpcConfig
                               (CMDS.grpcHost backend)
                               (CMDS.grpcPort backend)
@@ -69,7 +67,6 @@ main = do
   ProxyConfig{..} <- execParser parser
   let logm s = runStderrLoggingT ($logDebug ("[GRPC]: " <> s))
   keyFile <- LBS.readFile pcGTUAccountFile
-  Right globalInfo <- AE.eitherDecode' <$> LBS.readFile pcGlobal
   Right ipInfo <- AE.eitherDecode' <$> LBS.readFile pcIpInfo
   let getKeys = AE.eitherDecode' keyFile >>= AE.parseEither accountParser
   case getKeys of
@@ -79,5 +76,10 @@ main = do
         runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
         runExceptT (mkGrpcClient pcGRPC (Just logm)) >>= \case
           Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
-          Right cfg ->
-            runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg, ..}
+          Right cfg -> do
+            -- The getCryptographicParameters returns a versioned cryptographic parameters object, which is what we need.
+            -- Because these parameters do not change we only look them up on startup, and store them.
+            runClient cfg (withLastFinalBlockHash Nothing getCryptographicParameters) >>= \case
+              Left err -> die $ "Cannot obtain cryptographic parameters due to network error: " ++ show err
+              Right (Left err) -> die $ "Cannot obtain cryptographic parameters due to unexpected response: " ++ err
+              Right (Right globalInfo) -> runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg, ..}
