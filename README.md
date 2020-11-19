@@ -98,12 +98,12 @@ all of which will be present
 * `"accountNonce"` the nonce of the account matching the balance. This is the
   nonce of the next transaction that is not yet included in the balance.
 * `"accountReleaseSchedule"` the release schedule for this account consisting on:
-  - `"schedule"`: a list of pairs of a 
-    * timestamp (in milliseconds since Unix Epoch)
-    * a pair of amount and a list of transaction hashes that contribute to
-      the amount) that will be released at the given timestamp.
+  - `"schedule"`: a list of objects with the following fields, all required
+    * `"timestamp"` (in milliseconds since Unix Epoch)
+    * `"amount"` .. the amount that will be released at the given timestamp
+    * `"transactions"` .. an array of transaction hashes that contribute to
+      the amount that will be released.
   
-    Thus each list element is of the form `[timestamp, [amount, [hash1, hash2, ..]]]`
   - `"total"`: The sum of all the pending amounts, to be used when calculating the available amount.
   More explicitly, the format of `"accountReleaseSchedule"` is:
   ```
