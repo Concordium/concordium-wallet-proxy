@@ -114,9 +114,9 @@ The `AccountBalance` value is always an object with the following four fields
       "total" : totalamount
     }
   ```
-* `"accountStakedAmount"` (optional) if present indicates that this account is
+* `"accountBaker"` (optional) if present indicates that this account is
  registered as a baker. If present, the value is always an object with fields
-  - `"amount"` (required): the amount that is currently staked
+  - `"stakedAmount"` (required): the amount that is currently staked
   - `"bakerId"` (required): the baker id the account is registered as
 
 
