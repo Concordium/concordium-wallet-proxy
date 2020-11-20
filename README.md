@@ -96,7 +96,7 @@ The `AccountBalance` value is always an object with the following four fields
     hexadecimal strings. The array could be empty, but is always present.
 * `"accountNonce"` the nonce of the account matching the balance. This is the
   nonce of the next transaction that is not yet included in the balance.
-* `"accountReleaseSchedule"` (required) the release schedule for this account consisting on:
+* `"accountReleaseSchedule"` (required) the release schedule for this account consisting of:
   - `"schedule"`: a list of objects with the following fields, all required
     * `"timestamp"` (in milliseconds since Unix Epoch)
     * `"amount"` .. the amount that will be released at the given timestamp
