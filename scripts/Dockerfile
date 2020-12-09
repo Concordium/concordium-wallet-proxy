@@ -20,7 +20,7 @@ RUN mkdir -p -m 0600 ~/.ssh && ssh-keyscan gitlab.com >> ~/.ssh/known_hosts
 # These change rarely and are always manually generated and curated.
 # It is important that those files match the identity providers and global parameters of the network
 # the wallet-proxy will connect to. This needs to be ensured manually.
-RUN --mount=type=ssh git clone --depth 1 --branch master git@gitlab.com:Concordium/genesis-data.git
+RUN --mount=type=ssh git clone --depth 1 --branch opentestenet-v3-update-ip-link git@gitlab.com:Concordium/genesis-data.git
 
 # Collect build artifacts in fresh image.
 FROM ubuntu:20.04
