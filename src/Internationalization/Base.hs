@@ -11,6 +11,8 @@ import Concordium.Types.Transactions
 import Concordium.Types.Execution
 
 import Concordium.Crypto.EncryptedTransfers
+import Concordium.ID.Types (CredentialType)
+import Concordium.Types.Updates (UpdateType)
 
 data ErrorMessage
     = EMErrorResponse ErrorResponse
@@ -28,8 +30,10 @@ data ErrorMessage
 data I18n = I18n {
     i18nRejectReason :: RejectReason -> Text,
     i18nTransactionType :: TransactionType -> Text,
-    i18nDeployCredential :: Text,
+    i18nMalformedTransaction :: Text,
+    i18nDeployCredential :: CredentialType -> Text,
     i18nEvent :: Event -> Text,
+    i18nUpdateTransaction :: UpdateType -> Text,
     i18nSpecialEvent :: SpecialTransactionOutcome -> Text,
     i18nSpecialOutcomeShort :: SpecialTransactionOutcome -> Text,
     i18nErrorMessage :: ErrorMessage -> Text
@@ -53,8 +57,8 @@ descrInstance = Text.pack . show
 descrAmount :: Amount -> Text
 descrAmount amount = pack (amountToString amount) <> " GTU"
 
-descrBaker :: BakerId -> Text
-descrBaker = Text.pack . show
+descrBaker :: BakerId -> AccountAddress -> Text
+descrBaker bid addr = Text.pack $ show addr ++ "(ID " ++ show bid ++ ")"
 
 descrAddress :: Address -> Text
 descrAddress (AddressAccount addr) = descrAccount addr

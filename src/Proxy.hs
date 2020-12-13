@@ -14,6 +14,7 @@ import qualified Data.ByteString as BS
 
 import qualified Data.Ratio as Rational
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Map.Strict as Map
 import Text.Read hiding (String)
 import Control.Arrow (left)
 import Control.Monad.Except
@@ -285,7 +286,7 @@ getTransactionCostR = withExchangeRate $ \rate -> do
           return $ parseEither (AE.withObject "Block summary" (AE..: "updates")) =<< summary
       withExchangeRate cont = runGRPC fetchUpdates $ \upd -> do
           now <- utcTimeToTimestamp <$> liftIO getCurrentTime
-          cont $ _cpEnergyRate $ _currentParameters $ processUpdateQueues now upd
+          cont $ _cpEnergyRate $ _currentParameters $ snd $ processUpdateQueues now upd
 
 putCredentialR :: Handler TypedContent
 putCredentialR =
@@ -330,7 +331,7 @@ putTransferR =
       where transferParser = withObject "Parse transfer request." $ \obj -> do
               sig :: TransactionSignature <- obj .: "signatures"
               body <- decodeBase16 =<< (obj .: "transaction")
-              case S.decode ((S.encode sig) <> body) of
+              case S.decode (S.encode sig <> body) of
                 Left err -> fail err
                 Right tx -> return tx
 
@@ -361,7 +362,7 @@ getSimpleTransactionStatus i trHash = do
       , "sender" .= tsSender
       , "cost" .= tsCost] <>) <$>
       case tsType of
-        Nothing -> -- credential deployment
+        TSTCredentialDeploymentTransaction _ -> -- credential deployment
           case tsResult of
             TxSuccess [AccountCreated {}, _] ->
               return ["outcome" .= String "success"]
@@ -369,7 +370,7 @@ getSimpleTransactionStatus i trHash = do
               return ["outcome" .= String "success"]
             es ->
               Left $ "Unexpected outcome of credential deployment: " ++ show es
-        Just TTTransfer ->
+        TSTAccountTransaction (Just TTTransfer) ->
           case tsResult of
             TxSuccess [Transferred{etTo = AddressAccount addr,..}] ->
               return ["outcome" .= String "success",
@@ -378,7 +379,7 @@ getSimpleTransactionStatus i trHash = do
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
               Left $ "Unexpected outcome of simple transfer: " ++ show es
-        Just TTEncryptedAmountTransfer ->
+        TSTAccountTransaction (Just TTEncryptedAmountTransfer) ->
           case tsResult of
             TxSuccess [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}] ->
               return ["outcome" .= String "success",
@@ -391,7 +392,7 @@ getSimpleTransactionStatus i trHash = do
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
               Left $ "Unexpected outcome of encrypted transfer: " ++ show es
-        Just TTTransferToPublic ->
+        TSTAccountTransaction (Just TTTransferToPublic) ->
           case tsResult of
             TxSuccess [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}] ->
               return ["outcome" .= String "success",
@@ -403,7 +404,7 @@ getSimpleTransactionStatus i trHash = do
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
               Left $ "Unexpected outcome of secret to public transfer: " ++ show es
-        Just TTTransferToEncrypted ->
+        TSTAccountTransaction (Just TTTransferToEncrypted) ->
           case tsResult of
             TxSuccess [EncryptedSelfAmountAdded{..}] ->
               return ["outcome" .= String "success",
@@ -487,12 +488,47 @@ formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
                      ]
   transactionDetails <- case AE.fromJSON summarySummary of
     AE.Error e -> Left e
-    AE.Success (Right v@BakingReward{..}) ->
+    AE.Success (Right v@BakingRewards{..}) ->
       return [
       "origin" .= object ["type" .= ("reward" :: Text)],
-        "total" .= stoRewardAmount,
+        "total" .= Map.lookup self (accountAmounts stoBakerRewards), -- this should always return Just due to the way we look up.
         "details" .= object [
           "type" .= ("bakingReward" :: Text),
+            "outcome" .= ("success" :: Text),
+            "description" .= i18n i (ShortDescription v),
+            "events" .= [i18n i v]
+          ]
+      ]
+    AE.Success (Right v@Mint{..}) ->
+      return [
+      "origin" .= object ["type" .= ("reward" :: Text)],
+        "total" .= stoMintPlatformDevelopmentCharge, -- this will only happen if we are looking up the foundation account
+        "details" .= object [
+          "type" .= ("platformDevelopmentCharge" :: Text),
+            "outcome" .= ("success" :: Text),
+            "description" .= i18n i (ShortDescription v),
+            "events" .= [i18n i v]
+          ]
+      ]
+    AE.Success (Right v@FinalizationRewards{..}) ->
+      return [
+      "origin" .= object ["type" .= ("reward" :: Text)],
+        "total" .= Map.lookup self (accountAmounts stoFinalizationRewards), -- this should always return Just due to the way we look up.
+        "details" .= object [
+          "type" .= ("finalizationReward" :: Text),
+            "outcome" .= ("success" :: Text),
+            "description" .= i18n i (ShortDescription v),
+            "events" .= [i18n i v]
+          ]
+      ]
+    AE.Success (Right v@BlockReward{..}) ->
+      return [
+      "origin" .= object ["type" .= ("reward" :: Text)],
+        "total" .= if self == stoBaker && self == stoFoundationAccount then stoBakerReward + stoFoundationCharge
+                   else if self == stoBaker then stoBakerReward
+                   else stoFoundationCharge, -- due to the way we index, that is the only remaining option
+        "details" .= object [
+          "type" .= ("blockReward" :: Text),
             "outcome" .= ("success" :: Text),
             "description" .= i18n i (ShortDescription v),
             "events" .= [i18n i v]
@@ -508,11 +544,11 @@ formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
           (resultDetails, subtotal) = case tsResult of
             TxSuccess evts -> ((["outcome" .= ("success" :: Text), "events" .= fmap (i18n i) evts]
                                 <> case (tsType, evts) of
-                                     (Just TTTransfer, [Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr)]) ->
+                                     (TSTAccountTransaction (Just TTTransfer), [Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr)]) ->
                                        ["transferSource" .= fromAddr,
                                         "transferDestination" .= toAddr,
                                         "transferAmount" .= amt]
-                                     (Just TTEncryptedAmountTransfer, [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
+                                     (TSTAccountTransaction (Just TTEncryptedAmountTransfer), [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
                                        ["transferSource" .= earAccount,
                                         "transferDestination" .= neaAccount,
                                         "encryptedAmount" .= neaEncryptedAmount,
@@ -520,43 +556,43 @@ formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
                                         "inputEncryptedAmount" .= earInputAmount,
                                         "newIndex" .= neaNewIndex,
                                         "newSelfEncryptedAmount" .= earNewAmount]
-                                     (Just TTTransferToPublic, [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}]) ->
+                                     (TSTAccountTransaction (Just TTTransferToPublic), [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}]) ->
                                        ["transferSource" .= earAccount,
                                         "amountAdded" .= aabdAmount,
                                         "aggregatedIndex" .= earUpToIndex,
                                         "inputEncryptedAmount" .= earInputAmount,
                                         "newSelfEncryptedAmount" .= earNewAmount]
-                                     (Just TTTransferToEncrypted, [EncryptedSelfAmountAdded{..}]) ->
+                                     (TSTAccountTransaction (Just TTTransferToEncrypted), [EncryptedSelfAmountAdded{..}]) ->
                                        ["transferSource" .= eaaAccount,
                                         "amountSubtracted" .= eaaAmount,
                                         "newSelfEncryptedAmount" .= eaaNewAmount]
                                      _ -> []), eventSubtotal self evts )
             TxReject reason -> (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason], Nothing)
 
-          details = object $ ["type" .= renderMaybeTransactionType tsType, "description" .= i18n i tsType] <> resultDetails
+          details = object $ ["type" .= renderTransactionSummaryType tsType, "description" .= i18n i tsType] <> resultDetails
 
           costs
             | selfOrigin = case subtotal of
                 Nothing -> let total = - toInteger tsCost in ["cost" .= show (toInteger tsCost), "total" .= show total]
                 Just st -> let total = st - toInteger tsCost
                           in ["subtotal" .= show st, "cost" .= show (toInteger tsCost), "total" .= show total]
-            | otherwise = ["total" .= show (maybe 0 id subtotal)]
+            | otherwise = ["total" .= show (fromMaybe 0 subtotal)]
 
           encryptedCost = case tsSender of
             Just sender
               | sender == self -> case (tsType, tsResult) of
-                  (Just TTEncryptedAmountTransfer, TxSuccess [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
+                  (TSTAccountTransaction (Just TTEncryptedAmountTransfer), TxSuccess [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
                     ["encrypted" .= object ["encryptedAmount" .= neaEncryptedAmount,
                                             "newStartIndex" .= earUpToIndex,
                                             "newSelfEncryptedAmount" .= earNewAmount]]
-                  (Just TTTransferToPublic, TxSuccess [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}]) ->
+                  (TSTAccountTransaction (Just TTTransferToPublic), TxSuccess [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}]) ->
                     ["encrypted" .= object ["newStartIndex" .= earUpToIndex,
                                             "newSelfEncryptedAmount" .= earNewAmount]]
-                  (Just TTTransferToEncrypted, TxSuccess [EncryptedSelfAmountAdded{..}]) ->
+                  (TSTAccountTransaction (Just TTTransferToEncrypted), TxSuccess [EncryptedSelfAmountAdded{..}]) ->
                     ["encrypted" .= object ["newSelfEncryptedAmount" .= eaaNewAmount]]
                   _ -> []
               | otherwise -> case (tsType, tsResult) of
-                  (Just TTEncryptedAmountTransfer, TxSuccess [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
+                  (TSTAccountTransaction (Just TTEncryptedAmountTransfer), TxSuccess [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
                     ["encrypted" .= object ["encryptedAmount" .= neaEncryptedAmount,
                                             "newIndex" .= neaNewIndex]]
                   _ -> []
@@ -574,15 +610,12 @@ renderTransactionType :: TransactionType -> Text
 renderTransactionType TTDeployModule = "deployModule"
 renderTransactionType TTInitContract = "initContract"
 renderTransactionType TTUpdate = "update"
+renderTransactionType TTUpdateBakerStake = "updateBakerStake"
+renderTransactionType TTUpdateBakerKeys = "updateBakerKeys"
+renderTransactionType TTUpdateBakerRestakeEarnings = "UpdateBakerRestakeEarnings"
 renderTransactionType TTTransfer = "transfer"
 renderTransactionType TTAddBaker = "addBaker"
 renderTransactionType TTRemoveBaker = "removeBaker"
-renderTransactionType TTUpdateBakerAccount = "updateBakerAccount"
-renderTransactionType TTUpdateBakerSignKey = "updateBakerSignKey"
-renderTransactionType TTDelegateStake = "delegateStake"
-renderTransactionType TTUndelegateStake = "undelegateStake"
-renderTransactionType TTUpdateBakerAggregationVerifyKey = "updateBakerAggregationVerifyKey"
-renderTransactionType TTUpdateBakerElectionKey = "updateBakerElectionKey"
 renderTransactionType TTUpdateAccountKeys = "updateAccountKeys"
 renderTransactionType TTAddAccountKeys = "addAccountKeys"
 renderTransactionType TTRemoveAccountKeys = "removeAccountKeys"
@@ -591,9 +624,11 @@ renderTransactionType TTTransferToEncrypted = "transferToEncrypted"
 renderTransactionType TTTransferToPublic = "transferToPublic"
 renderTransactionType TTTransferWithSchedule = "transferWithSchedule"
 
-renderMaybeTransactionType :: Maybe TransactionType -> Text
-renderMaybeTransactionType (Just tt) = renderTransactionType tt
-renderMaybeTransactionType Nothing = "deployCredential"
+renderTransactionSummaryType :: TransactionSummaryType -> Text
+renderTransactionSummaryType (TSTAccountTransaction (Just tt)) = renderTransactionType tt
+renderTransactionSummaryType (TSTAccountTransaction Nothing) = "Malformed account transaction"
+renderTransactionSummaryType (TSTCredentialDeploymentTransaction _) = "deployCredential"
+renderTransactionSummaryType (TSTUpdateTransaction _) = "chainUpdate"
 
 eventSubtotal :: AccountAddress -> [Event] -> Maybe Integer
 eventSubtotal self evts = case catMaybes $ eventCost <$> evts of
@@ -611,6 +646,10 @@ eventSubtotal self evts = case catMaybes $ eventCost <$> evts of
       (True, False) -> Just (- toInteger etAmount)
       (False, True) -> Just (toInteger etAmount)
       (False, False) -> Nothing
+    eventCost TransferredWithSchedule{..} =
+      if self == etwsFrom then -- self transfers are not possible with schedule
+        Just (- toInteger (sum . map snd $ etwsAmount))
+      else Just (toInteger (sum . map snd $ etwsAmount))
     eventCost AmountAddedByDecryption{..} = Just $ toInteger aabdAmount
     eventCost EncryptedSelfAmountAdded{..} = Just $ - toInteger eaaAmount
     eventCost _ = Nothing
