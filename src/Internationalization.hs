@@ -19,9 +19,11 @@ class Internationalizable a where
 instance Internationalizable RejectReason where
     i18n = i18nRejectReason
 
-instance Internationalizable (Maybe TransactionType) where
-    i18n i (Just t) = i18nTransactionType i t
-    i18n i Nothing = i18nDeployCredential i
+instance Internationalizable TransactionSummaryType where
+    i18n i (TSTAccountTransaction (Just t)) = i18nTransactionType i t
+    i18n i (TSTAccountTransaction Nothing) = i18nMalformedTransaction i
+    i18n i (TSTCredentialDeploymentTransaction t) = i18nDeployCredential i t
+    i18n i (TSTUpdateTransaction t) = i18nUpdateTransaction i t
 
 instance Internationalizable Event where
     i18n = i18nEvent
