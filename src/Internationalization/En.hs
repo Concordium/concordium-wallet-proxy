@@ -4,15 +4,28 @@ module Internationalization.En where
 import qualified Data.Text as Text
 import Yesod
 
+import qualified Data.Map.Strict as Map
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
+import Concordium.Types.Updates
 
 import Internationalization.Base
-
+import Concordium.ID.Types
 
 translation :: I18n
 translation = I18n {..}
     where
+        i18nMalformedTransaction = "Malformed transaction body"
+        i18nUpdateTransaction UpdateAuthorization = "Update the authorizations access structure"
+        i18nUpdateTransaction UpdateProtocol = "Protocol update"
+        i18nUpdateTransaction UpdateElectionDifficulty = "Update election difficulty"
+        i18nUpdateTransaction UpdateEuroPerEnergy = "Update Euro per Energy exchange rate"
+        i18nUpdateTransaction UpdateMicroGTUPerEuro = "Update micro GTU per Euro exchange rate"
+        i18nUpdateTransaction UpdateFoundationAccount = "Update the foundation account address"
+        i18nUpdateTransaction UpdateMintDistribution = "Update parameters of the mint distribution"
+        i18nUpdateTransaction UpdateTransactionFeeDistribution = "Update transaction fee distribution"
+        i18nUpdateTransaction UpdateGASRewards = "Update parameters for GAS rewards distribution"
+
         i18nRejectReason ModuleNotWF = "Typechecking of module failed"
         i18nRejectReason (ModuleHashAlreadyExists mref) = "A module with the hash " <> descrModule mref <> " already exists"
         i18nRejectReason (InvalidAccountReference addr) = "The account " <> descrAccount addr <> " does not exist"
@@ -26,13 +39,6 @@ translation = I18n {..}
         i18nRejectReason Rejected = "Rejected by contract logic"
         i18nRejectReason (NonExistentRewardAccount addr) = "The designated reward account (" <> descrAccount addr <> ") does not exist"
         i18nRejectReason InvalidProof = "Invalid proof"
-        i18nRejectReason (RemovingNonExistentBaker bid) = "Baker does not exist: " <> descrBaker bid
-        i18nRejectReason (InvalidBakerRemoveSource _) = "Sender is not authorized to remove baker"
-        i18nRejectReason (UpdatingNonExistentBaker bid) = "Baker does not exist: " <> descrBaker bid
-        i18nRejectReason (InvalidStakeDelegationTarget bid) = "Baker does not exist: " <> descrBaker bid
-        i18nRejectReason (DuplicateSignKey _) = "Duplicate baker signature key"
-        i18nRejectReason (NotFromBakerAccount _ _) = "Sender is not the baker's designated account"
-        i18nRejectReason NotFromSpecialAccount = "Sender is not authorized to perform chain control actions"
         i18nRejectReason (InvalidInitMethod mref initName) = "Init method " <> descrInitName initName <> " does not exist in module " <> descrModule mref <> "."
         i18nRejectReason (InvalidReceiveMethod mref receiveName) = "Receive method " <> descrReceiveName receiveName <> " does not exist for module " <> descrModule mref <> "."
         i18nRejectReason RuntimeFailure = "Runtime failure when executing smart contract."
@@ -48,19 +54,20 @@ translation = I18n {..}
         i18nRejectReason NonIncreasingSchedule = "Attempt to transfer amount with non-increasing schedule."
         i18nRejectReason FirstScheduledReleaseExpired = "The first scheduled release is in the past."
         i18nRejectReason (ScheduledSelfTransfer _) = "Attempt to transfer from account A to A with schedule."
+        i18nRejectReason (AlreadyABaker bid) = "Baker with ID " <> Text.pack (show bid) <> " already exists."
+        i18nRejectReason (NotABaker addr) = "Account " <> descrAccount addr <> " is not a baker."
+        i18nRejectReason InsufficientBalanceForBakerStake = "Sender account has insufficient balance to cover the requested stake."
+        i18nRejectReason BakerInCooldown = "Request to make change to the baker while the baker is in the cooldown period."
 
         i18nTransactionType TTDeployModule = "Deploy module"
         i18nTransactionType TTInitContract = "Initialize smart contract"
         i18nTransactionType TTUpdate = "Invoke smart contract"
         i18nTransactionType TTTransfer = "Transfer"
+        i18nTransactionType TTUpdateBakerStake = "Update baker stake"
+        i18nTransactionType TTUpdateBakerKeys = "Update baker keys"
+        i18nTransactionType TTUpdateBakerRestakeEarnings = "Update whether to restake baker earnings"
         i18nTransactionType TTAddBaker = "Add baker"
         i18nTransactionType TTRemoveBaker = "Remove baker"
-        i18nTransactionType TTUpdateBakerAccount = "Update baker account"
-        i18nTransactionType TTUpdateBakerSignKey = "Update baker key"
-        i18nTransactionType TTDelegateStake = "Delegate stake"
-        i18nTransactionType TTUndelegateStake = "Undelegate stake"
-        i18nTransactionType TTUpdateBakerAggregationVerifyKey = "Update baker aggregation key"
-        i18nTransactionType TTUpdateBakerElectionKey = "Update baker election key"
         i18nTransactionType TTUpdateAccountKeys = "Update account keys"
         i18nTransactionType TTAddAccountKeys = "Add account keys"
         i18nTransactionType TTRemoveAccountKeys = "Remove account keys"
@@ -69,7 +76,8 @@ translation = I18n {..}
         i18nTransactionType TTTransferToPublic = "Unshielded amount"
         i18nTransactionType TTTransferWithSchedule = "Transfer with schedule"
 
-        i18nDeployCredential = "Deploy account credential"
+        i18nDeployCredential Initial = "Deploy initial account credential"
+        i18nDeployCredential Normal = "Deploy account credential"
 
         i18nEvent (ModuleDeployed mref) = "Deployed module " <> descrModule mref
         i18nEvent ContractInitialized{..} =
@@ -88,14 +96,12 @@ translation = I18n {..}
         i18nEvent (Transferred sender amt recv) = "Transferred " <> descrAmount amt <> " from " <> descrAddress sender <> " to " <> descrAddress recv
         i18nEvent (AccountCreated addr) = "Created account with address " <> descrAccount addr
         i18nEvent (CredentialDeployed _ addr) = "Deployed a credential to account " <> descrAccount addr
-        i18nEvent (BakerAdded bid) = "Added baker " <> descrBaker bid
-        i18nEvent (BakerRemoved bid) = "Removed baker " <> descrBaker bid
-        i18nEvent (BakerAccountUpdated bid addr) = "Updated account for baker " <> descrBaker bid <> " to " <> descrAccount addr
-        i18nEvent (BakerKeyUpdated bid _) = "Updated key for baker " <> descrBaker bid
-        i18nEvent (BakerElectionKeyUpdated bid _) = "Updated election key for baker " <> descrBaker bid
-        i18nEvent (StakeDelegated _ bid) = "Delegated stake to baker " <> descrBaker bid
-        i18nEvent (StakeUndelegated _ _) = "Undelegated stake"
-        i18nEvent (BakerAggregationKeyUpdated bid _) = "Updated aggregation key for baker " <> descrBaker bid
+        i18nEvent BakerAdded{..} = "Added baker " <> descrBaker ebaBakerId ebaAccount <> " and initial stake " <> descrAmount ebaStake
+        i18nEvent BakerRemoved{..} = "Removed baker " <> descrBaker ebrBakerId ebrAccount
+        i18nEvent BakerStakeIncreased{..} = "Stake of baker " <> descrBaker ebsiBakerId ebsiAccount <> " increased to " <> descrAmount ebsiNewStake
+        i18nEvent BakerStakeDecreased{..} = "Stake of baker " <> descrBaker ebsiBakerId ebsiAccount <> " decreased to " <> descrAmount ebsiNewStake
+        i18nEvent BakerSetRestakeEarnings{..} = "Baker " <> descrBaker ebsreBakerId ebsreAccount <> if ebsreRestakeEarnings then " set to restake earnings." else " unset restaking of earnings."
+        i18nEvent BakerKeysUpdated{..} = "Baker " <> descrBaker ebkuBakerId ebkuAccount <> " keys updated."
         i18nEvent AccountKeysUpdated = "Updated account keys"
         i18nEvent AccountKeysAdded = "Added account keys"
         i18nEvent AccountKeysRemoved = "Removed account keys"
@@ -107,9 +113,28 @@ translation = I18n {..}
         i18nEvent UpdateEnqueued{..} = "Chain update event enqueued."
         i18nEvent TransferredWithSchedule{..} = "Transferred with schedule from " <> descrAccount etwsTo <> " to " <> descrAccount etwsTo
 
-        i18nSpecialEvent BakingReward{..} = "Award " <> descrAmount stoRewardAmount <> " to baker " <> descrBaker stoBakerId <> " at " <> descrAccount stoBakerAccount
+        i18nSpecialEvent BakingRewards{..} = "Baking rewards\n" <>
+            Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)
+        i18nSpecialEvent Mint{..} = "New GTU minted\n " <>
+            Text.unlines [
+              "  - " <> descrAmount stoMintBakingReward <> " to the baking reward account",
+              "  - " <> descrAmount stoMintFinalizationReward <> " to the finalization reward account",
+                "  - " <> descrAmount stoMintPlatformDevelopmentCharge <> " as the platform development charge to account " <> descrAccount stoFoundationAccount]
+        i18nSpecialEvent FinalizationRewards{..} = "Finalization rewards\n " <>
+            Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoFinalizationRewards)
+        i18nSpecialEvent BlockReward{..} = "Block rewards\n" <>
+            Text.unlines [
+              "  - " <> descrAmount stoTransactionFees <> " transaction fees in the block",
+              "  - " <> descrAmount stoOldGASAccount <> " was the old balance of the GAS account",
+              "  - " <> descrAmount stoNewGASAccount <> " is the new balance of the GAS account",
+              "  - " <> descrAmount stoBakerReward <> " awarded to the block baker to address " <> descrAccount stoBaker,
+              "  - " <> descrAmount stoFoundationCharge <> " awarded to the foundation account " <> descrAccount stoFoundationAccount
+              ]
 
-        i18nSpecialOutcomeShort BakingReward{..} = "Reward for baker " <> descrBaker stoBakerId
+        i18nSpecialOutcomeShort BakingRewards{..} = "Baking rewards"
+        i18nSpecialOutcomeShort Mint{..} = "New GTU minted"
+        i18nSpecialOutcomeShort FinalizationRewards{..} = "Finalization rewards"
+        i18nSpecialOutcomeShort BlockReward{..} = "Block rewards"
 
         i18nErrorMessage (EMErrorResponse NotFound) = "Not found"
         i18nErrorMessage (EMErrorResponse InternalError{}) = "Internal server error"
