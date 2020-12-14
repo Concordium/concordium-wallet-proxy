@@ -182,13 +182,9 @@ getAccountBalanceR addrText =
             encryptedAmount <- HM.lookup "accountEncryptedAmount" obj
             nnce <- HM.lookup "accountNonce" obj
             releases <- HM.lookup "accountReleaseSchedule" obj
-            let staked =
-                  case parseMaybe parseJSON publicAmount :: Maybe Amount of
-                    Just amnt | amnt >= 2 -> [ "accountBaker" .= object [
-                                               "stakedAmount" .= Amount (_amount amnt `div` 2),
-                                               "bakerId" .= (3 :: BakerId)
-                                               ]]
-                    _ -> []
+            let staked = case HM.lookup "accountBaker" obj of
+                  Nothing -> []
+                  Just b -> ["accountBaker" .= b]
             return . object $ staked ++ ["accountAmount" .= publicAmount,
                                          "accountEncryptedAmount" .= encryptedAmount,
                                          "accountNonce" .= nnce,
