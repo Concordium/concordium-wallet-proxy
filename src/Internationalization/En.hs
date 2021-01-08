@@ -11,6 +11,7 @@ import Concordium.Types.Updates
 
 import Internationalization.Base
 import Concordium.ID.Types
+import Concordium.Wasm (contractAndFunctionName, initContractName)
 
 translation :: I18n
 translation = I18n {..}
@@ -82,15 +83,18 @@ translation = I18n {..}
         i18nEvent (ModuleDeployed mref) = "Deployed module " <> descrModule mref
         i18nEvent ContractInitialized{..} =
           "Initialized smart contract " <>
-          descrModule ecRef <>
+          initContractName ecInitName <>
           " at address " <> descrInstance ecAddress <>
           " with balance " <>
           descrAmount ecAmount <>
           ". " <>
           Text.pack (show (length ecEvents)) <> " events were logged"
         i18nEvent Updated{..} =
+          let (cname, fname) = contractAndFunctionName euReceiveName in
           "Invoked smart contract: source=" <> descrAddress euInstigator <>
           ", target=" <> descrInstance euAddress <>
+          ", contract= " <> cname <>
+          ", function= " <> fname <>
           ", amount=" <> descrAmount euAmount <>
           ", message=" <> Text.pack (show euMessage)
         i18nEvent (Transferred sender amt recv) = "Transferred " <> descrAmount amt <> " from " <> descrAddress sender <> " to " <> descrAddress recv
