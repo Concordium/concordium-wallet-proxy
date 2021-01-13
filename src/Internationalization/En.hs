@@ -115,7 +115,7 @@ translation = I18n {..}
         i18nEvent EncryptedSelfAmountAdded{..} = "Updated shielded balance of account " <> descrAccount eaaAccount
         i18nEvent AmountAddedByDecryption{..} = "Unshielded " <> descrAmount aabdAmount <> " on account " <> descrAccount aabdAccount
         i18nEvent UpdateEnqueued{..} = "Chain update event enqueued."
-        i18nEvent TransferredWithSchedule{..} = "Transferred with schedule from " <> descrAccount etwsTo <> " to " <> descrAccount etwsTo
+        i18nEvent TransferredWithSchedule{..} = "Transferred with schedule from " <> descrAccount etwsFrom <> " to " <> descrAccount etwsTo
 
         i18nSpecialEvent BakingRewards{..} = "Baking rewards\n" <>
             Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)
