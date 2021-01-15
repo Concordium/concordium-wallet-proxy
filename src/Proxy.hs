@@ -34,6 +34,7 @@ import Data.Maybe(catMaybes, fromMaybe)
 import Data.Time.Clock.POSIX
 import qualified Database.Esqueleto as E
 import System.Random
+import Data.Foldable
 
 import Data.Text(Text)
 import qualified Data.Text as Text
@@ -571,6 +572,10 @@ formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
                                        ["transferSource" .= eaaAccount,
                                         "amountSubtracted" .= eaaAmount,
                                         "newSelfEncryptedAmount" .= eaaNewAmount]
+                                     (TSTAccountTransaction (Just TTTransferWithSchedule), [TransferredWithSchedule{..}]) ->
+                                       ["transferDestination" .= etwsTo,
+                                        "transferAmount" .= foldl' (+) 0 (map snd etwsAmount)]
+
                                      _ -> []), eventSubtotal self evts )
             TxReject reason -> (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason], Nothing)
 
