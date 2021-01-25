@@ -43,6 +43,7 @@ import Concordium.Types
 import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
+
 import Concordium.Client.GRPC
 import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost, simpleTransferEnergyCost,
                                            encryptedTransferEnergyCost,
@@ -51,10 +52,8 @@ import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost, simpl
 import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex)
 import Concordium.Crypto.SignatureScheme (KeyPair)
 import Concordium.Common.Version
-import Concordium.GlobalState.SQL.AccountTransactionIndex
-import Concordium.GlobalState.SQL
-import Concordium.GlobalState.Basic.BlockState.Updates
-import Concordium.GlobalState.Parameters
+import Concordium.SQL.AccountTransactionIndex
+import Concordium.SQL.Helpers
 
 import Internationalization
 
@@ -275,15 +274,25 @@ getTransactionCostR = withExchangeRate $ \rate -> do
                                           , "energy" .= energyCost
                                           ]
               tty' -> respond400Error (EMParseError $ "Could not parse transaction type: " <> tty') RequestInvalid
-      fetchUpdates :: ClientMonad IO (Either String Updates)
+      fetchUpdates :: ClientMonad IO (Either String EnergyRate)
       fetchUpdates = do
           bbh <- getBestBlockHash
           summary <- getBlockSummary bbh
-          return $ parseEither (AE.withObject "Block summary" (AE..: "updates")) =<< summary
-      withExchangeRate cont = runGRPC fetchUpdates $ \upd -> do
-          now <- utcTimeToTimestamp <$> liftIO getCurrentTime
-          cont $ _cpEnergyRate $ _currentParameters $ snd $ processUpdateQueues now upd
-
+          -- This extraction of the parameter is not ideal for two reasons
+          -- - this is the exchange rate in the best block, which could already be obsolete.
+          --   This is not likely not matter since block times 10s on average, and it is always the case
+          --   that the transaction is committed after the current time. In any case this is only an estimate.
+          -- - It is manually parsing the return value, instead of using the Updates type. This should be fixed
+          --   and we want to use the same calculation in concordium-client, however that requires more restructuring
+          --   of the dependencies. The current solution is good enough in the meantime.
+          let energyRateParser = AE.withObject "Block summary" $ \obj -> do
+                updates <- obj AE..: "updates"
+                chainParameters <- updates AE..: "chainParameters"
+                euroPerEnergy <- chainParameters AE..: "euroPerEnergy"
+                microGTUPerEuro <- chainParameters AE..: "microGTUPerEuro"
+                return $ computeEnergyRate microGTUPerEuro euroPerEnergy
+          return $ parseEither energyRateParser =<< summary
+      withExchangeRate = runGRPC fetchUpdates
 putCredentialR :: Handler TypedContent
 putCredentialR =
   connect rawRequestBody (sinkParserEither json') >>= \case
