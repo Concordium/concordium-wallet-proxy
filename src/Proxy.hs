@@ -329,9 +329,9 @@ putTransferR =
         Success tx -> do
           $(logInfo) (Text.pack (show tx))
           runGRPC (sendTransactionToBaker (NormalTransaction tx) defaultNetId) $ \case
-            False -> do -- this case cannot happen at this time
-              $(logError) "Credential rejected by node."
-              respond400Error EMCredentialRejected RequestInvalid
+            False -> do -- transaction invalid
+              $(logError) "Transaction rejected by the node."
+              respond400Error EMTransactionRejected RequestInvalid
             True ->
               sendResponse (object ["submissionId" .= (getHash (NormalTransaction tx) :: TransactionHash)])
       where transferParser = withObject "Parse transfer request." $ \obj -> do
