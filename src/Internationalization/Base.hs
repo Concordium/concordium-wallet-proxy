@@ -19,6 +19,7 @@ data ErrorMessage
     | EMGRPCError
     | EMParseError String
     | EMCredentialRejected
+    | EMTransactionRejected
     | EMMalformedTransaction
     | EMMalformedAddress
     | EMDatabaseError
