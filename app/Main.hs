@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
 import Proxy
@@ -10,8 +11,8 @@ import Data.ByteString(ByteString)
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Aeson as AE
 import qualified Data.Aeson.Types as AE
-import qualified Data.HashMap.Strict as HM
-import Concordium.ID.Types (AccountAddress, KeyIndex)
+import qualified Data.Map.Strict as Map
+import Concordium.ID.Types (AccountAddress, KeyIndex, AccountThreshold, SignatureThreshold, CredentialIndex)
 import Concordium.Crypto.SignatureScheme (KeyPair)
 
 import System.Exit(die)
@@ -55,12 +56,17 @@ runSite port host site = do
         Network.Wai.Handler.Warp.setHost host $
         Network.Wai.Handler.Warp.defaultSettings)
 
-accountParser :: AE.Value -> AE.Parser (AccountAddress, [(KeyIndex, KeyPair)])
+accountParser :: AE.Value -> AE.Parser (AccountAddress, [(CredentialIndex, [(KeyIndex, KeyPair)])])
 accountParser = AE.withObject "Account keys" $ \v -> do
           accountAddr <- v AE..: "address"
-          accountData <- v AE..: "accountData"
-          keyMap <- accountData AE..: "keys"
-          return (accountAddr, HM.toList keyMap)
+          accountKeys <- v AE..: "accountKeys"
+          credentialsMap <- accountKeys AE..: "keys"
+          threshold :: AccountThreshold <- accountKeys AE..: "threshold"
+          keysMap <- forM credentialsMap $ AE.withObject "Credential Keys" $ \obj -> do
+            ks <- obj AE..: "keys"
+            keyThreshold :: SignatureThreshold <- obj AE..: "threshold"
+            return $ take (fromIntegral keyThreshold) $ Map.toAscList ks
+          return (accountAddr, take (fromIntegral threshold) (Map.toAscList keysMap))
 
 main :: IO ()
 main = do

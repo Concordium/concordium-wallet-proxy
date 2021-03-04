@@ -44,7 +44,6 @@ translation = I18n {..}
         i18nRejectReason (InvalidReceiveMethod mref receiveName) = "Receive method " <> descrReceiveName receiveName <> " does not exist for module " <> descrModule mref <> "."
         i18nRejectReason RuntimeFailure = "Runtime failure when executing smart contract."
         i18nRejectReason (DuplicateAggregationKey _) = "Duplicate aggregation key."
-        i18nRejectReason NonExistentAccountKey = "The account key with the specified index does not exist."
         i18nRejectReason KeyIndexAlreadyInUse = "The requested key index is already in use."
         i18nRejectReason InvalidAccountKeySignThreshold = "The requested sign threshold would exceed the number of keys on the account."
         i18nRejectReason InvalidEncryptedAmountTransferProof = "The encrypted amount transfer has an invalid proof."
@@ -59,6 +58,13 @@ translation = I18n {..}
         i18nRejectReason (NotABaker addr) = "Account " <> descrAccount addr <> " is not a baker."
         i18nRejectReason InsufficientBalanceForBakerStake = "Sender account has insufficient balance to cover the requested stake."
         i18nRejectReason BakerInCooldown = "Request to make change to the baker while the baker is in the cooldown period."
+        i18nRejectReason NonExistentCredentialID = "Credential ID does not exist."
+        i18nRejectReason InvalidCredentials = "One or more of the credentials is invalid."
+        i18nRejectReason (DuplicateCredIDs _) = "One or more of the credential IDs is duplicate."
+        i18nRejectReason (NonExistentCredIDs _) = "One or more of the credential IDs does not exist."
+        i18nRejectReason RemoveFirstCredential = "Attempt to remove the first credential."
+        i18nRejectReason CredentialHolderDidNotSign = "Credential holder did not sign the key update."
+
 
         i18nTransactionType TTDeployModule = "Deploy module"
         i18nTransactionType TTInitContract = "Initialize smart contract"
@@ -69,13 +75,12 @@ translation = I18n {..}
         i18nTransactionType TTUpdateBakerRestakeEarnings = "Update whether to restake baker earnings"
         i18nTransactionType TTAddBaker = "Add baker"
         i18nTransactionType TTRemoveBaker = "Remove baker"
-        i18nTransactionType TTUpdateAccountKeys = "Update account keys"
-        i18nTransactionType TTAddAccountKeys = "Add account keys"
-        i18nTransactionType TTRemoveAccountKeys = "Remove account keys"
+        i18nTransactionType TTUpdateCredentialKeys = "Update credential keys"
         i18nTransactionType TTEncryptedAmountTransfer = "Shielded transfer"
         i18nTransactionType TTTransferToEncrypted = "Shielded amount"
         i18nTransactionType TTTransferToPublic = "Unshielded amount"
         i18nTransactionType TTTransferWithSchedule = "Transfer with schedule"
+        i18nTransactionType TTUpdateCredentials = "Update account credentials"
 
         i18nDeployCredential Initial = "Deploy initial account credential"
         i18nDeployCredential Normal = "Deploy account credential"
@@ -106,16 +111,14 @@ translation = I18n {..}
         i18nEvent BakerStakeDecreased{..} = "Stake of baker " <> descrBaker ebsiBakerId ebsiAccount <> " decreased to " <> descrAmount ebsiNewStake
         i18nEvent BakerSetRestakeEarnings{..} = "Baker " <> descrBaker ebsreBakerId ebsreAccount <> if ebsreRestakeEarnings then " set to restake earnings." else " unset restaking of earnings."
         i18nEvent BakerKeysUpdated{..} = "Baker " <> descrBaker ebkuBakerId ebkuAccount <> " keys updated."
-        i18nEvent AccountKeysUpdated = "Updated account keys"
-        i18nEvent AccountKeysAdded = "Added account keys"
-        i18nEvent AccountKeysRemoved = "Removed account keys"
-        i18nEvent AccountKeysSignThresholdUpdated = "Signature threshold updated"
+        i18nEvent CredentialKeysUpdated{..} = "Updated keys of credential with ID " <> Text.pack (show ckuCredId)
         i18nEvent NewEncryptedAmount{..} = "New encrypted amount added to account " <> descrAccount neaAccount
         i18nEvent EncryptedAmountsRemoved{..} = "Consumed encrypted amounts on account " <> descrAccount earAccount
         i18nEvent EncryptedSelfAmountAdded{..} = "Updated shielded balance of account " <> descrAccount eaaAccount
         i18nEvent AmountAddedByDecryption{..} = "Unshielded " <> descrAmount aabdAmount <> " on account " <> descrAccount aabdAccount
         i18nEvent UpdateEnqueued{..} = "Chain update event enqueued."
         i18nEvent TransferredWithSchedule{..} = "Transferred with schedule from " <> descrAccount etwsFrom <> " to " <> descrAccount etwsTo
+        i18nEvent CredentialsUpdated{..} = "Credentials on account " <> descrAccount cuAccount <> " updated."
 
         i18nSpecialEvent BakingRewards{..} = "Baking rewards\n" <>
             Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)
