@@ -50,7 +50,7 @@ import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost, simpl
                                            encryptedTransferEnergyCost,
                                            accountEncryptEnergyCost,
                                            accountDecryptEnergyCost)
-import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex)
+import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex, CredentialIndex)
 import Concordium.Crypto.SignatureScheme (KeyPair)
 import Concordium.Common.Version
 import Concordium.SQL.AccountTransactionIndex
@@ -65,7 +65,7 @@ data Proxy = Proxy {
   grpcEnvData :: !EnvData,
   dbConnectionPool :: ConnectionPool,
   dropAccount :: AccountAddress,
-  dropKeys :: [(KeyIndex, KeyPair)],
+  dropKeys :: [(CredentialIndex, [(KeyIndex, KeyPair)])],
   globalInfo :: Value,
   ipInfo :: Value
 }
@@ -626,13 +626,12 @@ renderTransactionType TTUpdateBakerRestakeEarnings = "UpdateBakerRestakeEarnings
 renderTransactionType TTTransfer = "transfer"
 renderTransactionType TTAddBaker = "addBaker"
 renderTransactionType TTRemoveBaker = "removeBaker"
-renderTransactionType TTUpdateAccountKeys = "updateAccountKeys"
-renderTransactionType TTAddAccountKeys = "addAccountKeys"
-renderTransactionType TTRemoveAccountKeys = "removeAccountKeys"
+renderTransactionType TTUpdateCredentialKeys = "updateAccountKeys"
 renderTransactionType TTEncryptedAmountTransfer = "encryptedAmountTransfer"
 renderTransactionType TTTransferToEncrypted = "transferToEncrypted"
 renderTransactionType TTTransferToPublic = "transferToPublic"
 renderTransactionType TTTransferWithSchedule = "transferWithSchedule"
+renderTransactionType TTUpdateCredentials = "updateCredentials"
 
 renderTransactionSummaryType :: TransactionSummaryType -> Text
 renderTransactionSummaryType (TSTAccountTransaction (Just tt)) = renderTransactionType tt
