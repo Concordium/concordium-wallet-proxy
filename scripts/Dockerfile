@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:experimental
-FROM 192549843005.dkr.ecr.eu-west-1.amazonaws.com/concordium/base-haskell:0.17 as wallet-proxy-build
+FROM 192549843005.dkr.ecr.eu-west-1.amazonaws.com/concordium/base:0.18 as wallet-proxy-build
 
 # Build wallet-proxy binary.
 COPY . /build

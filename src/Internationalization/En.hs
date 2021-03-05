@@ -116,7 +116,7 @@ translation = I18n {..}
         i18nEvent EncryptedAmountsRemoved{..} = "Consumed encrypted amounts on account " <> descrAccount earAccount
         i18nEvent EncryptedSelfAmountAdded{..} = "Updated shielded balance of account " <> descrAccount eaaAccount
         i18nEvent AmountAddedByDecryption{..} = "Unshielded " <> descrAmount aabdAmount <> " on account " <> descrAccount aabdAccount
-        i18nEvent UpdateEnqueued{..} = "Chain update event enqueued."
+        i18nEvent UpdateEnqueued{} = "Chain update event enqueued."
         i18nEvent TransferredWithSchedule{..} = "Transferred with schedule from " <> descrAccount etwsFrom <> " to " <> descrAccount etwsTo
         i18nEvent CredentialsUpdated{..} = "Credentials on account " <> descrAccount cuAccount <> " updated."
 
@@ -138,10 +138,10 @@ translation = I18n {..}
               "  - " <> descrAmount stoFoundationCharge <> " awarded to the foundation account " <> descrAccount stoFoundationAccount
               ]
 
-        i18nSpecialOutcomeShort BakingRewards{..} = "Baking rewards"
-        i18nSpecialOutcomeShort Mint{..} = "New GTU minted"
-        i18nSpecialOutcomeShort FinalizationRewards{..} = "Finalization rewards"
-        i18nSpecialOutcomeShort BlockReward{..} = "Block rewards"
+        i18nSpecialOutcomeShort BakingRewards{} = "Baking rewards"
+        i18nSpecialOutcomeShort Mint{} = "New GTU minted"
+        i18nSpecialOutcomeShort FinalizationRewards{} = "Finalization rewards"
+        i18nSpecialOutcomeShort BlockReward{} = "Block rewards"
 
         i18nErrorMessage (EMErrorResponse NotFound) = "Not found"
         i18nErrorMessage (EMErrorResponse InternalError{}) = "Internal server error"
