@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -488,7 +489,7 @@ timestampToFracSeconds :: Timestamp -> Double
 timestampToFracSeconds Timestamp{..} = fromRational (toInteger tsMillis Rational.% 1000)
 
 formatEntry :: I18n -> AccountAddress -> (Entity Entry, Entity Summary) -> Either String Value
-formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
+formatEntry i self (Entity key Entry{}, Entity _ Summary{..}) = do
   let blockDetails = ["blockHash" .= unBSS summaryBlock,
                       "blockTime" .= timestampToFracSeconds summaryTimestamp
                      ]
@@ -595,14 +596,14 @@ formatEntry i self (Entity key Entry{..}, Entity _ Summary{..}) = do
                     ["encrypted" .= object ["encryptedAmount" .= neaEncryptedAmount,
                                             "newStartIndex" .= earUpToIndex,
                                             "newSelfEncryptedAmount" .= earNewAmount]]
-                  (TSTAccountTransaction (Just TTTransferToPublic), TxSuccess [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}]) ->
+                  (TSTAccountTransaction (Just TTTransferToPublic), TxSuccess [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{}]) ->
                     ["encrypted" .= object ["newStartIndex" .= earUpToIndex,
                                             "newSelfEncryptedAmount" .= earNewAmount]]
                   (TSTAccountTransaction (Just TTTransferToEncrypted), TxSuccess [EncryptedSelfAmountAdded{..}]) ->
                     ["encrypted" .= object ["newSelfEncryptedAmount" .= eaaNewAmount]]
                   _ -> []
               | otherwise -> case (tsType, tsResult) of
-                  (TSTAccountTransaction (Just TTEncryptedAmountTransfer), TxSuccess [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
+                  (TSTAccountTransaction (Just TTEncryptedAmountTransfer), TxSuccess [EncryptedAmountsRemoved{}, NewEncryptedAmount{..}]) ->
                     ["encrypted" .= object ["encryptedAmount" .= neaEncryptedAmount,
                                             "newIndex" .= neaNewIndex]]
                   _ -> []
