@@ -11,7 +11,8 @@ import Concordium.Types.Updates
 
 import Internationalization.Base
 import Concordium.ID.Types
-import Concordium.Wasm (contractAndFunctionName, initContractName, parameter)
+import Concordium.Wasm (contractAndFunctionName, initContractName)
+import qualified Concordium.Wasm as Wasm
 
 translation :: I18n
 translation = I18n {..}
@@ -37,7 +38,8 @@ translation = I18n {..}
         i18nRejectReason (AmountTooLarge addr _) = "The sending account (" <> descrAddress addr <> ") has insufficient funds"
         i18nRejectReason SerializationFailure = "Malformed transaction body"
         i18nRejectReason OutOfEnergy = "Insufficient energy"
-        i18nRejectReason Rejected{..} = "Rejected by contract logic with reason " <> Text.pack (show rejectReason)
+        i18nRejectReason RejectedInit{..} = "Failed contract initialization due to contract logic with error code " <> Text.pack (show rejectReason)
+        i18nRejectReason RejectedReceive{..} = "Failed contract receive invocation due to contract logic with reason " <> Text.pack (show rejectReason)
         i18nRejectReason (NonExistentRewardAccount addr) = "The designated reward account (" <> descrAccount addr <> ") does not exist"
         i18nRejectReason InvalidProof = "Invalid proof"
         i18nRejectReason (InvalidInitMethod mref initName) = "Init method " <> descrInitName initName <> " does not exist in module " <> descrModule mref <> "."
@@ -102,7 +104,7 @@ translation = I18n {..}
           ", contract= " <> cname <>
           ", function= " <> fname <>
           ", amount=" <> descrAmount euAmount <>
-          ", message=" <> Text.pack (show (parameter euMessage))
+          ", message=" <> Text.pack (show (Wasm.parameter euMessage))
         i18nEvent (Transferred sender amt recv) = "Transferred " <> descrAmount amt <> " from " <> descrAddress sender <> " to " <> descrAddress recv
         i18nEvent (AccountCreated addr) = "Created account with address " <> descrAccount addr
         i18nEvent (CredentialDeployed _ addr) = "Deployed a credential to account " <> descrAccount addr
