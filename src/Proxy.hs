@@ -765,6 +765,8 @@ putGTUDropR addrText = do
         ]
     tryDrop addr dropType = do
       Proxy{..} <- getYesod
+      -- number of keys we need to sign with
+      let numKeys = sum . map (length . snd) $ dropKeys
       let getNonce = (>>= parseEither (withObject "nonce" (.: "nonce"))) <$> getNextAccountNonce (accountToText dropAccount)
       -- Determine if there is already a GTU drop entry for this account
       rcpRecord <- runDB $ getBy (UniqueAccount (ByteStringSerialized addr))
@@ -773,7 +775,7 @@ putGTUDropR addrText = do
         Nothing -> runGRPC getNonce $ \nonce -> do
           currentTime <- liftIO $ round <$> getPOSIXTime
           (payload, thEnergyAmount) <- case dropType of
-            Normal -> return (Transfer addr dropAmount, simpleTransferEnergyCost (length dropKeys))
+            Normal -> return (Transfer addr dropAmount, simpleTransferEnergyCost numKeys)
             Scheduled -> do
               -- sample a random release schedule spaced by 5min.
               numRels <- liftIO $ randomRIO (1::Word,15)
@@ -783,7 +785,7 @@ putGTUDropR addrText = do
                                if i == 1
                                then fromIntegral (remainder + releaseAmount)
                                else fromIntegral releaseAmount) | i <- [1 .. numRels]]
-              return (TransferWithSchedule addr releases, transferWithScheduleEnergyCost (fromIntegral numRels) (length dropKeys))
+              return (TransferWithSchedule addr releases, transferWithScheduleEnergyCost (fromIntegral numRels) numKeys)
           let
             atrPayload = encodePayload payload
             atrHeader = TransactionHeader {
