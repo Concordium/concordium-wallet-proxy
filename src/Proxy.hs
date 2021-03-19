@@ -65,11 +65,19 @@ data ErrorCode = InternalError | RequestInvalid | DataNotFound
 data Proxy = Proxy {
   grpcEnvData :: !EnvData,
   dbConnectionPool :: ConnectionPool,
-  dropAccount :: AccountAddress,
-  dropKeys :: [(CredentialIndex, [(KeyIndex, KeyPair)])],
+  gtuDropData :: Maybe GTUDropData,
   globalInfo :: Value,
   ipInfo :: Value
 }
+
+-- | Data needed for GTU drops.
+data GTUDropData = GTUDropData {
+  -- | Account to send GTU from.
+  dropAccount :: AccountAddress,
+  -- | Keys for the account.
+  dropKeys :: [(CredentialIndex, [(KeyIndex, KeyPair)])]
+  }
+
 instance Yesod Proxy where
   errorHandler e = do
     case e of
@@ -701,25 +709,32 @@ instance FromJSON DropSchedule where
       return Normal
     else fail "Unsupported drop type."
 
+-- | Handle a GTU drop request.
+--     When 'gtuDropData' is provided: handle drop.
+--     Otherwise: return 404.
 putGTUDropR :: Text -> Handler TypedContent
 putGTUDropR addrText = do
     i <- internationalize
-    case addressFromText addrText of
-      Left _ -> respond400Error EMMalformedAddress RequestInvalid
-      Right addr -> runGRPC (doGetAccInfo addrText) $ \case
-          -- Account is not finalized
-          Nothing -> sendResponseStatus notFound404 $ object
-                      ["errorMessage" .= i18n i EMAccountNotFinal,
-                       "error" .= fromEnum RequestInvalid]
-          -- Account is finalized, so try the drop
-          Just _ -> do
-            connect rawRequestBody (sinkParserEither json') >>= \case
-              Left _ -> tryDrop addr Normal -- malformed or empty body, we assume normal drop.
-              Right v -> case fromJSON v of
-                          AE.Success x -> tryDrop addr x
-                          AE.Error e -> do
-                            $(logWarn) (Text.pack e)
-                            respond400Error EMConfigurationError RequestInvalid
+    Proxy{..} <- getYesod
+    case gtuDropData of
+      Nothing -> respond404Error $ EMErrorResponse NotFound
+      Just gtuDropData' -> do
+        case addressFromText addrText of
+          Left _ -> respond400Error EMMalformedAddress RequestInvalid
+          Right addr -> runGRPC (doGetAccInfo addrText) $ \case
+              -- Account is not finalized
+              Nothing -> sendResponseStatus notFound404 $ object
+                          ["errorMessage" .= i18n i EMAccountNotFinal,
+                          "error" .= fromEnum RequestInvalid]
+              -- Account is finalized, so try the drop
+              Just _ -> do
+                connect rawRequestBody (sinkParserEither json') >>= \case
+                  Left _ -> tryDrop addr Normal gtuDropData' -- malformed or empty body, we assume normal drop.
+                  Right v -> case fromJSON v of
+                              AE.Success x -> tryDrop addr x gtuDropData'
+                              AE.Error e -> do
+                                $(logWarn) (Text.pack e)
+                                respond400Error EMConfigurationError RequestInvalid
 
   where
     accountToText = Text.decodeUtf8 . addressToBytes
@@ -763,8 +778,7 @@ putGTUDropR addrText = do
         "errorMessage" .= i18n i EMConfigurationError,
         "error" .= fromEnum InternalError
         ]
-    tryDrop addr dropType = do
-      Proxy{..} <- getYesod
+    tryDrop addr dropType gtuDropData@GTUDropData{..} = do
       -- number of keys we need to sign with
       let numKeys = sum . map (length . snd) $ dropKeys
       let getNonce = (>>= parseEither (withObject "nonce" (.: "nonce"))) <$> getNextAccountNonce (accountToText dropAccount)
@@ -799,7 +813,7 @@ putGTUDropR addrText = do
           mk <- runDB $ insertUnique (GTURecipient (ByteStringSerialized addr) (ByteStringSerialized transaction))
           case mk of
             -- There is already a transaction, so retry.
-            Nothing -> tryDrop addr dropType
+            Nothing -> tryDrop addr dropType gtuDropData
             Just _ -> sendTransaction transaction
         Just (Entity key (GTURecipient _ (ByteStringSerialized transaction))) ->
           runGRPC (doGetAccInfo (accountToText dropAccount)) $ \case
@@ -819,13 +833,13 @@ putGTUDropR addrText = do
                       -> do
                         -- Given the nonce, the transaction is no good. Delete and try again.
                         runDB $ delete key
-                        tryDrop addr dropType
+                        tryDrop addr dropType gtuDropData
                     | otherwise
                       -> do
                         currentTime <- liftIO $ round <$> getPOSIXTime
                         if thExpiry (atrHeader transaction) < TransactionTime currentTime then do
                           runDB $ delete key
-                          tryDrop addr dropType
+                          tryDrop addr dropType gtuDropData
                         else sendTransaction transaction
 
 getGlobalFileR :: Handler TypedContent
