@@ -26,7 +26,8 @@ import Options.Applicative
 data ProxyConfig = ProxyConfig {
   pcGRPC :: GrpcConfig,
   pcDBConnString :: ByteString,
-  pcGTUAccountFile :: FilePath,
+  -- | Account file used for GTU drop. Only used on stagenet and testnet.
+  pcGTUAccountFile :: Maybe FilePath,
   pcIpInfo :: FilePath
 }
 
@@ -37,7 +38,7 @@ parser = info (helper <*> parseProxyConfig)
     parseProxyConfig = mkProxyConfig
       <$> backendParser
       <*> strOption (long "db" <> metavar "STR" <> help "database connection string")
-      <*> strOption (long "drop-account" <> metavar "FILE" <> help "file with GTU drop account credentials")
+      <*> optional (strOption (long "drop-account" <> metavar "FILE" <> help "file with GTU drop account credentials (only used for stagenet and testnet)."))
       <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and private information on the identity providers, together with metadata.")
     mkProxyConfig backend = ProxyConfig $ GrpcConfig
                               (CMDS.grpcHost backend)
@@ -72,20 +73,23 @@ main :: IO ()
 main = do
   ProxyConfig{..} <- execParser parser
   let logm s = runStderrLoggingT ($logDebug ("[GRPC]: " <> s))
-  keyFile <- LBS.readFile pcGTUAccountFile
+  gtuDropData <- case pcGTUAccountFile of
+    Nothing -> return Nothing
+    Just accFile -> do
+      keyFile <- LBS.readFile accFile
+      let getKeys = AE.eitherDecode' keyFile >>= AE.parseEither accountParser
+      case getKeys of
+        Left err -> die $ "Cannot parse account keys: " ++ show err
+        Right (dropAccount, dropKeys) -> return . Just $ GTUDropData {..}
   Right ipInfo <- AE.eitherDecode' <$> LBS.readFile pcIpInfo
-  let getKeys = AE.eitherDecode' keyFile >>= AE.parseEither accountParser
-  case getKeys of
-    Left err -> die $ "Cannot parse account keys: " ++ show err
-    Right (dropAccount, dropKeys) ->
-      runStderrLoggingT $ withPostgresqlPool pcDBConnString 10 $ \dbConnectionPool -> liftIO $ do
-        runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
-        runExceptT (mkGrpcClient pcGRPC (Just logm)) >>= \case
-          Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
-          Right cfg -> do
-            -- The getCryptographicParameters returns a versioned cryptographic parameters object, which is what we need.
-            -- Because these parameters do not change we only look them up on startup, and store them.
-            runClient cfg (withLastFinalBlockHash Nothing getCryptographicParameters) >>= \case
-              Left err -> die $ "Cannot obtain cryptographic parameters due to network error: " ++ show err
-              Right (Left err) -> die $ "Cannot obtain cryptographic parameters due to unexpected response: " ++ err
-              Right (Right globalInfo) -> runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg, ..}
+  runStderrLoggingT $ withPostgresqlPool pcDBConnString 10 $ \dbConnectionPool -> liftIO $ do
+    runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
+    runExceptT (mkGrpcClient pcGRPC (Just logm)) >>= \case
+      Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
+      Right cfg -> do
+        -- The getCryptographicParameters returns a versioned cryptographic parameters object, which is what we need.
+        -- Because these parameters do not change we only look them up on startup, and store them.
+        runClient cfg (withLastFinalBlockHash Nothing getCryptographicParameters) >>= \case
+          Left err -> die $ "Cannot obtain cryptographic parameters due to network error: " ++ show err
+          Right (Left err) -> die $ "Cannot obtain cryptographic parameters due to unexpected response: " ++ err
+          Right (Right globalInfo) -> runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg, ..}
