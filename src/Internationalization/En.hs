@@ -27,6 +27,7 @@ translation = I18n {..}
         i18nUpdateTransaction UpdateMintDistribution = "Update parameters of the mint distribution"
         i18nUpdateTransaction UpdateTransactionFeeDistribution = "Update transaction fee distribution"
         i18nUpdateTransaction UpdateGASRewards = "Update parameters for GAS rewards distribution"
+        i18nUpdateTransaction UpdateBakerStakeThreshold = "Update minimum baker stake threshold"
 
         i18nRejectReason ModuleNotWF = "Typechecking of module failed"
         i18nRejectReason (ModuleHashAlreadyExists mref) = "A module with the hash " <> descrModule mref <> " already exists"
@@ -67,6 +68,7 @@ translation = I18n {..}
         i18nRejectReason (NonExistentCredIDs _) = "One or more of the credential IDs does not exist."
         i18nRejectReason RemoveFirstCredential = "Attempt to remove the first credential."
         i18nRejectReason CredentialHolderDidNotSign = "Credential holder did not sign the key update."
+        i18nRejectReason StakeUnderMinimumThresholdForBaking = "Desired stake is below the minimum threshold."
 
 
         i18nTransactionType TTDeployModule = "Deploy module"
