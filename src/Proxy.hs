@@ -265,9 +265,7 @@ getTransactionCostR = withExchangeRate $ \rate -> do
                                                        , "energy" .= simpleTransferEnergyCost numSignatures
                                                        ]
               y | y == "encryptedTransfer" -> do
-                -- FIXME: Once the size handling in simple-client is better remove the 11+
-                -- The 11+ is to account for the size of the transaction.
-                let energyCost = 11 + encryptedTransferEnergyCost numSignatures
+                let energyCost = encryptedTransferEnergyCost numSignatures
                 sendResponse $ object ["cost" .= computeCost rate energyCost
                                       , "energy" .= energyCost
                                       ]
@@ -277,9 +275,7 @@ getTransactionCostR = withExchangeRate $ \rate -> do
                                           , "energy" .= energyCost
                                           ]
                 | y == "transferToPublic" -> do
-                    -- FIXME: Once the size handling in simple-client is better remove the 11+
-                    -- The 6+ is to account for the size of the transaction.
-                    let energyCost = 6 + accountDecryptEnergyCost numSignatures
+                    let energyCost = accountDecryptEnergyCost numSignatures
                     sendResponse $ object ["cost" .= computeCost rate energyCost
                                           , "energy" .= energyCost
                                           ]
