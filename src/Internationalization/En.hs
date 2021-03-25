@@ -18,7 +18,6 @@ translation :: I18n
 translation = I18n {..}
     where
         i18nMalformedTransaction = "Malformed transaction body"
-        i18nUpdateTransaction UpdateAuthorization = "Update the authorizations access structure"
         i18nUpdateTransaction UpdateProtocol = "Protocol update"
         i18nUpdateTransaction UpdateElectionDifficulty = "Update election difficulty"
         i18nUpdateTransaction UpdateEuroPerEnergy = "Update Euro per Energy exchange rate"
@@ -28,6 +27,11 @@ translation = I18n {..}
         i18nUpdateTransaction UpdateTransactionFeeDistribution = "Update transaction fee distribution"
         i18nUpdateTransaction UpdateGASRewards = "Update parameters for GAS rewards distribution"
         i18nUpdateTransaction UpdateBakerStakeThreshold = "Update minimum baker stake threshold"
+        i18nUpdateTransaction UpdateRootKeysWithRootKeys = "Update root keys with root keys"
+        i18nUpdateTransaction UpdateLevel1KeysWithRootKeys = "Update level 1 keys with root keys"
+        i18nUpdateTransaction UpdateLevel2KeysWithRootKeys = "Update level 2 keys with root keys"
+        i18nUpdateTransaction UpdateLevel1KeysWithLevel1Keys = "Update level 1 keys with level 1 keys"
+        i18nUpdateTransaction UpdateLevel2KeysWithLevel1Keys = "Update level 2 keys with level 1 keys"
 
         i18nRejectReason ModuleNotWF = "Typechecking of module failed"
         i18nRejectReason (ModuleHashAlreadyExists mref) = "A module with the hash " <> descrModule mref <> " already exists"
@@ -86,6 +90,7 @@ translation = I18n {..}
         i18nTransactionType TTTransferToPublic = "Unshielded amount"
         i18nTransactionType TTTransferWithSchedule = "Transfer with schedule"
         i18nTransactionType TTUpdateCredentials = "Update account credentials"
+        i18nTransactionType TTRegisterData = "Register data on the chain"
 
         i18nDeployCredential Initial = "Deploy initial account credential"
         i18nDeployCredential Normal = "Deploy account credential"
@@ -124,6 +129,7 @@ translation = I18n {..}
         i18nEvent UpdateEnqueued{} = "Chain update event enqueued."
         i18nEvent TransferredWithSchedule{..} = "Transferred with schedule from " <> descrAccount etwsFrom <> " to " <> descrAccount etwsTo
         i18nEvent CredentialsUpdated{..} = "Credentials on account " <> descrAccount cuAccount <> " updated."
+        i18nEvent DataRegistered{} = "Data registered on the chain."
 
         i18nSpecialEvent BakingRewards{..} = "Baking rewards\n" <>
             Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)
