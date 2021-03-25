@@ -47,10 +47,17 @@ import Concordium.Types.Transactions
 import Concordium.Types.Execution
 
 import Concordium.Client.GRPC
-import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost, simpleTransferEnergyCost,
+import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
+                                           transferWithSchedulePayloadSize,
+                                           simpleTransferEnergyCost,
+                                           simpleTransferPayloadSize,
                                            encryptedTransferEnergyCost,
+                                           encryptedTransferPayloadSize,
                                            accountEncryptEnergyCost,
-                                           accountDecryptEnergyCost)
+                                           accountEncryptPayloadSize,
+                                           accountDecryptEnergyCost,
+                                           accountDecryptPayloadSize,
+                                           )
 import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex, CredentialIndex)
 import Concordium.Crypto.SignatureScheme (KeyPair)
 import Concordium.Common.Version
@@ -261,21 +268,23 @@ getTransactionCostR = withExchangeRate $ \rate -> do
           lookupGetParam "type" >>= \case
             Nothing -> respond400Error EMMissingParameter RequestInvalid
             Just tty -> case Text.unpack tty of
-              "simpleTransfer" -> sendResponse $ object ["cost" .= computeCost rate (simpleTransferEnergyCost numSignatures)
-                                                       , "energy" .= simpleTransferEnergyCost numSignatures
-                                                       ]
+              "simpleTransfer" -> do
+                let energyCost = simpleTransferEnergyCost simpleTransferPayloadSize numSignatures
+                sendResponse $ object ["cost" .= computeCost rate energyCost
+                                      , "energy" .= energyCost
+                                      ]
               y | y == "encryptedTransfer" -> do
-                let energyCost = encryptedTransferEnergyCost numSignatures
+                let energyCost = encryptedTransferEnergyCost encryptedTransferPayloadSize numSignatures
                 sendResponse $ object ["cost" .= computeCost rate energyCost
                                       , "energy" .= energyCost
                                       ]
                 | y == "transferToSecret" -> do
-                    let energyCost = accountEncryptEnergyCost numSignatures
+                    let energyCost = accountEncryptEnergyCost accountEncryptPayloadSize numSignatures
                     sendResponse $ object ["cost" .= computeCost rate energyCost
                                           , "energy" .= energyCost
                                           ]
                 | y == "transferToPublic" -> do
-                    let energyCost = accountDecryptEnergyCost numSignatures
+                    let energyCost = accountDecryptEnergyCost accountDecryptPayloadSize numSignatures
                     sendResponse $ object ["cost" .= computeCost rate energyCost
                                           , "energy" .= energyCost
                                           ]
@@ -637,6 +646,7 @@ renderTransactionType TTTransferToEncrypted = "transferToEncrypted"
 renderTransactionType TTTransferToPublic = "transferToPublic"
 renderTransactionType TTTransferWithSchedule = "transferWithSchedule"
 renderTransactionType TTUpdateCredentials = "updateCredentials"
+renderTransactionType TTRegisterData = "registerData"
 
 renderTransactionSummaryType :: TransactionSummaryType -> Text
 renderTransactionSummaryType (TSTAccountTransaction (Just tt)) = renderTransactionType tt
@@ -785,7 +795,7 @@ putGTUDropR addrText = do
         Nothing -> runGRPC getNonce $ \nonce -> do
           currentTime <- liftIO $ round <$> getPOSIXTime
           (payload, thEnergyAmount) <- case dropType of
-            Normal -> return (Transfer addr dropAmount, simpleTransferEnergyCost numKeys)
+            Normal -> return (Transfer addr dropAmount, simpleTransferEnergyCost simpleTransferPayloadSize numKeys)
             Scheduled -> do
               -- sample a random release schedule spaced by 5min.
               numRels <- liftIO $ randomRIO (1::Word,15)
@@ -795,7 +805,7 @@ putGTUDropR addrText = do
                                if i == 1
                                then fromIntegral (remainder + releaseAmount)
                                else fromIntegral releaseAmount) | i <- [1 .. numRels]]
-              return (TransferWithSchedule addr releases, transferWithScheduleEnergyCost (fromIntegral numRels) numKeys)
+              return (TransferWithSchedule addr releases, transferWithScheduleEnergyCost (transferWithSchedulePayloadSize (fromIntegral numRels)) (fromIntegral numRels) numKeys)
           let
             atrPayload = encodePayload payload
             atrHeader = TransactionHeader {

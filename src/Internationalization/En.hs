@@ -90,6 +90,7 @@ translation = I18n {..}
         i18nTransactionType TTTransferToPublic = "Unshielded amount"
         i18nTransactionType TTTransferWithSchedule = "Transfer with schedule"
         i18nTransactionType TTUpdateCredentials = "Update account credentials"
+        i18nTransactionType TTRegisterData = "Register data on the chain"
 
         i18nDeployCredential Initial = "Deploy initial account credential"
         i18nDeployCredential Normal = "Deploy account credential"
@@ -128,6 +129,7 @@ translation = I18n {..}
         i18nEvent UpdateEnqueued{} = "Chain update event enqueued."
         i18nEvent TransferredWithSchedule{..} = "Transferred with schedule from " <> descrAccount etwsFrom <> " to " <> descrAccount etwsTo
         i18nEvent CredentialsUpdated{..} = "Credentials on account " <> descrAccount cuAccount <> " updated."
+        i18nEvent DataRegistered{} = "Data registered on the chain."
 
         i18nSpecialEvent BakingRewards{..} = "Baking rewards\n" <>
             Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)
