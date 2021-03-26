@@ -1,0 +1,49 @@
+name: Build
+
+on:
+  push:
+    branches: 
+      - main
+
+  pull_request:
+    branches: 
+      - main
+
+  workflow_dispatch: # allows manual trigger
+
+env:
+  RUST: 1.45.2
+  GHC: 8.10.4
+
+jobs:
+  "Build":
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.draft }} 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ env.RUST }}
+          override: true
+      - uses: haskell/actions/setup@v1
+        with:
+          ghc-version: ${{ env.GHC }}
+      - name: Install protoc
+        run: sudo apt-get -y install protobuf-compiler
+      - name: Cache cargo dependencies and targets
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+            **/target
+          key: ${{ runner.os }}-rust-deps-${{ env.RUST }}-${{ hashFiles('stack.yaml', 'package.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-deps-${{ env.RUST }}
+      - name: Build wallet-proxy
+        run: stack build --ghc-options -j4
