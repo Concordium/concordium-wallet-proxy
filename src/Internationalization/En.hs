@@ -38,8 +38,6 @@ translation = I18n {..}
         i18nRejectReason (InvalidAccountReference addr) = "The account " <> descrAccount addr <> " does not exist"
         i18nRejectReason (InvalidModuleReference mref) = "Module does not exist: " <> descrModule mref
         i18nRejectReason (InvalidContractAddress caddr) = "No smart contract instance exists with address " <> descrInstance caddr
-        i18nRejectReason (ReceiverAccountNoCredential addr) = "The receiving account (" <> descrAccount addr <> ") has has no valid credential"
-        i18nRejectReason (ReceiverContractNoCredential caddr) = "The receiving smart contract instance (" <> descrInstance caddr <> "') has no valid credential"
         i18nRejectReason (AmountTooLarge addr _) = "The sending account (" <> descrAddress addr <> ") has insufficient funds"
         i18nRejectReason SerializationFailure = "Malformed transaction body"
         i18nRejectReason OutOfEnergy = "Insufficient energy"
@@ -73,6 +71,9 @@ translation = I18n {..}
         i18nRejectReason RemoveFirstCredential = "Attempt to remove the first credential."
         i18nRejectReason CredentialHolderDidNotSign = "Credential holder did not sign the key update."
         i18nRejectReason StakeUnderMinimumThresholdForBaking = "Desired stake is below the minimum threshold."
+        i18nRejectReason NotAllowedMultipleCredentials = "The account is not allowed to have multiple credentials."
+        i18nRejectReason NotAllowedToReceiveEncrypted = "The account is not allowed to receive encrypted transfers."
+        i18nRejectReason NotAllowedToHandleEncrypted = "The account is not allowed to handle encrypted amounts."
 
 
         i18nTransactionType TTDeployModule = "Deploy module"
