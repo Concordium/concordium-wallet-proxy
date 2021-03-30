@@ -1,10 +1,12 @@
 name:                wallet-proxy
 version:             0.5.0
-github:              "githubuser/wallet-proxy"
+github:              "Concordium/concordium-wallet-proxy"
 license:             BSD3
-author:              "Concordium AG"
-maintainer:          "contact@concordium.com"
-copyright:           "2020 Concordium"
+author:              "Concordium"
+maintainer:          "developers@concordium.com"
+copyright:           "Concordium"
+license-file:        "LICENSE"
+license:             "Apache-2.0"
 
 extra-source-files:
 - README.md
@@ -17,7 +19,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/githubuser/pager#readme>
+description:         Please see the README on GitHub at <https://github.com/Concordium/concordium-wallet-proxy#readme>
 
 dependencies:
 - base >=4.7 && < 5

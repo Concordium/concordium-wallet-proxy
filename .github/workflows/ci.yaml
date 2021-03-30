@@ -1,24 +1,36 @@
 name: Build
 
 on:
-  push:
-    branches: 
-      - main
-
   pull_request:
-    branches: 
+    branches:
       - main
+    paths:
+    - '.github/workflows/ci.yaml'
+    - '**.hs'
+    - 'stack*.yaml'
+    - 'package.yaml'
+    - 'deps/concordium-client'
 
-  workflow_dispatch: # allows manual trigger
+  push:
+    branches:
+      - main
+    paths:
+    - '.github/workflows/ci.yaml'
+    - '**.hs'
+    - 'stack*.yaml'
+    - 'package.yaml'
+    - 'deps/concordium-client'
+
+  workflow_dispatch: # allow manual trigger
 
 env:
   RUST: 1.45.2
   GHC: 8.10.4
 
 jobs:
-  "Build":
+  concordium-client-build-and-test:
     runs-on: ubuntu-latest
-    if: ${{ !github.event.pull_request.draft }} 
+    if: ${{ !github.event.pull_request.draft }}
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -34,16 +46,22 @@ jobs:
         with:
           ghc-version: ${{ env.GHC }}
       - name: Install protoc
-        run: sudo apt-get -y install protobuf-compiler
-      - name: Cache cargo dependencies and targets
+        run: sudo apt -y install protobuf-compiler
+      - name: Cache cargo and stack dependencies and targets
         uses: actions/cache@v2
         with:
           path: |
+            ~/.cargo/registry
+            ~/.cargo/git
             ~/.stack
             .stack-work
-            **/target
-          key: ${{ runner.os }}-rust-deps-${{ env.RUST }}-${{ hashFiles('stack.yaml', 'package.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-rust-deps-${{ env.RUST }}
-      - name: Build wallet-proxy
-        run: stack build --ghc-options -j4
+            deps/concordium-client/deps/concordium-base/.stack-work/
+            deps/concordium-client/deps/concordium-base/lib/
+            deps/concordium-client/deps/concordium-base/rust-src/target/release/
+            deps/concordium-client/.stack-work/
+          # Cache based on dependency versions, as well as the contents of the rust dependencies.
+          # This is a bit hacky, but we do not currently version the packages religously, so we need to do something like this.
+          key: ${{ runner.os }}-rust-stack-deps-${{ env.RUST }}-${{ hashFiles('stack.yaml', 'package.yaml', 'deps/concordium-client/package.yaml', 'deps/concordium-client/src/**.hs', 'deps/concordium-client/deps/concordium-base/haskell-src/**.hs', 'deps/concordium-client/deps/concordium-base/rust-src/Cargo.toml', 'deps/concordium-base/rust-src/**.rs') }}
+
+      - name: Stack build # build all the binaries and tests, but don't run the tests
+        run: stack build --fast
