@@ -1,4 +1,4 @@
-# wallet-proxy
+ # wallet-proxy
 
 ## Overview
 
@@ -14,8 +14,9 @@ The wallet proxy provides the following endpoints:
 * `PUT /v0/submitTransfer`: perform a simple transfer
 * `GET /v0/accTransactions/{accountNumer}`: get the transactions affecting an account
 * `PUT /v0/testnetGTUDrop/{accountNumber}`: request a GTU drop to the specified account
-* `GET /v0/global`: get the global parameters (serves the file [`global.json`](https://gitlab.com/Concordium/genesis-data/-/blob/master/global.json)).
-* `GET /v0/ip_info`: get the identity providers info (serves the file [`identity_providers_with_metadata.json`](https://gitlab.com/Concordium/genesis-data/-/blob/master/identity-providers-with-metadata.json)).
+* `GET /v0/global`: get the cryptographic parameters obtained from the node it is connected to
+* `GET /v0/ip_info`: get the identity providers information, including links for
+  submitting initial identity issuance request.
 
 ### Errors
 
@@ -28,13 +29,13 @@ In case of a non 200 return code the return value will always be a JSON object w
 ```
 
 Where the error codes currently returned are
-- 0 for internal server error, most likely the server could not communicate with the baker:
+- 0 for internal server error, most likely the server could not communicate with the node:
   ```json
   {"error":0,"errorMessage":"Error accessing the GRPC endpoint"}
   ```
 - 1 for when the request is invalid. There can be a number of reasons for this, but most of them
   should not occur once the initial debugging is over. They indicate that data is malformed in one
-  way or another:
+  way or another. The message will usually pinpoint the cause of the error.
   ```json
   {"error":1,"errorMessage":"Malformed transaction hash."}
   ```
@@ -269,8 +270,9 @@ This field is present if the `status` field is `committed` or `finalized`, and t
 
 ## Credential deployment/account creation
 
-Using the example credential in [examples/cdi.json](examples/cdi.json) the
-following displays an interaction that leads to credential deployment.
+Using either the example credential in [examples/cdi.json](examples/cdi.json) or
+the initial account creation transaction in [examples/initial-account.json](examples/initial-account.json)
+the following displays an interaction that leads to credential deployment.
 
 ```console
 $ curl -XPUT -d "@examples/cdi.json" localhost:3000/v0/submitCredential
@@ -280,17 +282,16 @@ $ curl -XPUT -d "@examples/cdi.json" localhost:3000/v0/submitCredential
 ```
 
 If the credential is well-formed and communication with the server is good, and
-the baker node is alive the server will respond with a submission id which can
-be queried via the `/submissionStatus` endpoint.
+the node is alive the server will respond with a submission id which can be
+queried via the `/submissionStatus` endpoint.
 
 
 ## Submit transfer
 
 When submitting a transfer you should make a PUT request to `/v0/submitTransfer` endpoint.
-The data that should be sent is as the one returned from the library provided as part of the crypto repository.
+The data that should be sent is as the one returned from the library provided as part of the concordium-base repository.
 After submission of the transaction the responses are the same as for the submission of the credential. If successful
 a submission id is returned, which can be used to query the status of the transfer via the `/v0/submissionStatus` endpoint.
-
 
 ## Get transactions
 
