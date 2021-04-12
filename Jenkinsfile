@@ -33,8 +33,11 @@ pipeline {
                 }
             }
         }
+
         stage('push') {
-            sh 'docker push "${image_name}"'
+            steps {
+                sh 'docker push "${image_name}"'
+            }
         }
     }
 }
