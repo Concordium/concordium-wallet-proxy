@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        image_tag = "$GIT_COMMIT"
         image_repo = '192549843005.dkr.ecr.eu-west-1.amazonaws.com/concordium/wallet-proxy'
         image_name = "${image_repo}:${image_tag}"
     }
@@ -19,6 +18,8 @@ pipeline {
                     sh '''\
                         docker build \
                           -t "${image_name}" \
+                          --build-arg base_image_tag="$base_image_tag" \
+                          --label base_image_tag="$base_image_tag" \
                           --label git_commit="${GIT_COMMIT}" \
                           -f scripts/Dockerfile \
                           --ssh default \

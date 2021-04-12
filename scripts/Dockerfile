@@ -1,4 +1,5 @@
-FROM concordium/base:0.18 as build
+ARG base_image_tag
+FROM concordium/base:${base_image_tag} as build
 
 # Build wallet-proxy binary.
 COPY . /build
