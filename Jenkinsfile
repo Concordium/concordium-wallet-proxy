@@ -14,19 +14,15 @@ pipeline {
         }
         stage('build') {
             steps {
-                sshagent(credentials: ['jenkins-gitlab-ssh']) {
-                    sh '''\
-                        docker build \
-                          -t "${image_name}" \
-                          --build-arg base_image_tag="$base_image_tag" \
-                          --label base_image_tag="$base_image_tag" \
-                          --label git_commit="${GIT_COMMIT}" \
-                          -f scripts/Dockerfile \
-                          --ssh default \
-                          --no-cache \
-                          .
-                    '''
-                }
+                sh '''\
+                    docker build \
+                      -t "${image_name}" \
+                      --build-arg base_image_tag="${base_image_tag}" \
+                      --label base_image_tag="${base_image_tag}" \
+                      --label git_commit="${GIT_COMMIT}" \
+                      -f scripts/Dockerfile \
+                      .
+                '''
             }
         }
 
