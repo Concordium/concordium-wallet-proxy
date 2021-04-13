@@ -19,9 +19,9 @@ RUN apt-get update && \
       liblmdb0 \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd -l -m -s /bin/false -u 61000 docker
-COPY --from=wallet-proxy-build /bins/wallet-proxy /wallet-proxy
-COPY --from=wallet-proxy-build /build/deps/concordium-client/deps/concordium-base/rust-src/target/release/*.so /usr/lib/
-COPY --from=wallet-proxy-build /build/scripts/start.sh /start.sh
+COPY --from=build /bins/wallet-proxy /wallet-proxy
+COPY --from=build /build/deps/concordium-client/deps/concordium-base/rust-src/target/release/*.so /usr/lib/
+COPY --from=build /build/scripts/start.sh /start.sh
 RUN touch client_session_key.aes && \
     chmod 0777 client_session_key.aes
 USER docker
