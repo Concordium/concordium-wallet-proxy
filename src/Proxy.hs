@@ -19,6 +19,7 @@ import qualified Data.Map.Strict as Map
 import Text.Read hiding (String)
 import Control.Arrow (left)
 import Control.Monad.Except
+import Data.Functor
 import Control.Exception (SomeException, catch)
 import Data.Aeson(withObject, fromJSON, Result(..))
 import Data.Aeson.Types(parse, parseMaybe, Pair, parseEither)
@@ -34,6 +35,8 @@ import Database.Persist.Sql
 import Data.Maybe(catMaybes, fromMaybe)
 import Data.Time.Clock.POSIX
 import qualified Database.Esqueleto as E
+import qualified Database.Esqueleto.PostgreSQL.JSON as EJ
+import qualified Database.Esqueleto.Internal.Internal as EInternal
 import System.Random
 import Data.Foldable
 
@@ -467,35 +470,61 @@ getAccountTransactionsR addrText = do
                         _ -> (E.asc, "ascending", (E.>.))
       startId :: Maybe EntryId <- (>>= fromPathPiece) <$> lookupGetParam "from"
       limit <- maybe 20 (max 0 . min 1000) . (>>= readMaybe . Text.unpack) <$> lookupGetParam "limit"
-      entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
-        E.select $ E.from $ \(e, s) ->  do
-          -- Assert join
-          E.where_ (e E.^. EntrySummary E.==. s E.^. SummaryId)
-          -- Filter by address
-          E.where_ (e E.^. EntryAccount E.==. E.val (ByteStringSerialized addr))
-          -- If specified, start from the given starting id
-          maybe
-            (return ())
-            (\sid -> E.where_ (e E.^. EntryId `ordRel` E.val sid))
-            startId
-          -- sort with the requested method or ascending over EntryId.
-          E.orderBy [ordering (e E.^. EntryId)]
-          -- Limit the number of returned rows
-          E.limit limit
-          return (e, s)
-      case mapM (formatEntry i addr) entries of
-        Left err -> do
-          $(logError) $ "Error decoding transaction: " <> Text.pack err
-          sendResponseStatus badGateway502 $ object [
-            "errorMessage" .= i18n i EMDatabaseError,
-            "error" .= fromEnum InternalError
-            ]
-        Right fentries -> sendResponse $ object $ [
-          "limit" .= limit,
-          "order" .= ordType,
-          "count" .= length fentries,
-          "transactions" .= fentries] <>
-          (maybe [] (\sid -> ["from" .= sid]) startId)
+      -- Construct a "transaction type filter" to only query the relevant transaction types specified by `includeRewards`.
+      -- This is done as part of the SQL query since it is both more efficient, but also simpler since we do not have to filter
+      -- on the client side.
+      -- In this typefilter we make use of the `veryUnsafeCoerceSqlExprValue` which we really do not need,
+      -- but I cannot find any API in Esqueleto that would allow us to transform from AE.Value to EJ.JSONB Value
+      -- even though this should be possible.
+      -- This function should either be fixed to use the Persistent abstractions without Esqueleto, the database schema type
+      -- should be changed to use JSONB, or the relevant compatibility function should be added to Esqueleto.
+      -- Because we are pressed for time I have the solution at the moment.
+      maybeTypeFilter <- lookupGetParam "includeRewards" <&> \case
+        Nothing -> Just $ const (return ()) -- the default
+        Just "all" -> Just $ const (return ())
+        Just "allButFinalization" -> Just $ \s ->
+          -- check if
+          -- - either the transaction is an account transaction
+          -- - or if not check that it is not a finalization reward.
+          let coerced = E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary))
+              isAccountTransaction = coerced EJ.?. "Left"
+              extractedTag = coerced EJ.#>>. ["Right", "tag"]
+          in E.where_ (isAccountTransaction E.||. extractedTag E.!=. E.val (Just "FinalizationRewards"))
+        Just "none" -> Just $ \s -> E.where_ (E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary)) EJ.?. "Left") -- Left are account transactions.
+        Just _ -> Nothing
+      case maybeTypeFilter of
+        Nothing -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
+        Just typeFilter -> do
+          entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
+            E.select $ E.from $ \(e, s) ->  do
+              -- Assert join
+              E.where_ (e E.^. EntrySummary E.==. s E.^. SummaryId)
+              -- Filter by address
+              E.where_ (e E.^. EntryAccount E.==. E.val (ByteStringSerialized addr))
+              -- If specified, start from the given starting id
+              maybe
+                (return ())
+                (\sid -> E.where_ (e E.^. EntryId `ordRel` E.val sid))
+                startId
+              typeFilter s
+              -- sort with the requested method or ascending over EntryId.
+              E.orderBy [ordering (e E.^. EntryId)]
+              -- Limit the number of returned rows
+              E.limit limit
+              return (e, s)
+          case mapM (formatEntry i addr) entries of
+            Left err -> do
+              $(logError) $ "Error decoding transaction: " <> Text.pack err
+              sendResponseStatus badGateway502 $ object [
+                "errorMessage" .= i18n i EMDatabaseError,
+                "error" .= fromEnum InternalError
+                ]
+            Right fentries -> sendResponse $ object $ [
+              "limit" .= limit,
+              "order" .= ordType,
+              "count" .= length fentries,
+              "transactions" .= fentries] <>
+              (maybe [] (\sid -> ["from" .= sid]) startId)
 
 -- |Convert a timestamp to seconds since the unix epoch. A timestamp can be a fractional number, e.g., 17.5.
 timestampToFracSeconds :: Timestamp -> Double
