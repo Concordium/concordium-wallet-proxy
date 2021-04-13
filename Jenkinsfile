@@ -1,12 +1,9 @@
 pipeline {
     agent any
 
-    parameters {
-        string(name: 'GENESIS_REF', defaultValue: 'master', description: 'Genesis ref - must be a branch or tag, not SHA!')
-    }
-
     environment {
-        DOCKER_BUILDKIT = 1
+        image_repo = '192549843005.dkr.ecr.eu-west-1.amazonaws.com/concordium/wallet-proxy'
+        image_name = "${image_repo}:${image_tag}"
     }
 
     stages {
@@ -17,23 +14,21 @@ pipeline {
         }
         stage('build') {
             steps {
-                script {
-                    if (params.GENESIS_REF == '') {
-                        sh script: 'exit 1', label: 'missing ref for genesis-data'
-                    }
-                    VERSION_TAG = sh (
-                        script: 'git rev-parse --verify HEAD',
-                        returnStdout: true
-                    ).trim()
-                }
+                sh '''\
+                    docker build \
+                      -t "${image_name}" \
+                      --build-arg base_image_tag="${base_image_tag}" \
+                      --label base_image_tag="${base_image_tag}" \
+                      --label git_commit="${GIT_COMMIT}" \
+                      -f scripts/Dockerfile \
+                      .
+                '''
+            }
+        }
 
-                sshagent(credentials: ['jenkins-gitlab-ssh']) {
-                    sh """\
-                           docker build -t 192549843005.dkr.ecr.eu-west-1.amazonaws.com/concordium/wallet-proxy:$VERSION_TAG -f scripts/Dockerfile --ssh default --build-arg GENESIS_REF="${params.GENESIS_REF}" . --no-cache
-
-                           docker push 192549843005.dkr.ecr.eu-west-1.amazonaws.com/concordium/wallet-proxy:$VERSION_TAG
-                       """
-                }
+        stage('push') {
+            steps {
+                sh 'docker push "${image_name}"'
             }
         }
     }
