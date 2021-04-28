@@ -11,14 +11,15 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/accEncryptionKey/{account address}`: get the public encryption key of
   the account
 * `GET /v0/transactionCost`: get the cost of a simple transfer
-* `GET /v0/submissionStatus/{submissionId}`: get the status of a simple transfer or credential deployment
+* `GET /v0/submissionStatus/{transactionHash OR submissionId}`: get the status
+  of a transfer or credential deployment
 * `PUT /v0/submitCredential`: deploy a credential/create an account
 * `PUT /v0/submitTransfer`: perform a simple transfer
-* `GET /v0/accTransactions/{accountNumer}`: get the transactions affecting an account
+* `GET /v0/accTransactions/{accountNumber}`: get the transactions affecting an account
 * `PUT /v0/testnetGTUDrop/{accountNumber}`: request a GTU drop to the specified account
 * `GET /v0/global`: get the cryptographic parameters obtained from the node it is connected to
 * `GET /v0/ip_info`: get the identity providers information, including links for
-  submitting initial identity issuance request.
+  submitting initial identity issuance requests.
 
 ### Errors
 
@@ -121,7 +122,11 @@ The `AccountBalance` value is always an object with the following four fields
  registered as a baker. If present, the value is always an object with fields
   - `"stakedAmount"` (required): the amount that is currently staked
   - `"bakerId"` (required): the baker id the account is registered as
-
+  - `"restakeEarnings"` (required): a boolean indicating whether earnings are
+    added to stake.
+  - `"bakerAggregationVerifyKey"` (required): public key to verify aggregate signatures in which the baker participates.
+  - `"bakerElectionVerifyKey"` (required): public key to verify the baker has won the election.
+  - `"bakerSignatureVerifyKey"` (required): public key to verify block signatures signed by the baker.
 
 ## Account Nonce
 
@@ -142,7 +147,7 @@ $ curl -XGET localhost:3000/v0/accNonce/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32
 ```
 
 The `nonce` is always the next nonce that should be used provided all the known transactions will be finalized eventually.
-- If `allFinal` is `True` then all transactions from this account are finlized and the nonce should be considered reliable.
+- If `allFinal` is `True` then all transactions from this account are finalized and the nonce should be considered reliable.
 - Otherwise there are some pending transactions so the nonce returned is a best guess assuming all transctions will be successful.
 
 In case the wallet is the only user of the account then this nonce tracking is reliable.
@@ -180,7 +185,8 @@ the response will always be a JSON object with required fields
 
 ## Submission Status
 
-A GET request to `/submissionStatus/[transactionHash]` returns a JSON object summarizing the status of a simple transfer or credential deployment.
+A GET request to `/submissionStatus/{transactionHash OR submissionId}` returns a
+JSON object summarizing the status of a transfer or credential deployment.
 On success, the response is of the following form:
 ```
 {
@@ -222,7 +228,7 @@ The `ambiguous` outcome only applies to `committed` transactions.
 
 #### `rejectReason` (optional)
 This field is present if `outcome` is `reject`.
-It contains a description of of the reason for rejection.
+It contains a description of the reason for rejection.
 
 #### `transactionHash` (optional)
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is not `ambiguous`.
@@ -238,8 +244,8 @@ The value is a number representing the actual cost of the transaction to the sen
 (The value is an integer in the smallest denomination of GTU.)
 
 #### `to` (optional)
-This field is present if the `status` field is `committed` or `finalized`, the `outcome` field is `success`, and the transaction is a simple transfer.
-The value is the account address of the recipient of the simple transfer.
+This field is present if the `status` field is `committed` or `finalized`, the `outcome` field is `success`, and the transaction is a simple or encrypted transfer.
+The value is the account address of the recipient of the transfer.
 
 #### `amount` (optional)
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is a simple transfer.
@@ -256,16 +262,12 @@ This field is present if the `status` field is `committed` or `finalized`, and t
 
 #### `inputEncryptedAmount` (optional)
 This field is present if the `status` field is `committed` or `finalized`, and
-the outcome field is `success`, and thre transaction is either an encrypted
+the outcome field is `success`, and the transaction is either an encrypted
 transfer, or encrypted to public transfer, i.e., unshielding. The value is the
 input encrypted amount that was removed from the sender's account.
 
-
 #### `aggregatedIndex` (optional)
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is either `EncryptedAmountTransfer` or `TransferToPublic`. The value is the index up to which the self encrypted amounts have been combined during the operation that was performed.
-
-#### `newIndex`  (optional)
-This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is an `EncryptedAmountTransfer`. The value is the new index on the incoming amounts vector of the receiver account that will be associated with the transferred amount.
 
 #### `amountAdded`/`amountSubtracted` (optional)
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`. For a `TransferToPublic`, the field will be named `amountAdded` and it represents the plaintext amount that is added to the public balance of the sender. For a `TransferToEncrypted`, the field will be named `amountSubtracted` and it represents the paintext amount that is subtracted from the public balance of the sender.
@@ -279,7 +281,7 @@ the following displays an interaction that leads to credential deployment.
 ```console
 $ curl -XPUT -d "@examples/cdi.json" localhost:3000/v0/submitCredential
 {
-  "submissionId": "e02852599926f00a52572ed80afbade4955ce7f1256bd116b1109d5a43ece455"
+  "submissionId": "af8d639191fa6194c0ff285bcedb1f47b8b05ca477aae68dae26e1c524e06888"
 }
 ```
 
@@ -395,16 +397,23 @@ It consists of the following fields:
   - `"transfer"`
   - `"addBaker"`
   - `"removeBaker"`
-  - `"updateBakerAccount"`
-  - `"updateBakerSignKey"`
-  - `"delegateStake"`
-  - `"undelegateStake"`
-  - `"updateElectionDifficulty"`
-  - `"deployCredential"`
+  - `"updateBakerStake"`
+  - `"updateBakerKeys"`
+  - `"updateBakerRestakeEarnings"`
+  - `"encryptedAmountTransfer"`
+  - `"transferToEncrypted"`
+  - `"transferToPublic"`
+  - `"transferWithSchedule"`
+  - `"registerData"`
   - `"bakingReward"`
-  - `encryptedAmountTransfer`
-  - `transferToEncrypted`
-  - `transferToPublic`
+  - `"platformDevelopmentCharge"` (only returned when viewing the foundation account)
+  - `"finalizationReward"`
+  - `"blockReward"`
+  - `"deployCredential"`
+  - `"updateCredentials"`
+  - `"updateAccountKeys"`
+  - `"chainUpdate"`
+  - `"Malformed account transaction"`
 - `description` (required): a brief localized description of the type of the transaction
 - `outcome` (required):
   - `"success"` if the transaction was executed successfully
@@ -424,13 +433,18 @@ It consists of the following fields:
   - `newIndex`: the index on the receiver's incomingAmounts that will be assigned to the transferred amount.
   - `newSelfEncryptedAmount`: the resulting self encrypted amount in the sender's account.
 - The following fields are present if the transaction is a transfer to public transaction:
+  - `transferSource`: account address of the source of the transfer
   - `amountAdded`: the plaintext of the amount that is added to the sender's public balance.
   - `aggregatedIndex`: the index up to which incoming amounts on the sender account have been combined during this operation.
   - `newSelfEncryptedAmount`: the resulting self encrypted amount in the sender's account.
   - `inputEncryptedAmount`: the encrypted amount that was used by the sender as input to the transaction, i.e., consumed
 - The following fields are present if the transaction is a transfer to encrypted transaction:
+  - `transferSource`: account address of the source of the transfer
   - `amountSubtracted`: the plaintext of the amount that is subtracted from the sender's public balance.
   - `newSelfEncryptedAmount`: the resulting self encrypted amount in the sender's account.
+- The following fields are present if the transaction is a transfer with schedule:
+  - `transferDestination`: account address of the destination of the transfer
+  - `transferAmount`: amount of the transfer
 
 For the purposes of the above, a simple transfer is a transaction of type `"transfer"` which transfers funds from one account to another.
 A transactions of type `"transfer"` is not considered a simple transfer if the destination is a smart contract instance.

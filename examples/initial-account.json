@@ -22,16 +22,16 @@
         },
         "ipIdentity": 0,
         "policy": {
-          "createdAt": "202004",
+          "createdAt": "202104",
           "revealedAttributes": {
           },
-          "validTo": "202104"
+          "validTo": "202204"
         },
         "regId": "8eabfa3614c8154fa35ab3c647df2e438aa9f317093425553f17231f4abd7ba952d511b96365d7f76c4bbcf6d23f196c",
         "sig": "3ac3d5c7bac3a0b56c759178b13add6aa2df195f4a069cbd5a487b51547bfa1f1bcdd50ed9cc460013c9ed5482a8627e18c27d084e7da008442b802f10ad1d0b"
       },
       "type": "initial"
     },
-    "messageExpiry": 1234567
+    "messageExpiry": 1619173438
   }
 }
