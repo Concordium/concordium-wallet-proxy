@@ -310,6 +310,8 @@ The following parameters are supported:
   - `none`: include no rewards, including minting
   - `allButFinalization`: include all but finalization rewards
   - `all`: include all rewards. This is also the default if not supplied.
+- `includeRawRejectReason`: whether to include the raw rejection reason (the
+  same JSON as returned by `GetTransactionStatus` gRPC endpoint).
 
 The result is a JSON object with the following fields:
 - `order`: either `"ascending"` or `"descending"` indicating the ordering applied to the transactions.
