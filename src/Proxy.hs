@@ -32,7 +32,7 @@ import Network.HTTP.Types(badRequest400, notFound404, badGateway502)
 import Yesod hiding (InternalError)
 import qualified Yesod
 import Database.Persist.Sql
-import Data.Maybe(catMaybes, fromMaybe)
+import Data.Maybe(catMaybes, fromMaybe, isJust)
 import Data.Time.Clock.POSIX
 import qualified Database.Esqueleto as E
 import qualified Database.Esqueleto.PostgreSQL.JSON as EJ
@@ -494,6 +494,7 @@ getAccountTransactionsR addrText = do
           in E.where_ (isAccountTransaction E.||. extractedTag E.!=. E.val (Just "FinalizationRewards"))
         Just "none" -> Just $ \s -> E.where_ (E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary)) EJ.?. "Left") -- Left are account transactions.
         Just _ -> Nothing
+      rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
       case maybeTypeFilter of
         Nothing -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
         Just typeFilter -> do
@@ -514,7 +515,7 @@ getAccountTransactionsR addrText = do
               -- Limit the number of returned rows
               E.limit limit
               return (e, s)
-          case mapM (formatEntry i addr) entries of
+          case mapM (formatEntry rawReason i addr) entries of
             Left err -> do
               $(logError) $ "Error decoding transaction: " <> Text.pack err
               sendResponseStatus badGateway502 $ object [
@@ -532,8 +533,13 @@ getAccountTransactionsR addrText = do
 timestampToFracSeconds :: Timestamp -> Double
 timestampToFracSeconds Timestamp{..} = fromRational (toInteger tsMillis Rational.% 1000)
 
-formatEntry :: I18n -> AccountAddress -> (Entity Entry, Entity Summary) -> Either String Value
-formatEntry i self (Entity key Entry{}, Entity _ Summary{..}) = do
+-- |Format a transaction affecting an account.
+formatEntry :: Bool -- ^ Whether to include a raw reject reason for account transactions or not.
+            -> I18n -- ^ Internationalization of messages.
+            -> AccountAddress -- ^ Address of the account whose transactions we are formatting.
+            -> (Entity Entry, Entity Summary) -- ^ Database entry to be formatted.
+            -> Either String Value
+formatEntry rawRejectReason i self (Entity key Entry{}, Entity _ Summary{..}) = do
   let blockDetails = ["blockHash" .= unBSS summaryBlock,
                       "blockTime" .= timestampToFracSeconds summaryTimestamp
                      ]
@@ -622,7 +628,9 @@ formatEntry i self (Entity key Entry{}, Entity _ Summary{..}) = do
                                         "transferAmount" .= foldl' (+) 0 (map snd etwsAmount)]
 
                                      _ -> []), eventSubtotal self evts )
-            TxReject reason -> (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason], Nothing)
+            TxReject reason ->
+              let rawReason = if rawRejectReason then ["rawRejectReason" .= reason] else []
+              in (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason] ++ rawReason, Nothing)
 
           details = object $ ["type" .= renderTransactionSummaryType tsType, "description" .= i18n i tsType] <> resultDetails
 
