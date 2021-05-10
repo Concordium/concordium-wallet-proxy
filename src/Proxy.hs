@@ -89,6 +89,8 @@ data GTUDropData = GTUDropData {
   }
 
 instance Yesod Proxy where
+  -- Disable session handling entirely. We do not use sessions for anything at the moment.
+  makeSessionBackend _ = return Nothing
   errorHandler e = do
     case e of
       Yesod.InternalError emsg -> $(logError) emsg
