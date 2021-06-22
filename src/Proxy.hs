@@ -138,6 +138,7 @@ mkYesod "Proxy" [parseRoutes|
 /v0/submitTransfer/ TransferR PUT
 /v0/testnetGTUDrop/#Text GTUDropR PUT
 /v0/global GlobalFileR GET
+/v0/health HealthR GET
 /v0/ip_info IpsR GET
 |]
 
@@ -889,6 +890,21 @@ putGTUDropR addrText = do
 
 getGlobalFileR :: Handler TypedContent
 getGlobalFileR = toTypedContent . globalInfo <$> getYesod
+
+-- todo define health:
+-- Currently just replies with best block info, if GRPC and db queries work
+-- Could do: Up to date best block and last final, for some meaningful def. of up to date
+getHealthR :: Handler TypedContent
+getHealthR = 
+  runGRPC doGetBlockInfo $ \blockInfo -> do 
+      $(logInfo) "Successfully got best block info."
+      _ :: [(Entity Entry, Entity Summary)] <- runDB $ E.select $
+                    E.from $ \val -> do
+                      E.limit 1 -- return at most 1 row
+                      return val
+      sendResponse $ blockInfo
+  where doGetBlockInfo = withBestBlockHash Nothing getBlockInfo
+
 
 getIpsR :: Handler TypedContent
 getIpsR = toTypedContent . ipInfo <$> getYesod
