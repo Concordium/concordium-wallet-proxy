@@ -896,15 +896,32 @@ getGlobalFileR = toTypedContent . globalInfo <$> getYesod
 -- Could do: Up to date best block and last final, for some meaningful def. of up to date
 getHealthR :: Handler TypedContent
 getHealthR = 
-  runGRPC doGetBlockInfo $ \blockInfo -> do 
-      $(logInfo) "Successfully got best block info."
-      _ :: [(Entity Entry, Entity Summary)] <- runDB $ E.select $
-                    E.from $ \val -> do
-                      E.limit 1 -- return at most 1 row
-                      return val
-      sendResponse $ blockInfo
-  where doGetBlockInfo = withBestBlockHash Nothing getBlockInfo
-
+  runGRPC doGetBlockInfo $ \case
+      Nothing -> do
+        $(logError) $ "Could not get response from GRPC."
+        sendResponse $ object $ ["healthy" .= False, "reason" .= ("Could not get response from GRPC":: String)]
+      Just lastFinalBlockInfo -> do
+        $(logInfo) "Successfully got best block info."
+        result :: [(Entity Entry, Entity Summary)] <- runDB $ E.select $
+                  E.from $ \val -> do
+                  E.limit 1 -- return at most 1 row
+                  return val
+        case result of
+          [] -> -- todo Could this create a deadlock when the chain is started?
+            sendResponse $ object $ ["healthy" .= False, "reason" .= ("Could not get response from database":: String)]
+          _ -> do
+            $(logInfo) "Successfully queried database."
+            -- todo get block slot time from block info object, compare with current time: reject if more than x minutes
+            -- todo should maximal acceptable age of last final block be a url parameter?
+            sendResponse $ object $ ["healthy" .= True, "lastFinal" .= lastFinalBlockInfo]
+  where 
+    doGetBlockInfo :: ClientMonad IO (Either String (Maybe Value))
+    doGetBlockInfo = do
+      bbi <- withLastFinalBlockHash Nothing getBlockInfo
+      case bbi of
+        Right Null -> return $ Right Nothing
+        Right val -> return $ Right $ Just val
+        Left err -> return $ Left err -- todo should it just be nothing in this case? I.e. healthy = 0
 
 getIpsR :: Handler TypedContent
 getIpsR = toTypedContent . ipInfo <$> getYesod
