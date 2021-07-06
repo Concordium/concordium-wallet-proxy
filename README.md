@@ -529,7 +529,9 @@ If the account address is well-formed, but the account does not exist in a final
 ## Health
 
 Returns an object specifying if the information accessible from the wallet proxy is up to date.
-It will query the GRPC and the transaction database, assuming both succeeds it checks that the last final block is less than 5 minutes old.
+It will query the GRPC and the transaction database. Assuming both succeeds it checks that the last final block is less than `health-tolerance` seconds old.
+`health-tolerance` is an optional parameter to the wallet-proxy. It defaults to 300 seconds if left unspecified.
+
 Under normal conditions the health query returns:
 ```json
 {
@@ -612,6 +614,7 @@ wallet-proxy --grpc-ip 127.0.0.1\ # IP of the node
              --db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=postgres"\ # transaction outcome database connection string
              --ip-data identity-providers-with-metadata.json\ # JSON file with identity providers and anonymity revokers
              --drop-account gtu-drop-account-0.json # keys of the gtu drop account
+             --health-tolerance 30 # tolerated age of last final block in seconds before the health query returns false
 ```
 
 ## Identity providers metadata file
