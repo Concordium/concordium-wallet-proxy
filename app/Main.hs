@@ -8,6 +8,7 @@ import Yesod
 import Database.Persist.Postgresql
 import qualified Network.Wai.Handler.Warp
 import Data.ByteString(ByteString)
+import Data.Maybe
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Aeson as AE
 import qualified Data.Aeson.Types as AE
@@ -28,6 +29,7 @@ data ProxyConfig = ProxyConfig {
   pcDBConnString :: ByteString,
   -- | Account file used for GTU drop. Only used on stagenet and testnet.
   pcGTUAccountFile :: Maybe FilePath,
+  pcHealthTolerance :: Maybe Int,
   pcIpInfo :: FilePath
 }
 
@@ -39,6 +41,7 @@ parser = info (helper <*> parseProxyConfig)
       <$> backendParser
       <*> strOption (long "db" <> metavar "STR" <> help "database connection string")
       <*> optional (strOption (long "drop-account" <> metavar "FILE" <> help "file with GTU drop account credentials (only used for stagenet and testnet)."))
+      <*> optional (option auto (long "health-tolerance" <> metavar "SECONDS" <> help "the maximum tolerated age of the last final block in seconds before the health query returns false."))
       <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and private information on the identity providers, together with metadata.")
     mkProxyConfig backend = ProxyConfig $ GrpcConfig
                               (CMDS.grpcHost backend)
@@ -73,6 +76,7 @@ main :: IO ()
 main = do
   ProxyConfig{..} <- execParser parser
   let logm s = runStderrLoggingT ($logDebug ("[GRPC]: " <> s))
+  healthTolerance <- return $ fromMaybe 300 pcHealthTolerance -- use 5 minutes as default health tolerance
   gtuDropData <- case pcGTUAccountFile of
     Nothing -> return Nothing
     Just accFile -> do

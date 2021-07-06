@@ -79,6 +79,7 @@ data Proxy = Proxy {
   grpcEnvData :: !EnvData,
   dbConnectionPool :: ConnectionPool,
   gtuDropData :: Maybe GTUDropData,
+  healthTolerance :: Int,
   globalInfo :: Value,
   ipInfo :: Value
 }
@@ -895,7 +896,7 @@ getGlobalFileR :: Handler TypedContent
 getGlobalFileR = toTypedContent . globalInfo <$> getYesod
 
 -- Queries the transaction database and the GRPC, 
--- then if both succeed checks that the last final block is less than 5 minutes old.
+-- then if both succeed checks that the last final block is less than `healthTolerance` seconds old.
 getHealthR :: Handler TypedContent
 getHealthR = 
   runGRPC doGetBlockFinalInfo $ \case
@@ -908,14 +909,17 @@ getHealthR =
                   E.from $ \val -> do
                   E.limit 1
                   return val
-        -- get block slot time from block info object, compare with current time: reject if more than 5 minutes
+        -- get block slot time from block info object, compare with current time: reject if more than `healthTolerance` seconds old.
         case fromJSON lastFinalBlockInfo of
-          Error _ -> sendResponse $ object $ ["healthy" .= False, "reason" .= ("Block info format has changed. blockSlotTime is not UTCTime.":: String)]
+          Error _ -> do
+            i <- internationalize
+            sendResponseStatus badGateway502 $ object ["errorMessage" .= i18n i EMGRPCError, "error" .= fromEnum InternalError]
           Success (bir :: BlockInfoResult) -> do
             currentTime <- liftIO Clock.getCurrentTime
-            case (Clock.diffUTCTime currentTime (birBlockSlotTime bir)) < (Clock.secondsToNominalDiffTime 300) of -- 5 minutes = 300 seconds
-              True -> sendResponse $ object $ ["healthy" .= True, "lastFinalTime" .= (birBlockSlotTime bir)]
-              False -> sendResponse $ object $ ["healthy" .= False, "reason" .= ("The last final block is too old.":: String), "lastFinalTime" .= (birBlockSlotTime bir)] 
+            Proxy{..} <- getYesod
+            if (Clock.diffUTCTime currentTime (birBlockSlotTime bir)) < (Clock.secondsToNominalDiffTime $ fromIntegral healthTolerance)
+            then sendResponse $ object $ ["healthy" .= True, "lastFinalTime" .= (birBlockSlotTime bir)]
+            else sendResponse $ object $ ["healthy" .= False, "reason" .= ("The last final block is too old.":: String), "lastFinalTime" .= (birBlockSlotTime bir)] 
   where 
     doGetBlockFinalInfo :: ClientMonad IO (Either String (Maybe Value))
     doGetBlockFinalInfo = do
