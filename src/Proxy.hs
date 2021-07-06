@@ -44,6 +44,8 @@ import Data.Text(Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
+import Data.Time.Clock as Clock
+
 import Concordium.Types
 import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
@@ -891,37 +893,47 @@ putGTUDropR addrText = do
 getGlobalFileR :: Handler TypedContent
 getGlobalFileR = toTypedContent . globalInfo <$> getYesod
 
--- todo define health:
--- Currently just replies with best block info, if GRPC and db queries work
--- Could do: Up to date best block and last final, for some meaningful def. of up to date
+-- Queries the transaction database and the GRPC, 
+-- then if both succeed checks that the last final block is less than 5 minutes old.
 getHealthR :: Handler TypedContent
 getHealthR = 
-  runGRPC doGetBlockInfo $ \case
+  runGRPC doGetBlockFinalInfo $ \case
       Nothing -> do
         $(logError) $ "Could not get response from GRPC."
-        sendResponse $ object $ ["healthy" .= False, "reason" .= ("Could not get response from GRPC":: String)]
+        sendResponse $ object $ ["healthy" .= False, "reason" .= ("Could not get response from GRPC.":: String)]
       Just lastFinalBlockInfo -> do
         $(logInfo) "Successfully got best block info."
         result :: [(Entity Entry, Entity Summary)] <- runDB $ E.select $
                   E.from $ \val -> do
-                  E.limit 1 -- return at most 1 row
+                  E.limit 1 -- query for any single row
                   return val
         case result of
-          [] -> -- todo Could this create a deadlock when the chain is started?
-            sendResponse $ object $ ["healthy" .= False, "reason" .= ("Could not get response from database":: String)]
+          [] ->
+            sendResponse $ object $ ["healthy" .= False, "reason" .= ("Could not get response from database.":: String)]
           _ -> do
             $(logInfo) "Successfully queried database."
-            -- todo get block slot time from block info object, compare with current time: reject if more than x minutes
-            -- todo should maximal acceptable age of last final block be a url parameter?
-            sendResponse $ object $ ["healthy" .= True, "lastFinal" .= lastFinalBlockInfo]
+            -- get block slot time from block info object, compare with current time: reject if more than 5 minutes:
+            case lastFinalBlockInfo of
+              Object hm -> 
+                case HM.lookup "blockSlotTime" hm of
+                  Nothing -> sendResponse $ object $ ["healthy" .= False, "reason" .= ("Block info format has changed. blockSlotTime field missing.":: String)]
+                  Just time -> 
+                    case fromJSON time of
+                      Error _ -> sendResponse $ object $ ["healthy" .= False, "reason" .= ("Block info format has changed. blockSlotTime is not UTCTime.":: String)]
+                      Success (lastFinalBlockTime :: Clock.UTCTime) -> do 
+                        currentTime <- liftIO Clock.getCurrentTime
+                        case (Clock.diffUTCTime currentTime lastFinalBlockTime) < (Clock.secondsToNominalDiffTime 300) of -- 5 minutes = 300 seconds
+                          True -> sendResponse $ object $ ["healthy" .= True, "lastFinalTime" .= lastFinalBlockTime]
+                          False -> sendResponse $ object $ ["healthy" .= False, "reason" .= ("The last final block is too old.":: String)] 
+              _ -> sendResponse $ object $ ["healthy" .= False, "reason" .= ("Block info format has changed. Not an object.":: String)]
   where 
-    doGetBlockInfo :: ClientMonad IO (Either String (Maybe Value))
-    doGetBlockInfo = do
+    doGetBlockFinalInfo :: ClientMonad IO (Either String (Maybe Value))
+    doGetBlockFinalInfo = do
       bbi <- withLastFinalBlockHash Nothing getBlockInfo
       case bbi of
         Right Null -> return $ Right Nothing
         Right val -> return $ Right $ Just val
-        Left err -> return $ Left err -- todo should it just be nothing in this case? I.e. healthy = 0
+        Left err -> return $ Left err
 
 getIpsR :: Handler TypedContent
 getIpsR = toTypedContent . ipInfo <$> getYesod
