@@ -51,6 +51,7 @@ import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
 
+import Concordium.Client.Cli(BlockInfoResult, birBlockSlotTime)
 import Concordium.Client.GRPC
 import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
                                            transferWithSchedulePayloadSize,
@@ -903,29 +904,18 @@ getHealthR =
         sendResponse $ object $ ["healthy" .= False, "reason" .= ("Could not get response from GRPC.":: String)]
       Just lastFinalBlockInfo -> do
         $(logInfo) "Successfully got best block info."
-        result :: [(Entity Entry, Entity Summary)] <- runDB $ E.select $
+        _ :: [(Entity Entry, Entity Summary)] <- runDB $ E.select $
                   E.from $ \val -> do
-                  E.limit 1 -- query for any single row
+                  E.limit 1
                   return val
-        case result of
-          [] ->
-            sendResponse $ object $ ["healthy" .= False, "reason" .= ("Could not get response from database.":: String)]
-          _ -> do
-            $(logInfo) "Successfully queried database."
-            -- get block slot time from block info object, compare with current time: reject if more than 5 minutes:
-            case lastFinalBlockInfo of
-              Object hm -> 
-                case HM.lookup "blockSlotTime" hm of
-                  Nothing -> sendResponse $ object $ ["healthy" .= False, "reason" .= ("Block info format has changed. blockSlotTime field missing.":: String)]
-                  Just time -> 
-                    case fromJSON time of
-                      Error _ -> sendResponse $ object $ ["healthy" .= False, "reason" .= ("Block info format has changed. blockSlotTime is not UTCTime.":: String)]
-                      Success (lastFinalBlockTime :: Clock.UTCTime) -> do 
-                        currentTime <- liftIO Clock.getCurrentTime
-                        case (Clock.diffUTCTime currentTime lastFinalBlockTime) < (Clock.secondsToNominalDiffTime 300) of -- 5 minutes = 300 seconds
-                          True -> sendResponse $ object $ ["healthy" .= True, "lastFinalTime" .= lastFinalBlockTime]
-                          False -> sendResponse $ object $ ["healthy" .= False, "reason" .= ("The last final block is too old.":: String)] 
-              _ -> sendResponse $ object $ ["healthy" .= False, "reason" .= ("Block info format has changed. Not an object.":: String)]
+        -- get block slot time from block info object, compare with current time: reject if more than 5 minutes
+        case fromJSON lastFinalBlockInfo of
+          Error _ -> sendResponse $ object $ ["healthy" .= False, "reason" .= ("Block info format has changed. blockSlotTime is not UTCTime.":: String)]
+          Success (bir :: BlockInfoResult) -> do
+            currentTime <- liftIO Clock.getCurrentTime
+            case (Clock.diffUTCTime currentTime (birBlockSlotTime bir)) < (Clock.secondsToNominalDiffTime 300) of -- 5 minutes = 300 seconds
+              True -> sendResponse $ object $ ["healthy" .= True, "lastFinalTime" .= (birBlockSlotTime bir)]
+              False -> sendResponse $ object $ ["healthy" .= False, "reason" .= ("The last final block is too old.":: String), "lastFinalTime" .= (birBlockSlotTime bir)] 
   where 
     doGetBlockFinalInfo :: ClientMonad IO (Either String (Maybe Value))
     doGetBlockFinalInfo = do
