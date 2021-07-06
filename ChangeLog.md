@@ -5,7 +5,8 @@
  - Disable sessions since we don't use them.
  - Add query parameter `includeRawRejectReason` to the `accTransactions` query.
  - health query checks connections to database and GRPC, and that the last final
-   block is less than 5 minutes old.
+   block is less than `health-tolerance` seconds old. `health-tolerance` is 300
+   seconds unless an alternative value is chosen at startup.
 
 ## 0.5.0
  - Make the GTU drop functionality optional.
