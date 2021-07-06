@@ -17,6 +17,7 @@ The wallet proxy provides the following endpoints:
 * `PUT /v0/submitTransfer`: perform a simple transfer
 * `GET /v0/accTransactions/{accountNumber}`: get the transactions affecting an account
 * `PUT /v0/testnetGTUDrop/{accountNumber}`: request a GTU drop to the specified account
+* `GET /v0/health`: get a response specifying if the wallet proxy is up to date
 * `GET /v0/global`: get the cryptographic parameters obtained from the node it is connected to
 * `GET /v0/ip_info`: get the identity providers information, including links for
   submitting initial identity issuance requests.
@@ -524,6 +525,27 @@ If for some reason the drop fails, subsequent calls could return a new `submissi
 
 If the account address is well-formed, but the account does not exist in a finalized state on the chain, this call fails with a **404 Not found** status code.
 
+
+## Health
+
+Returns an object specifying if the information accessible from the wallet proxy is up to date.
+It will query the GRPC and the transaction database, assuming both succeeds it checks that the last final block is less than 5 minutes old.
+Under normal conditions the health query returns:
+```json
+{
+  "healthy":true,
+  "lastFinalTime":"2021-07-06T11:55:49.5Z"
+}
+```
+If the queries succeeded but the last final block is too old it will return:
+```json
+{
+  "healthy":false,
+  "reason":"The last final block is too old.",
+  "lastFinalTime":"2021-07-06T11:55:49.5Z"
+}
+```
+If one of the queries fail, it could return `healthy=false` with a reason, or an error.
 
 ## Notes on account balances.
 
