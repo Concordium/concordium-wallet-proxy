@@ -529,7 +529,7 @@ If the account address is well-formed, but the account does not exist in a final
 ## Health
 
 Returns an object specifying if the information accessible from the wallet proxy is up to date.
-It will query the GRPC and the transaction database. Assuming both succeeds it checks that the last final block is less than `health-tolerance` seconds old.
+It will query the GRPC and the transaction database. Assuming both succeed it checks that the last final block is less than `health-tolerance` seconds old.
 `health-tolerance` is an optional parameter to the wallet-proxy. It defaults to 300 seconds if left unspecified.
 
 Under normal conditions the health query returns:

@@ -76,7 +76,7 @@ main :: IO ()
 main = do
   ProxyConfig{..} <- execParser parser
   let logm s = runStderrLoggingT ($logDebug ("[GRPC]: " <> s))
-  healthTolerance <- return $ fromMaybe 300 pcHealthTolerance -- use 5 minutes as default health tolerance
+  let healthTolerance = fromMaybe 300 pcHealthTolerance -- use 5 minutes as default health tolerance
   gtuDropData <- case pcGTUAccountFile of
     Nothing -> return Nothing
     Just accFile -> do
