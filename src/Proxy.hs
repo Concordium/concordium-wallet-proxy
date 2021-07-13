@@ -488,6 +488,13 @@ getAccountTransactionsR addrText = do
       -- Because we are pressed for time I have the solution at the moment.
       maybeTypeFilter <- lookupGetParam "includeRewards" <&> \case
         Nothing -> Just $ const (return ()) -- the default
+        -- FinalizationRewards
+        -- BakingRewards
+        -- BlockReward
+
+        -- EncryptedAmountTransfer
+        -- TransferToEncrypted
+        -- TransferToPublic
         Just "all" -> Just $ const (return ())
         Just "allButFinalization" -> Just $ \s ->
           -- check if
@@ -499,10 +506,29 @@ getAccountTransactionsR addrText = do
           in E.where_ (isAccountTransaction E.||. extractedTag E.!=. E.val (Just "FinalizationRewards"))
         Just "none" -> Just $ \s -> E.where_ (E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary)) EJ.?. "Left") -- Left are account transactions.
         Just _ -> Nothing
+
+      maybeTimeFromFilter <- lookupGetParam "blockTimeFrom" <&> \case
+            Nothing -> Just $ const (return ()) -- the default
+            Just fromTime -> 
+              case readMaybe $ Text.unpack fromTime of
+                Nothing -> Nothing
+                Just seconds -> Just $ \s -> 
+                  E.where_ (s E.^. SummaryTimestamp E.>=. (E.val Timestamp{tsMillis = seconds * 1000}))
+
+      maybeTimeToFilter <- lookupGetParam "blockTimeTo" <&> \case
+            Nothing -> Just $ const (return ()) -- the default
+            Just toTime -> 
+              case readMaybe $ Text.unpack toTime of
+                Nothing -> Nothing
+                Just seconds -> Just $ \s -> 
+                  E.where_ (s E.^. SummaryTimestamp E.<=. (E.val Timestamp{tsMillis = seconds * 1000}))
+
       rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
-      case maybeTypeFilter of
-        Nothing -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
-        Just typeFilter -> do
+      case (maybeTypeFilter, maybeTimeFromFilter, maybeTimeToFilter) of
+        (Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
+        (_, Nothing, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
+        (_, _, Nothing) -> respond400Error (EMParseError "Unsupported 'blockTimeTo' parameter.") RequestInvalid
+        (Just typeFilter, Just timeFromFilter, Just timeToFilter) -> do
           entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
             E.select $ E.from $ \(e, s) ->  do
               -- Assert join
@@ -515,6 +541,8 @@ getAccountTransactionsR addrText = do
                 (\sid -> E.where_ (e E.^. EntryId `ordRel` E.val sid))
                 startId
               typeFilter s
+              timeFromFilter s
+              timeToFilter s
               -- sort with the requested method or ascending over EntryId.
               E.orderBy [ordering (e E.^. EntryId)]
               -- Limit the number of returned rows
