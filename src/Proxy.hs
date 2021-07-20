@@ -488,13 +488,6 @@ getAccountTransactionsR addrText = do
       -- Because we are pressed for time I have the solution at the moment.
       maybeTypeFilter <- lookupGetParam "includeRewards" <&> \case
         Nothing -> Just $ const (return ()) -- the default
-        -- FinalizationRewards
-        -- BakingRewards
-        -- BlockReward
-
-        -- EncryptedAmountTransfer
-        -- TransferToEncrypted
-        -- TransferToPublic
         Just "all" -> Just $ const (return ())
         Just "allButFinalization" -> Just $ \s ->
           -- check if
@@ -523,12 +516,50 @@ getAccountTransactionsR addrText = do
                 Just seconds -> Just $ \s -> 
                   E.where_ (s E.^. SummaryTimestamp E.<=. (E.val Timestamp{tsMillis = seconds * 1000}))
 
+      maybeBlockRewardFilter <- lookupGetParam "blockReward" <&> \case
+        Nothing -> Just $ const $ return () -- the default
+        Just "y" -> Just $ const $ return ()
+        Just "n" -> Just $ \s ->
+          let coerced = E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary))
+              isAccountTransaction = coerced EJ.?. "Left"
+              extractedTag = coerced EJ.#>>. ["Right", "tag"]
+          in E.where_ (isAccountTransaction E.||. extractedTag E.!=. E.val (Just "BlockReward"))
+        Just _ -> Nothing
+
+      maybeFinalizationRewardFilter <- lookupGetParam "finalizationReward" <&> \case
+        Nothing -> Just $ const $ return () -- the default
+        Just "y" -> Just $ const $ return ()
+        Just "n" -> Just $ \s ->
+          let coerced = E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary))
+              isAccountTransaction = coerced EJ.?. "Left"
+              extractedTag = coerced EJ.#>>. ["Right", "tag"]
+          in E.where_ (isAccountTransaction E.||. extractedTag E.!=. E.val (Just "FinalizationRewards"))
+        Just _ -> Nothing
+
+      maybeBakingRewardFilter <- lookupGetParam "bakingReward" <&> \case
+        Nothing -> Just $ const $ return () -- the default
+        Just "y" -> Just $ const $ return ()
+        Just "n" -> Just $ \s ->
+          let coerced = E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary))
+              isAccountTransaction = coerced EJ.?. "Left"
+              extractedTag = coerced EJ.#>>. ["Right", "tag"]
+          in E.where_ (isAccountTransaction E.||. extractedTag E.!=. E.val (Just "BakingRewards"))
+        Just _ -> Nothing
+      
+      -- todo onlyEncrypted
+      -- EncryptedAmountTransfer
+      -- TransferToEncrypted
+      -- TransferToPublic
+
       rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
-      case (maybeTypeFilter, maybeTimeFromFilter, maybeTimeToFilter) of
-        (Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
-        (_, Nothing, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
-        (_, _, Nothing) -> respond400Error (EMParseError "Unsupported 'blockTimeTo' parameter.") RequestInvalid
-        (Just typeFilter, Just timeFromFilter, Just timeToFilter) -> do
+      case (maybeTypeFilter, maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter) of
+        (Nothing, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
+        (_, Nothing, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
+        (_, _, Nothing, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeTo' parameter.") RequestInvalid
+        (_, _, _, Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'blockReward' parameter.") RequestInvalid
+        (_, _, _, _, Nothing, _) -> respond400Error (EMParseError "Unsupported 'finalizationReward' parameter.") RequestInvalid
+        (_, _, _, _, _, Nothing) -> respond400Error (EMParseError "Unsupported 'bakingReward' parameter.") RequestInvalid
+        (Just typeFilter, Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter) -> do
           entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
             E.select $ E.from $ \(e, s) ->  do
               -- Assert join
@@ -543,6 +574,9 @@ getAccountTransactionsR addrText = do
               typeFilter s
               timeFromFilter s
               timeToFilter s
+              blockRewardFilter s
+              finalizationRewardFilter s
+              bakingRewardFilter s
               -- sort with the requested method or ascending over EntryId.
               E.orderBy [ordering (e E.^. EntryId)]
               -- Limit the number of returned rows
