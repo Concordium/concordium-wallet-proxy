@@ -477,89 +477,86 @@ getAccountTransactionsR addrText = do
                         _ -> (E.asc, "ascending", (E.>.))
       startId :: Maybe EntryId <- (>>= fromPathPiece) <$> lookupGetParam "from"
       limit <- maybe 20 (max 0 . min 1000) . (>>= readMaybe . Text.unpack) <$> lookupGetParam "limit"
-      -- Construct a "transaction type filter" to only query the relevant transaction types specified by `includeRewards`.
-      -- This is done as part of the SQL query since it is both more efficient, but also simpler since we do not have to filter
-      -- on the client side.
-      -- In this typefilter we make use of the `veryUnsafeCoerceSqlExprValue` which we really do not need,
-      -- but I cannot find any API in Esqueleto that would allow us to transform from AE.Value to EJ.JSONB Value
-      -- even though this should be possible.
-      -- This function should either be fixed to use the Persistent abstractions without Esqueleto, the database schema type
-      -- should be changed to use JSONB, or the relevant compatibility function should be added to Esqueleto.
-      -- Because we are pressed for time I have the solution at the moment.
-      maybeTypeFilter <- lookupGetParam "includeRewards" <&> \case
-        Nothing -> Just $ const (return ()) -- the default
-        Just "all" -> Just $ const (return ())
-        Just "allButFinalization" -> Just $ \s ->
-          -- check if
-          -- - either the transaction is an account transaction
-          -- - or if not check that it is not a finalization reward.
-          let coerced = E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary))
-              isAccountTransaction = coerced EJ.?. "Left"
-              extractedTag = coerced EJ.#>>. ["Right", "tag"]
-          in E.where_ (isAccountTransaction E.||. extractedTag E.!=. E.val (Just "FinalizationRewards"))
-        Just "none" -> Just $ \s -> E.where_ (E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary)) EJ.?. "Left") -- Left are account transactions.
-        Just _ -> Nothing
 
+      -- filter out any transactions with blocktime earlier than `blockTimeFrom` (seconds after epoch)
       maybeTimeFromFilter <- lookupGetParam "blockTimeFrom" <&> \case
-            Nothing -> Just $ const (return ()) -- the default
+            Nothing -> Just $ const (return ()) -- the default: exclude nothing.
             Just fromTime -> 
               case readMaybe $ Text.unpack fromTime of
                 Nothing -> Nothing
                 Just seconds -> Just $ \s -> 
                   E.where_ (s E.^. SummaryTimestamp E.>=. (E.val Timestamp{tsMillis = seconds * 1000}))
 
+      -- filter out any transactions with blocktime later than `blockTimeTo` (seconds after epoch)
       maybeTimeToFilter <- lookupGetParam "blockTimeTo" <&> \case
-            Nothing -> Just $ const (return ()) -- the default
+            Nothing -> Just $ const (return ()) -- the default: exclude nothing.
             Just toTime -> 
               case readMaybe $ Text.unpack toTime of
                 Nothing -> Nothing
                 Just seconds -> Just $ \s -> 
                   E.where_ (s E.^. SummaryTimestamp E.<=. (E.val Timestamp{tsMillis = seconds * 1000}))
 
+      -- Construct filters to only query the relevant transaction types specified by `blockReward`, `finalizationReward`, 
+      -- `bakingReward`, and `onlyEncrypted`.
+      -- This is done as part of the SQL query since it is both more efficient, but also simpler since we do not have to filter
+      -- on the client side.
+      -- In these filters we make use of the `veryUnsafeCoerceSqlExprValue` which we really do not need,
+      -- but I cannot find any API in Esqueleto that would allow us to transform from AE.Value to EJ.JSONB Value
+      -- even though this should be possible.
+      -- This function should either be fixed to use the Persistent abstractions without Esqueleto, the database schema type
+      -- should be changed to use JSONB, or the relevant compatibility function should be added to Esqueleto.
+      -- Because we are pressed for time I have the solution at the moment.
+      let coerced = \s -> E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary))
+      let isAccountTransaction = \s -> coerced s EJ.?. "Left"  -- Left are account transactions.
+      let extractedTag = \s -> coerced s EJ.#>>. ["Right", "tag"] -- the reward tag.
+
       maybeBlockRewardFilter <- lookupGetParam "blockReward" <&> \case
-        Nothing -> Just $ const $ return () -- the default
+        Nothing -> Just $ const $ return () -- the default: do not exclude block rewards.
         Just "y" -> Just $ const $ return ()
-        Just "n" -> Just $ \s ->
-          let coerced = E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary))
-              isAccountTransaction = coerced EJ.?. "Left"
-              extractedTag = coerced EJ.#>>. ["Right", "tag"]
-          in E.where_ (isAccountTransaction E.||. extractedTag E.!=. E.val (Just "BlockReward"))
+        -- check if
+        -- - either the transaction is an account transaction
+        -- - or if not check that it is not a block reward.
+        Just "n" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "BlockReward"))
         Just _ -> Nothing
 
       maybeFinalizationRewardFilter <- lookupGetParam "finalizationReward" <&> \case
-        Nothing -> Just $ const $ return () -- the default
+        Nothing -> Just $ const $ return () -- the default: do not exclude finalization rewards.
         Just "y" -> Just $ const $ return ()
-        Just "n" -> Just $ \s ->
-          let coerced = E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary))
-              isAccountTransaction = coerced EJ.?. "Left"
-              extractedTag = coerced EJ.#>>. ["Right", "tag"]
-          in E.where_ (isAccountTransaction E.||. extractedTag E.!=. E.val (Just "FinalizationRewards"))
+        -- check if
+        -- - either the transaction is an account transaction
+        -- - or if not check that it is not a finalization reward.
+        Just "n" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "FinalizationRewards"))
         Just _ -> Nothing
 
       maybeBakingRewardFilter <- lookupGetParam "bakingReward" <&> \case
-        Nothing -> Just $ const $ return () -- the default
+        Nothing -> Just $ const $ return () -- the default: do not exclude baking rewards.
         Just "y" -> Just $ const $ return ()
-        Just "n" -> Just $ \s ->
-          let coerced = E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary))
-              isAccountTransaction = coerced EJ.?. "Left"
-              extractedTag = coerced EJ.#>>. ["Right", "tag"]
-          in E.where_ (isAccountTransaction E.||. extractedTag E.!=. E.val (Just "BakingRewards"))
+        -- check if
+        -- - either the transaction is an account transaction
+        -- - or if not check that it is not a baking reward.
+        Just "n" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "BakingRewards"))
         Just _ -> Nothing
       
-      -- todo onlyEncrypted
-      -- EncryptedAmountTransfer
-      -- TransferToEncrypted
-      -- TransferToPublic
+      maybeEncryptedFilter <- lookupGetParam "onlyEncrypted" <&> \ case
+        Nothing -> Just $ const $ return () -- the default: include all transactions.
+        Just "n" -> Just $ const $ return ()
+        Just "y" -> Just $ \s ->
+          let extractedType = coerced s EJ.#>>. ["Left", "type", "contents"] -- the transaction type.
+          -- check if the transaction is encrypting, decrypting, or transferring an encrypted amount.
+          in E.where_ $ extractedType E.==. E.val (Just "encryptedAmountTransfer") E.||.
+                        extractedType E.==. E.val (Just "transferToEncrypted") E.||.
+                        extractedType E.==. E.val (Just "transferToPublic")
+        Just _ -> Nothing
 
       rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
-      case (maybeTypeFilter, maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter) of
-        (Nothing, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
-        (_, Nothing, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
-        (_, _, Nothing, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeTo' parameter.") RequestInvalid
-        (_, _, _, Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'blockReward' parameter.") RequestInvalid
-        (_, _, _, _, Nothing, _) -> respond400Error (EMParseError "Unsupported 'finalizationReward' parameter.") RequestInvalid
-        (_, _, _, _, _, Nothing) -> respond400Error (EMParseError "Unsupported 'bakingReward' parameter.") RequestInvalid
-        (Just typeFilter, Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter) -> do
+      case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter) of
+        (Nothing, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
+        (_, Nothing, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeTo' parameter.") RequestInvalid
+        (_, _, Nothing, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockReward' parameter.") RequestInvalid
+        (_, _, _, Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'finalizationReward' parameter.") RequestInvalid
+        (_, _, _, _, Nothing, _) -> respond400Error (EMParseError "Unsupported 'bakingReward' parameter.") RequestInvalid
+        (_, _, _, _, _, Nothing) -> respond400Error (EMParseError "Unsupported 'onlyEncrypted' parameter.") RequestInvalid
+        (Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter, Just encryptedFilter) -> do
           entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
             E.select $ E.from $ \(e, s) ->  do
               -- Assert join
@@ -571,12 +568,13 @@ getAccountTransactionsR addrText = do
                 (return ())
                 (\sid -> E.where_ (e E.^. EntryId `ordRel` E.val sid))
                 startId
-              typeFilter s
+              -- Apply any additional filters
               timeFromFilter s
               timeToFilter s
               blockRewardFilter s
               finalizationRewardFilter s
               bakingRewardFilter s
+              encryptedFilter s
               -- sort with the requested method or ascending over EntryId.
               E.orderBy [ordering (e E.^. EntryId)]
               -- Limit the number of returned rows
