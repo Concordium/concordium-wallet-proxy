@@ -478,7 +478,7 @@ getAccountTransactionsR addrText = do
       startId :: Maybe EntryId <- (>>= fromPathPiece) <$> lookupGetParam "from"
       limit <- maybe 20 (max 0 . min 1000) . (>>= readMaybe . Text.unpack) <$> lookupGetParam "limit"
 
-      -- filter out any transactions with blocktime earlier than `blockTimeFrom` (seconds after epoch)
+      -- Exclude any transactions with block time earlier than `blockTimeFrom` (seconds after epoch)
       maybeTimeFromFilter <- lookupGetParam "blockTimeFrom" <&> \case
             Nothing -> Just $ const (return ()) -- the default: exclude nothing.
             Just fromTime -> 
@@ -487,7 +487,7 @@ getAccountTransactionsR addrText = do
                 Just seconds -> Just $ \s -> 
                   E.where_ (s E.^. SummaryTimestamp E.>=. (E.val Timestamp{tsMillis = seconds * 1000}))
 
-      -- filter out any transactions with blocktime later than `blockTimeTo` (seconds after epoch)
+      -- Exclude any transactions with block time later than `blockTimeTo` (seconds after epoch)
       maybeTimeToFilter <- lookupGetParam "blockTimeTo" <&> \case
             Nothing -> Just $ const (return ()) -- the default: exclude nothing.
             Just toTime -> 
@@ -496,8 +496,8 @@ getAccountTransactionsR addrText = do
                 Just seconds -> Just $ \s -> 
                   E.where_ (s E.^. SummaryTimestamp E.<=. (E.val Timestamp{tsMillis = seconds * 1000}))
 
-      -- Construct filters to only query the relevant transaction types specified by `blockReward`, `finalizationReward`, 
-      -- `bakingReward`, and `onlyEncrypted`.
+      -- Construct filters to only query the relevant transaction types specified by `blockRewards`, `finalizationRewards`, 
+      -- `bakingRewards`, and `onlyEncrypted`.
       -- This is done as part of the SQL query since it is both more efficient, but also simpler since we do not have to filter
       -- on the client side.
       -- In these filters we make use of the `veryUnsafeCoerceSqlExprValue` which we really do not need,
@@ -510,7 +510,7 @@ getAccountTransactionsR addrText = do
       let isAccountTransaction = \s -> coerced s EJ.?. "Left"  -- Left are account transactions.
       let extractedTag = \s -> coerced s EJ.#>>. ["Right", "tag"] -- the reward tag.
 
-      maybeBlockRewardFilter <- lookupGetParam "blockReward" <&> \case
+      maybeBlockRewardFilter <- lookupGetParam "blockRewards" <&> \case
         Nothing -> Just $ const $ return () -- the default: do not exclude block rewards.
         Just "y" -> Just $ const $ return ()
         -- check if
@@ -519,7 +519,7 @@ getAccountTransactionsR addrText = do
         Just "n" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "BlockReward"))
         Just _ -> Nothing
 
-      maybeFinalizationRewardFilter <- lookupGetParam "finalizationReward" <&> \case
+      maybeFinalizationRewardFilter <- lookupGetParam "finalizationRewards" <&> \case
         Nothing -> Just $ const $ return () -- the default: do not exclude finalization rewards.
         Just "y" -> Just $ const $ return ()
         -- check if
@@ -528,7 +528,7 @@ getAccountTransactionsR addrText = do
         Just "n" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "FinalizationRewards"))
         Just _ -> Nothing
 
-      maybeBakingRewardFilter <- lookupGetParam "bakingReward" <&> \case
+      maybeBakingRewardFilter <- lookupGetParam "bakingRewards" <&> \case
         Nothing -> Just $ const $ return () -- the default: do not exclude baking rewards.
         Just "y" -> Just $ const $ return ()
         -- check if

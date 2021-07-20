@@ -149,7 +149,7 @@ $ curl -XGET localhost:3000/v0/accNonce/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32
 
 The `nonce` is always the next nonce that should be used provided all the known transactions will be finalized eventually.
 - If `allFinal` is `True` then all transactions from this account are finalized and the nonce should be considered reliable.
-- Otherwise there are some pending transactions so the nonce returned is a best guess assuming all transctions will be successful.
+- Otherwise there are some pending transactions so the nonce returned is a best guess assuming all transactions will be successful.
 
 In case the wallet is the only user of the account then this nonce tracking is reliable.
 If there are other concurrent users of the account then there is a chance the
@@ -271,7 +271,7 @@ input encrypted amount that was removed from the sender's account.
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is either `EncryptedAmountTransfer` or `TransferToPublic`. The value is the index up to which the self encrypted amounts have been combined during the operation that was performed.
 
 #### `amountAdded`/`amountSubtracted` (optional)
-This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`. For a `TransferToPublic`, the field will be named `amountAdded` and it represents the plaintext amount that is added to the public balance of the sender. For a `TransferToEncrypted`, the field will be named `amountSubtracted` and it represents the paintext amount that is subtracted from the public balance of the sender.
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`. For a `TransferToPublic`, the field will be named `amountAdded` and it represents the plaintext amount that is added to the public balance of the sender. For a `TransferToEncrypted`, the field will be named `amountSubtracted` and it represents the plaintext amount that is subtracted from the public balance of the sender.
 
 ## Credential deployment/account creation
 
@@ -305,12 +305,20 @@ The following parameters are supported:
 - `order`: whether to order the transactions in ascending or descending order of occurrence. A value beginning with `d` or `D` is interpreted as descending; any other (or no) value is interpreted as ascending.
 - `from`: a transaction id. If the order is ascending, return transactions with higher ids than this; if the order is descending, return transactions with lower ids.
 - `limit`: the maximum number of transactions to return; defaults to 20; values above 1000 are treated as 1000.
-- `includeRewards`: whether to include rewards, and if so, which ones. This is
-  an optional parameter which defaults to including all rewards. The possible
-  values are
-  - `none`: include no rewards, including minting
-  - `allButFinalization`: include all but finalization rewards
-  - `all`: include all rewards. This is also the default if not supplied.
+- `blockTimeFrom`: exclude any transactions with block time earlier than `blockTimeFrom` (seconds after epoch)
+- `blockTimeTo`: exclude any transactions with block time later than `blockTimeTo` (seconds after epoch)
+- `blockRewards`: whether to include block rewards. Possible values:
+  - `y`: include block rewards. (The default)
+  - `n`: exclude block rewards.
+- `finalizationRewards`: whether to include finalization rewards. Possible values:
+  - `y`: include finalization rewards. (The default)
+  - `n`: exclude finalization rewards.
+- `bakingRewards`: whether to include baking rewards. Possible values:
+  - `y`: include baking rewards. (The default)
+  - `n`: exclude baking rewards.
+- `onlyEncrypted`: whether to only include transactions related to encrypted amounts (i.e. shield, unshield, and transfer shielded). Possible values:
+  - `n`: include all transactions. (The default)
+  - `y`: only include shield, unshield, and transfer shielded transactions.
 - `includeRawRejectReason`: whether to include the raw rejection reason (the
   same JSON as returned by `GetTransactionStatus` gRPC endpoint).
 
@@ -430,7 +438,7 @@ It consists of the following fields:
 - The following fields are present if the transaction is an encrypted amount transfer:
   - `transferSource`: account address of the source of the transfer
   - `transferDestination`: account address of the destination of the transfer
-  - `encryptedAmount`: the encrypted amount that is transferred in the trasnaction in hexadecimal encoding.
+  - `encryptedAmount`: the encrypted amount that is transferred in the transaction in hexadecimal encoding.
   - `inputEncryptedAmount`: the encrypted amount that was used by the sender as input to the transaction, i.e., consumed
   - `aggregatedIndex`: the index up to which incoming amounts on the sender account have been combined during this operation.
   - `newIndex`: the index on the receiver's incomingAmounts that will be assigned to the transferred amount.
@@ -664,6 +672,6 @@ Where
 - the `arsInfos` field has the same format (minus the versioning) as the `anonymity_revokers.json` file generated by the genesis tool.
 - the `metadata` field needs to be constructed manually based on the desired setup and in communication with partners.
   - the `issuanceStart` link is where the wallet submits the initial identity creation request.
-  - the `icon` needs to be a base64 encoded png image that should be obtained from the releavant identity provider.
+  - the `icon` needs to be a base64 encoded png image that should be obtained from the relevant identity provider.
 
 NB: It is OK to have the same identity provider listed multiple times in this file, i.e., the same identity provider could have two verification backends, in which case they would be listed twice in the list, the difference between the two instances being the `issuanceStart` and `icon` fields.
