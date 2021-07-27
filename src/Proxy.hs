@@ -588,7 +588,13 @@ getAccountTransactionsR addrText = do
               encryptedFilter s
               typeFilter s
               -- sort with the requested method or ascending over EntryId.
-              E.orderBy [ordering (e E.^. EntryId)]
+              E.orderBy [ordering (e E.^. EntryId), E.asc (s E.^. SummaryTimestamp)] 
+              -- Semantically what we are interested in is:
+              -- `ORDER BY ati.id (DESC/ASC)`.
+              -- The use of `ORDER BY ati.id (DESC/ASC), summaries.timestamp ASC` 
+              -- is much faster due to some issues with postgres.
+              -- It is equivalent because `ati.id` is unique.
+
               -- Limit the number of returned rows
               E.limit limit
               return (e, s)
