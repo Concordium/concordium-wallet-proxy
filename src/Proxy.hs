@@ -569,9 +569,9 @@ getAccountTransactionsR addrText = do
         (_, _, _, _, _, _, Nothing) -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
         (Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter, Just encryptedFilter, Just typeFilter) -> do
           entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
-            E.select $ E.from $ \(e, s) ->  do
+            E.select $ E.from $ \(e `E.InnerJoin` s) ->  do
               -- Assert join
-              E.where_ (e E.^. EntrySummary E.==. s E.^. SummaryId)
+              E.on (e E.^. EntrySummary E.==. s E.^. SummaryId)
               -- Filter by address
               E.where_ (e E.^. EntryAccount E.==. E.val (ByteStringSerialized addr))
               -- If specified, start from the given starting id
