@@ -9,7 +9,7 @@
    seconds unless an alternative value is chosen at startup.
  - Add filtering options `blockTimeFrom`, `blockTimeTo`, `blockRewards`, 
   `finalizationRewards`, `bakingRewards`, and  `onlyEncrypted` to the 
-  `accTransactions` query. Removed the `includeRewards` option.
+  `accTransactions` query.
 
 ## 0.5.0
  - Make the GTU drop functionality optional.

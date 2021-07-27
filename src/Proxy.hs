@@ -510,6 +510,16 @@ getAccountTransactionsR addrText = do
       let isAccountTransaction = \s -> coerced s EJ.?. "Left"  -- Left are account transactions.
       let extractedTag = \s -> coerced s EJ.#>>. ["Right", "tag"] -- the reward tag.
 
+      maybeTypeFilter <- lookupGetParam "includeRewards" <&> \case
+        Nothing -> Just $ const $ return () -- the default
+        Just "all" -> Just $ const $ return ()
+          -- check if
+          -- - either the transaction is an account transaction
+          -- - or if not check that it is not a finalization reward.
+        Just "allButFinalization" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "FinalizationRewards"))
+        Just "none" -> Just $ \s -> E.where_ $ isAccountTransaction s
+        Just _ -> Nothing
+
       maybeBlockRewardFilter <- lookupGetParam "blockRewards" <&> \case
         Nothing -> Just $ const $ return () -- the default: do not exclude block rewards.
         Just "y" -> Just $ const $ return ()
@@ -549,14 +559,15 @@ getAccountTransactionsR addrText = do
         Just _ -> Nothing
 
       rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
-      case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter) of
-        (Nothing, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
-        (_, Nothing, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeTo' parameter.") RequestInvalid
-        (_, _, Nothing, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockReward' parameter.") RequestInvalid
-        (_, _, _, Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'finalizationReward' parameter.") RequestInvalid
-        (_, _, _, _, Nothing, _) -> respond400Error (EMParseError "Unsupported 'bakingReward' parameter.") RequestInvalid
-        (_, _, _, _, _, Nothing) -> respond400Error (EMParseError "Unsupported 'onlyEncrypted' parameter.") RequestInvalid
-        (Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter, Just encryptedFilter) -> do
+      case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter, maybeTypeFilter) of
+        (Nothing, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
+        (_, Nothing, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeTo' parameter.") RequestInvalid
+        (_, _, Nothing, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockReward' parameter.") RequestInvalid
+        (_, _, _, Nothing, _, _, _) -> respond400Error (EMParseError "Unsupported 'finalizationReward' parameter.") RequestInvalid
+        (_, _, _, _, Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'bakingReward' parameter.") RequestInvalid
+        (_, _, _, _, _, Nothing, _) -> respond400Error (EMParseError "Unsupported 'onlyEncrypted' parameter.") RequestInvalid
+        (_, _, _, _, _, _, Nothing) -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
+        (Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter, Just encryptedFilter, Just typeFilter) -> do
           entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
             E.select $ E.from $ \(e, s) ->  do
               -- Assert join
@@ -575,6 +586,7 @@ getAccountTransactionsR addrText = do
               finalizationRewardFilter s
               bakingRewardFilter s
               encryptedFilter s
+              typeFilter s
               -- sort with the requested method or ascending over EntryId.
               E.orderBy [ordering (e E.^. EntryId)]
               -- Limit the number of returned rows
@@ -798,7 +810,7 @@ dropAmount = 2000000000
         - received, committed, or successfully finalized: report transaction hash
         - absent, or unsuccessfully finalized:
           - if the GTU drop account has insufficient funds, return 502 Bad Gateway (configuration error)
-          - if the transaction nonce is finalized or the transaction is expired, delete the entry and trety from 2
+          - if the transaction nonce is finalized or the transaction is expired, delete the entry and retry from 2
           - otherwise, send the transaction to the node and report the transaction hash
     B. If there is no entry
         B.1. query the sender's next available nonce
