@@ -479,22 +479,22 @@ getAccountTransactionsR addrText = do
       limit <- maybe 20 (max 0 . min 1000) . (>>= readMaybe . Text.unpack) <$> lookupGetParam "limit"
 
       -- Exclude any transactions with block time earlier than `blockTimeFrom` (seconds after epoch)
-      maybeTimeFromFilter <- lookupGetParam "blockTimeFrom" <&> \case
-            Nothing -> Just $ const (return ()) -- the default: exclude nothing.
+      (timeFilterUsed, maybeTimeFromFilter) <- lookupGetParam "blockTimeFrom" <&> \case
+            Nothing -> (False, Just $ const $ return ()) -- the default: exclude nothing.
             Just fromTime -> 
               case readMaybe $ Text.unpack fromTime of
-                Nothing -> Nothing
-                Just seconds -> Just $ \s -> 
-                  E.where_ (s E.^. SummaryTimestamp E.>=. (E.val Timestamp{tsMillis = seconds * 1000}))
+                Nothing -> (False, Nothing)
+                Just seconds -> (True, Just $ \s -> 
+                  E.where_ (s E.^. SummaryTimestamp E.>=. (E.val Timestamp{tsMillis = seconds * 1000})))
 
       -- Exclude any transactions with block time later than `blockTimeTo` (seconds after epoch)
-      maybeTimeToFilter <- lookupGetParam "blockTimeTo" <&> \case
-            Nothing -> Just $ const (return ()) -- the default: exclude nothing.
+      (timeFilterUsed, maybeTimeToFilter) <- lookupGetParam "blockTimeTo" <&> \case
+            Nothing -> (timeFilterUsed, Just $ const $ return ()) -- the default: exclude nothing.
             Just toTime -> 
               case readMaybe $ Text.unpack toTime of
-                Nothing -> Nothing
-                Just seconds -> Just $ \s -> 
-                  E.where_ (s E.^. SummaryTimestamp E.<=. (E.val Timestamp{tsMillis = seconds * 1000}))
+                Nothing -> (timeFilterUsed, Nothing)
+                Just seconds -> (True, Just $ \s -> 
+                  E.where_ (s E.^. SummaryTimestamp E.<=. (E.val Timestamp{tsMillis = seconds * 1000})))
 
       -- Construct filters to only query the relevant transaction types specified by `blockRewards`, `finalizationRewards`, 
       -- `bakingRewards`, and `onlyEncrypted`.
@@ -507,56 +507,57 @@ getAccountTransactionsR addrText = do
       -- should be changed to use JSONB, or the relevant compatibility function should be added to Esqueleto.
       -- Because we are pressed for time I have the solution at the moment.
       let coerced = \s -> E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary))
+      -- let isAccountTransaction = \s -> E.not_ $ coerced s EJ.?. "Right"  -- Left are account transactions.
       let isAccountTransaction = \s -> coerced s EJ.?. "Left"  -- Left are account transactions.
       let extractedTag = \s -> coerced s EJ.#>>. ["Right", "tag"] -- the reward tag.
 
-      maybeTypeFilter <- lookupGetParam "includeRewards" <&> \case
-        Nothing -> Just $ const $ return () -- the default
-        Just "all" -> Just $ const $ return ()
+      (typeFilterUsed, maybeTypeFilter) <- lookupGetParam "includeRewards" <&> \case
+        Nothing -> (False, Just $ const $ return ()) -- the default
+        Just "all" -> (False, Just $ const $ return ())
           -- check if
           -- - either the transaction is an account transaction
           -- - or if not check that it is not a finalization reward.
-        Just "allButFinalization" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "FinalizationRewards"))
-        Just "none" -> Just $ \s -> E.where_ $ isAccountTransaction s
-        Just _ -> Nothing
+        Just "allButFinalization" -> (True, Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "FinalizationRewards")))
+        Just "none" -> (True, Just $ \s -> E.where_ $ isAccountTransaction s)
+        Just _ -> (False, Nothing)
 
-      maybeBlockRewardFilter <- lookupGetParam "blockRewards" <&> \case
-        Nothing -> Just $ const $ return () -- the default: do not exclude block rewards.
-        Just "y" -> Just $ const $ return ()
+      (typeFilterUsed, maybeBlockRewardFilter) <- lookupGetParam "blockRewards" <&> \case
+        Nothing -> (typeFilterUsed, Just $ const $ return ()) -- the default: do not exclude block rewards.
+        Just "y" -> (typeFilterUsed, Just $ const $ return ())
         -- check if
         -- - either the transaction is an account transaction
         -- - or if not check that it is not a block reward.
-        Just "n" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "BlockReward"))
-        Just _ -> Nothing
+        Just "n" -> (True, Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "BlockReward")))
+        Just _ -> (typeFilterUsed, Nothing)
 
-      maybeFinalizationRewardFilter <- lookupGetParam "finalizationRewards" <&> \case
-        Nothing -> Just $ const $ return () -- the default: do not exclude finalization rewards.
-        Just "y" -> Just $ const $ return ()
+      (typeFilterUsed, maybeFinalizationRewardFilter) <- lookupGetParam "finalizationRewards" <&> \case
+        Nothing -> (typeFilterUsed, Just $ const $ return ()) -- the default: do not exclude finalization rewards.
+        Just "y" -> (typeFilterUsed, Just $ const $ return ())
         -- check if
         -- - either the transaction is an account transaction
         -- - or if not check that it is not a finalization reward.
-        Just "n" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "FinalizationRewards"))
-        Just _ -> Nothing
+        Just "n" -> (True, Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "FinalizationRewards")))
+        Just _ -> (typeFilterUsed, Nothing)
 
-      maybeBakingRewardFilter <- lookupGetParam "bakingRewards" <&> \case
-        Nothing -> Just $ const $ return () -- the default: do not exclude baking rewards.
-        Just "y" -> Just $ const $ return ()
+      (typeFilterUsed, maybeBakingRewardFilter) <- lookupGetParam "bakingRewards" <&> \case
+        Nothing -> (typeFilterUsed, Just $ const $ return ()) -- the default: do not exclude baking rewards.
+        Just "y" -> (typeFilterUsed, Just $ const $ return ())
         -- check if
         -- - either the transaction is an account transaction
         -- - or if not check that it is not a baking reward.
-        Just "n" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "BakingRewards"))
-        Just _ -> Nothing
+        Just "n" -> (True, Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "BakingRewards")))
+        Just _ -> (typeFilterUsed, Nothing)
       
-      maybeEncryptedFilter <- lookupGetParam "onlyEncrypted" <&> \ case
-        Nothing -> Just $ const $ return () -- the default: include all transactions.
-        Just "n" -> Just $ const $ return ()
-        Just "y" -> Just $ \s ->
+      (typeFilterUsed, maybeEncryptedFilter) <- lookupGetParam "onlyEncrypted" <&> \ case
+        Nothing -> (typeFilterUsed, Just $ const $ return ()) -- the default: include all transactions.
+        Just "n" -> (typeFilterUsed, Just $ const $ return ())
+        Just "y" -> (True, Just $ \s ->
           let extractedType = coerced s EJ.#>>. ["Left", "type", "contents"] -- the transaction type.
           -- check if the transaction is encrypting, decrypting, or transferring an encrypted amount.
           in E.where_ $ extractedType E.==. E.val (Just "encryptedAmountTransfer") E.||.
                         extractedType E.==. E.val (Just "transferToEncrypted") E.||.
-                        extractedType E.==. E.val (Just "transferToPublic")
-        Just _ -> Nothing
+                        extractedType E.==. E.val (Just "transferToPublic"))
+        Just _ -> (typeFilterUsed, Nothing)
 
       rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
       case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter, maybeTypeFilter) of
@@ -567,7 +568,11 @@ getAccountTransactionsR addrText = do
         (_, _, _, _, Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'bakingReward' parameter.") RequestInvalid
         (_, _, _, _, _, Nothing, _) -> respond400Error (EMParseError "Unsupported 'onlyEncrypted' parameter.") RequestInvalid
         (_, _, _, _, _, _, Nothing) -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
-        (Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter, Just encryptedFilter, Just typeFilter) -> do
+        (Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter, Just encryptedFilter, Just typeFilter) -> 
+          if typeFilterUsed && timeFilterUsed
+          -- Combining time range and transaction types filters on e.g. finalizer accounts can result in a VERY slow responses.
+          then respond400Error (EMParseError "Unsupported parameters: time range filters cannot be combined with transactions type filters.") RequestInvalid
+          else do
           entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
             E.select $ E.from $ \(e `E.InnerJoin` s) ->  do
               -- Assert join
@@ -588,13 +593,14 @@ getAccountTransactionsR addrText = do
               encryptedFilter s
               typeFilter s
               -- sort with the requested method or ascending over EntryId.
-              E.orderBy [ordering (e E.^. EntryId), E.asc (s E.^. SummaryTimestamp)] 
-              -- Semantically what we are interested in is:
-              -- `ORDER BY ati.id (DESC/ASC)`.
-              -- The use of `ORDER BY ati.id (DESC/ASC), summaries.timestamp ASC` 
-              -- is much faster due to some issues with postgres.
-              -- It is equivalent because `ati.id` is unique.
-
+              if timeFilterUsed
+              then
+                E.orderBy [ordering (e E.^. EntryId), E.asc (s E.^. SummaryTimestamp)]
+                -- Semantically what we are interested in is: `ORDER BY ati.id (DESC/ASC)`.
+                -- The use of `ORDER BY ati.id (DESC/ASC), summaries.timestamp ASC` is much faster due to postgres heuristics.
+                -- It is equivalent because `ati.id` is unique.
+              else
+                E.orderBy [ordering (e E.^. EntryId)]
               -- Limit the number of returned rows
               E.limit limit
               return (e, s)
