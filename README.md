@@ -311,8 +311,8 @@ The following parameters are supported:
   - `none`: include no rewards, including minting
   - `allButFinalization`: include all but finalization rewards
   - `all`: include all rewards. This is also the default if not supplied.
-- `blockTimeFrom`: exclude any transactions with block time earlier than `blockTimeFrom` (seconds after epoch)
-- `blockTimeTo`: exclude any transactions with block time later than `blockTimeTo` (seconds after epoch)
+- `blockTimeFrom`: exclude any transactions with block time earlier than `blockTimeFrom` (seconds after epoch). Cannot currently be combined with filters on transaction types.
+- `blockTimeTo`: exclude any transactions with block time later than `blockTimeTo` (seconds after epoch). Cannot currently be combined with filters on transaction types.
 - `blockRewards`: whether to include block rewards. Possible values:
   - `y`: include block rewards. (The default)
   - `n`: exclude block rewards.
