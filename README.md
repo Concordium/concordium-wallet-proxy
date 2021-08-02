@@ -10,7 +10,7 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/accNonce/{account address}`: get the next nonce for an account
 * `GET /v0/accEncryptionKey/{account address}`: get the public encryption key of
   the account
-* `GET /v0/transactionCost`: get the cost of a simple transfer
+* `GET /v0/transactionCost`: get the cost of a transaction
 * `GET /v0/submissionStatus/{transactionHash OR submissionId}`: get the status
   of a transfer or credential deployment
 * `PUT /v0/submitCredential`: deploy a credential/create an account
