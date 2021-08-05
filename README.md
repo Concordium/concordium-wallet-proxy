@@ -311,8 +311,8 @@ The following parameters are supported:
   - `none`: include no rewards, including minting
   - `allButFinalization`: include all but finalization rewards
   - `all`: include all rewards. This is also the default if not supplied.
-- `blockTimeFrom`: exclude any transactions with block time earlier than `blockTimeFrom` (seconds after epoch). Cannot currently be combined with filters on transaction types.
-- `blockTimeTo`: exclude any transactions with block time later than `blockTimeTo` (seconds after epoch). Cannot currently be combined with filters on transaction types.
+- `blockTimeFrom`: exclude any transactions with block time earlier than `blockTimeFrom` (integer number of seconds after epoch).
+- `blockTimeTo`: exclude any transactions with block time later than  `blockTimeTo` (integer number of seconds after epoch).
 - `blockRewards`: whether to include block rewards. Possible values:
   - `y`: include block rewards. (The default)
   - `n`: exclude block rewards.
@@ -681,3 +681,12 @@ Where
   - the `icon` needs to be a base64 encoded png image that should be obtained from the relevant identity provider.
 
 NB: It is OK to have the same identity provider listed multiple times in this file, i.e., the same identity provider could have two verification backends, in which case they would be listed twice in the list, the difference between the two instances being the `issuanceStart` and `icon` fields.
+
+## Database setup
+
+The wallet-proxy needs access to the transaction logging database in the form of a PostgreSQL database.
+It assumes the layout and semantics is as described in the [transaction logging notes](https://github.com/Concordium/concordium-node/blob/main/docs/transaction-logging.md).
+The wallet-proxy queries the database in specific patterns. Every query filters by a single account/contract and narrows down by id.
+Some queries additionally filter out per transaction type or by time.
+To support efficient retrieval in the common cases it is necessary that the `ati` and `cti` tables have a primary key index on the joint `(account, id)` columns (and analogous columns `(index, subindex, id)` for the `cti` table).
+The order of columns matters, since PostgreSQL will make best use of these indices if the queries have an equality constraint on the leading columns and a relational constraint on the remaining ones.
