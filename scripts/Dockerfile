@@ -13,17 +13,19 @@ RUN cp target/wallet-proxy /bins/wallet-proxy
 FROM ubuntu:20.04
 RUN apt-get update && \
     apt-get -y install \
-      unbound \
+      less \
+      jq \
       curl \
+      unbound \
       postgresql-server-dev-12 \
       liblmdb0 \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd -l -m -s /bin/false -u 61000 docker
 COPY --from=build /bins/wallet-proxy /wallet-proxy
 COPY --from=build /build/deps/concordium-client/deps/concordium-base/rust-src/target/release/*.so /usr/lib/
-COPY --from=build /build/scripts/start.sh /start.sh
+COPY --from=build /build/scripts/docker-entrypoint.sh /docker-entrypoint.sh
 RUN touch client_session_key.aes && \
     chmod 0777 client_session_key.aes
 USER docker
 WORKDIR /
-ENTRYPOINT ["/start.sh"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
