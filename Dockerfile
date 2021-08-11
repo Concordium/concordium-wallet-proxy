@@ -16,10 +16,10 @@ RUN apt-get update && \
       unbound \
       postgresql-server-dev-12 \
       liblmdb0 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
 COPY --from=build /build/target/wallet-proxy /wallet-proxy
 COPY --from=build /build/deps/concordium-client/deps/concordium-base/rust-src/target/release/*.so /usr/lib/
-COPY ./scripts/docker-entrypoint.sh /docker-entrypoint.sh
+COPY ./docker /
 RUN touch client_session_key.aes && \
     chmod 0777 client_session_key.aes && \
     useradd -l -m -s /bin/false -u 61000 docker
