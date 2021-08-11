@@ -1,5 +1,5 @@
 .*
-examples
 **/*Dockerfile
-Jenkinsfile
+**/*Jenkinsfile
 LICENSE
+examples/
