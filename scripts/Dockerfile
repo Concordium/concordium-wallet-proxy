@@ -2,11 +2,7 @@ ARG base_image_tag
 FROM concordium/base:${base_image_tag} as build
 
 # Build wallet-proxy binary.
-# Copying only what is needed improves cache utilization.
-COPY ./src /build/src
-COPY ./app /build/app
-COPY ./deps /build/deps
-COPY ./src /build/src
+COPY . /build
 WORKDIR /build
 RUN STACK_ROOT=/build/.stack stack build --copy-bins --ghc-options="-j4" --local-bin-path=target
 
