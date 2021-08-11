@@ -2,14 +2,24 @@
 
 set -euxo pipefail
 
+grpc_host="${GRPC_HOST}"
+grpc_port="${GRPC_PORT}"
+ip_data_file="${IP_DATA_FILE}"
+db_host="${DB_HOST}"
+db_port="${DB_PORT}"
+db_user="${DB_USER}"
+db_name="${DB_NAME}"
+db_password="${DB_PASSWORD}"
+drop_account_file="${DROP_ACCOUNT_FILE-}"
+
 args=(
-	--grpc-ip "${GRPC_HOST}"
-	--grpc-port "${GRPC_PORT}"
-	--ip-data "${IP_DATA_FILE}"
-	--db "host=${DB_HOST} port=${DB_PORT} user=${DB_USER} dbname=${DB_NAME} password=${DB_PASSWORD}"
+	--grpc-ip "${grpc_host}"
+	--grpc-port "${grpc_port}"
+	--ip-data "${ip_data_file}"
+	--db "host=${db_host} port=${db_port} user=${db_user} dbname=${db_name} password=${db_password}"
 )
-if [ -n "${DROP_ACCOUNT_FILE-}" ]; then
-	args+=( --drop-account "${DROP_ACCOUNT_FILE}" )
+if [ -n "${drop_account_file}" ]; then
+	args+=( --drop-account "${drop_account_file}" )
 fi
 
 # Inherits env vars and args.
