@@ -44,11 +44,14 @@ import Data.Text(Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
+import Data.Time.Clock as Clock
+
 import Concordium.Types
 import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
 
+import Concordium.Client.Cli(BlockInfoResult, birBlockSlotTime)
 import Concordium.Client.GRPC
 import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
                                            transferWithSchedulePayloadSize,
@@ -76,6 +79,7 @@ data Proxy = Proxy {
   grpcEnvData :: !EnvData,
   dbConnectionPool :: ConnectionPool,
   gtuDropData :: Maybe GTUDropData,
+  healthTolerance :: Int,
   globalInfo :: Value,
   ipInfo :: Value
 }
@@ -138,6 +142,7 @@ mkYesod "Proxy" [parseRoutes|
 /v0/submitTransfer/ TransferR PUT
 /v0/testnetGTUDrop/#Text GTUDropR PUT
 /v0/global GlobalFileR GET
+/v0/health HealthR GET
 /v0/ip_info IpsR GET
 |]
 
@@ -472,36 +477,102 @@ getAccountTransactionsR addrText = do
                         _ -> (E.asc, "ascending", (E.>.))
       startId :: Maybe EntryId <- (>>= fromPathPiece) <$> lookupGetParam "from"
       limit <- maybe 20 (max 0 . min 1000) . (>>= readMaybe . Text.unpack) <$> lookupGetParam "limit"
-      -- Construct a "transaction type filter" to only query the relevant transaction types specified by `includeRewards`.
+
+      -- Exclude any transactions with block time earlier than `blockTimeFrom` (seconds after epoch)
+      maybeTimeFromFilter <- lookupGetParam "blockTimeFrom" <&> \case
+            Nothing -> Just $ const $ return () -- the default: exclude nothing.
+            Just fromTime ->
+              case readMaybe $ Text.unpack fromTime of
+                Nothing -> Nothing
+                Just seconds -> Just $ \s ->
+                  E.where_ (s E.^. SummaryTimestamp E.>=. (E.val Timestamp{tsMillis = seconds * 1000}))
+
+      -- Exclude any transactions with block time later than `blockTimeTo` (seconds after epoch)
+      maybeTimeToFilter <- lookupGetParam "blockTimeTo" <&> \case
+            Nothing -> Just $ const $ return () -- the default: exclude nothing.
+            Just toTime ->
+              case readMaybe $ Text.unpack toTime of
+                Nothing -> Nothing
+                Just seconds -> Just $ \s ->
+                  E.where_ (s E.^. SummaryTimestamp E.<=. (E.val Timestamp{tsMillis = seconds * 1000}))
+
+      -- Construct filters to only query the relevant transaction types specified by `blockRewards`, `finalizationRewards`,
+      -- `bakingRewards`, and `onlyEncrypted`.
       -- This is done as part of the SQL query since it is both more efficient, but also simpler since we do not have to filter
       -- on the client side.
-      -- In this typefilter we make use of the `veryUnsafeCoerceSqlExprValue` which we really do not need,
+      -- In these filters we make use of the `veryUnsafeCoerceSqlExprValue` which we really do not need,
       -- but I cannot find any API in Esqueleto that would allow us to transform from AE.Value to EJ.JSONB Value
       -- even though this should be possible.
       -- This function should either be fixed to use the Persistent abstractions without Esqueleto, the database schema type
       -- should be changed to use JSONB, or the relevant compatibility function should be added to Esqueleto.
       -- Because we are pressed for time I have the solution at the moment.
+      let coerced = \s -> E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary))
+      -- let isAccountTransaction = \s -> E.not_ $ coerced s EJ.?. "Right"  -- Left are account transactions.
+      let isAccountTransaction = \s -> coerced s EJ.?. "Left"  -- Left are account transactions.
+      let extractedTag = \s -> coerced s EJ.#>>. ["Right", "tag"] -- the reward tag.
+
       maybeTypeFilter <- lookupGetParam "includeRewards" <&> \case
-        Nothing -> Just $ const (return ()) -- the default
-        Just "all" -> Just $ const (return ())
-        Just "allButFinalization" -> Just $ \s ->
+        Nothing -> Just $ const $ return () -- the default
+        Just "all" -> Just $ const $ return ()
           -- check if
           -- - either the transaction is an account transaction
           -- - or if not check that it is not a finalization reward.
-          let coerced = E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary))
-              isAccountTransaction = coerced EJ.?. "Left"
-              extractedTag = coerced EJ.#>>. ["Right", "tag"]
-          in E.where_ (isAccountTransaction E.||. extractedTag E.!=. E.val (Just "FinalizationRewards"))
-        Just "none" -> Just $ \s -> E.where_ (E.just (EInternal.veryUnsafeCoerceSqlExprValue (s E.^. SummarySummary)) EJ.?. "Left") -- Left are account transactions.
+        Just "allButFinalization" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "FinalizationRewards"))
+        Just "none" -> Just $ \s -> E.where_ $ isAccountTransaction s
         Just _ -> Nothing
+
+      maybeBlockRewardFilter <- lookupGetParam "blockRewards" <&> \case
+        Nothing -> Just $ const $ return () -- the default: do not exclude block rewards.
+        Just "y" -> Just $ const $ return ()
+        -- check if
+        -- - either the transaction is an account transaction
+        -- - or if not check that it is not a block reward.
+        Just "n" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "BlockReward"))
+        Just _ -> Nothing
+
+      maybeFinalizationRewardFilter <- lookupGetParam "finalizationRewards" <&> \case
+        Nothing -> Just $ const $ return () -- the default: do not exclude finalization rewards.
+        Just "y" -> Just $ const $ return ()
+        -- check if
+        -- - either the transaction is an account transaction
+        -- - or if not check that it is not a finalization reward.
+        Just "n" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "FinalizationRewards"))
+        Just _ -> Nothing
+
+      maybeBakingRewardFilter <- lookupGetParam "bakingRewards" <&> \case
+        Nothing -> Just $ const $ return () -- the default: do not exclude baking rewards.
+        Just "y" -> Just $ const $ return ()
+        -- check if
+        -- - either the transaction is an account transaction
+        -- - or if not check that it is not a baking reward.
+        Just "n" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "BakingRewards"))
+        Just _ -> Nothing
+
+      maybeEncryptedFilter <- lookupGetParam "onlyEncrypted" <&> \ case
+        Nothing -> Just $ const $ return () -- the default: include all transactions.
+        Just "n" -> Just $ const $ return ()
+        Just "y" -> Just $ \s ->
+          let extractedType = coerced s EJ.#>>. ["Left", "type", "contents"] -- the transaction type.
+          -- check if the transaction is encrypting, decrypting, or transferring an encrypted amount.
+          in E.where_ $ extractedType E.==. E.val (Just "encryptedAmountTransfer") E.||.
+                        extractedType E.==. E.val (Just "transferToEncrypted") E.||.
+                        extractedType E.==. E.val (Just "transferToPublic")
+        Just _ -> Nothing
+
       rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
-      case maybeTypeFilter of
-        Nothing -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
-        Just typeFilter -> do
+      case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter, maybeTypeFilter) of
+        (Nothing, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
+        (_, Nothing, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeTo' parameter.") RequestInvalid
+        (_, _, Nothing, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockReward' parameter.") RequestInvalid
+        (_, _, _, Nothing, _, _, _) -> respond400Error (EMParseError "Unsupported 'finalizationReward' parameter.") RequestInvalid
+        (_, _, _, _, Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'bakingReward' parameter.") RequestInvalid
+        (_, _, _, _, _, Nothing, _) -> respond400Error (EMParseError "Unsupported 'onlyEncrypted' parameter.") RequestInvalid
+        (_, _, _, _, _, _, Nothing) -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
+        (Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter, Just encryptedFilter, Just typeFilter) -> do
           entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
-            E.select $ E.from $ \(e, s) ->  do
+            E.select $ E.from $ \(e `E.InnerJoin` s) ->  do
               -- Assert join
-              E.where_ (e E.^. EntrySummary E.==. s E.^. SummaryId)
+              E.on (e E.^. EntrySummary E.==. s E.^. SummaryId)
               -- Filter by address
               E.where_ (e E.^. EntryAccount E.==. E.val (ByteStringSerialized addr))
               -- If specified, start from the given starting id
@@ -509,6 +580,13 @@ getAccountTransactionsR addrText = do
                 (return ())
                 (\sid -> E.where_ (e E.^. EntryId `ordRel` E.val sid))
                 startId
+              -- Apply any additional filters
+              timeFromFilter s
+              timeToFilter s
+              blockRewardFilter s
+              finalizationRewardFilter s
+              bakingRewardFilter s
+              encryptedFilter s
               typeFilter s
               -- sort with the requested method or ascending over EntryId.
               E.orderBy [ordering (e E.^. EntryId)]
@@ -733,7 +811,7 @@ dropAmount = 2000000000
         - received, committed, or successfully finalized: report transaction hash
         - absent, or unsuccessfully finalized:
           - if the GTU drop account has insufficient funds, return 502 Bad Gateway (configuration error)
-          - if the transaction nonce is finalized or the transaction is expired, delete the entry and trety from 2
+          - if the transaction nonce is finalized or the transaction is expired, delete the entry and retry from 2
           - otherwise, send the transaction to the node and report the transaction hash
     B. If there is no entry
         B.1. query the sender's next available nonce
@@ -889,6 +967,40 @@ putGTUDropR addrText = do
 
 getGlobalFileR :: Handler TypedContent
 getGlobalFileR = toTypedContent . globalInfo <$> getYesod
+
+-- Queries the transaction database and the GRPC,
+-- then if both succeed checks that the last final block is less than `healthTolerance` seconds old.
+getHealthR :: Handler TypedContent
+getHealthR =
+  runGRPC doGetBlockFinalInfo $ \case
+      Nothing -> do
+        $(logError) $ "Could not get response from GRPC."
+        sendResponse $ object $ ["healthy" .= False, "reason" .= ("Could not get response from GRPC.":: String)]
+      Just lastFinalBlockInfo -> do
+        $(logInfo) "Successfully got best block info."
+        _ :: [(Entity Entry, Entity Summary)] <- runDB $ E.select $
+                  E.from $ \val -> do
+                  E.limit 1
+                  return val
+        -- get block slot time from block info object, compare with current time: reject if more than `healthTolerance` seconds old.
+        case fromJSON lastFinalBlockInfo of
+          Error _ -> do
+            i <- internationalize
+            sendResponseStatus badGateway502 $ object ["errorMessage" .= i18n i EMGRPCError, "error" .= fromEnum InternalError]
+          Success (bir :: BlockInfoResult) -> do
+            currentTime <- liftIO Clock.getCurrentTime
+            Proxy{..} <- getYesod
+            if (Clock.diffUTCTime currentTime (birBlockSlotTime bir)) < (Clock.secondsToNominalDiffTime $ fromIntegral healthTolerance)
+            then sendResponse $ object $ ["healthy" .= True, "lastFinalTime" .= (birBlockSlotTime bir)]
+            else sendResponse $ object $ ["healthy" .= False, "reason" .= ("The last final block is too old.":: String), "lastFinalTime" .= (birBlockSlotTime bir)]
+  where
+    doGetBlockFinalInfo :: ClientMonad IO (Either String (Maybe Value))
+    doGetBlockFinalInfo = do
+      bbi <- withLastFinalBlockHash Nothing getBlockInfo
+      case bbi of
+        Right Null -> return $ Right Nothing
+        Right val -> return $ Right $ Just val
+        Left err -> return $ Left err
 
 getIpsR :: Handler TypedContent
 getIpsR = toTypedContent . ipInfo <$> getYesod

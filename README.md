@@ -10,13 +10,14 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/accNonce/{account address}`: get the next nonce for an account
 * `GET /v0/accEncryptionKey/{account address}`: get the public encryption key of
   the account
-* `GET /v0/transactionCost`: get the cost of a simple transfer
+* `GET /v0/transactionCost`: get the cost of a transaction
 * `GET /v0/submissionStatus/{transactionHash OR submissionId}`: get the status
   of a transfer or credential deployment
 * `PUT /v0/submitCredential`: deploy a credential/create an account
 * `PUT /v0/submitTransfer`: perform a simple transfer
 * `GET /v0/accTransactions/{accountNumber}`: get the transactions affecting an account
 * `PUT /v0/testnetGTUDrop/{accountNumber}`: request a GTU drop to the specified account
+* `GET /v0/health`: get a response specifying if the wallet proxy is up to date
 * `GET /v0/global`: get the cryptographic parameters obtained from the node it is connected to
 * `GET /v0/ip_info`: get the identity providers information, including links for
   submitting initial identity issuance requests.
@@ -148,7 +149,7 @@ $ curl -XGET localhost:3000/v0/accNonce/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32
 
 The `nonce` is always the next nonce that should be used provided all the known transactions will be finalized eventually.
 - If `allFinal` is `True` then all transactions from this account are finalized and the nonce should be considered reliable.
-- Otherwise there are some pending transactions so the nonce returned is a best guess assuming all transctions will be successful.
+- Otherwise there are some pending transactions so the nonce returned is a best guess assuming all transactions will be successful.
 
 In case the wallet is the only user of the account then this nonce tracking is reliable.
 If there are other concurrent users of the account then there is a chance the
@@ -270,7 +271,7 @@ input encrypted amount that was removed from the sender's account.
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is either `EncryptedAmountTransfer` or `TransferToPublic`. The value is the index up to which the self encrypted amounts have been combined during the operation that was performed.
 
 #### `amountAdded`/`amountSubtracted` (optional)
-This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`. For a `TransferToPublic`, the field will be named `amountAdded` and it represents the plaintext amount that is added to the public balance of the sender. For a `TransferToEncrypted`, the field will be named `amountSubtracted` and it represents the paintext amount that is subtracted from the public balance of the sender.
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`. For a `TransferToPublic`, the field will be named `amountAdded` and it represents the plaintext amount that is added to the public balance of the sender. For a `TransferToEncrypted`, the field will be named `amountSubtracted` and it represents the plaintext amount that is subtracted from the public balance of the sender.
 
 ## Credential deployment/account creation
 
@@ -310,6 +311,20 @@ The following parameters are supported:
   - `none`: include no rewards, including minting
   - `allButFinalization`: include all but finalization rewards
   - `all`: include all rewards. This is also the default if not supplied.
+- `blockTimeFrom`: exclude any transactions with block time earlier than `blockTimeFrom` (integer number of seconds after epoch).
+- `blockTimeTo`: exclude any transactions with block time later than  `blockTimeTo` (integer number of seconds after epoch).
+- `blockRewards`: whether to include block rewards. Possible values:
+  - `y`: include block rewards. (The default)
+  - `n`: exclude block rewards.
+- `finalizationRewards`: whether to include finalization rewards. Possible values:
+  - `y`: include finalization rewards. (The default)
+  - `n`: exclude finalization rewards.
+- `bakingRewards`: whether to include baking rewards. Possible values:
+  - `y`: include baking rewards. (The default)
+  - `n`: exclude baking rewards.
+- `onlyEncrypted`: whether to only include transactions related to encrypted amounts (i.e. shield, unshield, and transfer shielded). Possible values:
+  - `n`: include all transactions. (The default)
+  - `y`: only include shield, unshield, and transfer shielded transactions.
 - `includeRawRejectReason`: whether to include the raw rejection reason (the
   same JSON as returned by `GetTransactionStatus` gRPC endpoint).
 
@@ -429,7 +444,7 @@ It consists of the following fields:
 - The following fields are present if the transaction is an encrypted amount transfer:
   - `transferSource`: account address of the source of the transfer
   - `transferDestination`: account address of the destination of the transfer
-  - `encryptedAmount`: the encrypted amount that is transferred in the trasnaction in hexadecimal encoding.
+  - `encryptedAmount`: the encrypted amount that is transferred in the transaction in hexadecimal encoding.
   - `inputEncryptedAmount`: the encrypted amount that was used by the sender as input to the transaction, i.e., consumed
   - `aggregatedIndex`: the index up to which incoming amounts on the sender account have been combined during this operation.
   - `newIndex`: the index on the receiver's incomingAmounts that will be assigned to the transferred amount.
@@ -525,6 +540,29 @@ If for some reason the drop fails, subsequent calls could return a new `submissi
 If the account address is well-formed, but the account does not exist in a finalized state on the chain, this call fails with a **404 Not found** status code.
 
 
+## Health
+
+Returns an object specifying if the information accessible from the wallet proxy is up to date.
+It will query the GRPC and the transaction database. Assuming both succeed it checks that the last final block is less than `health-tolerance` seconds old.
+`health-tolerance` is an optional parameter to the wallet-proxy. It defaults to 300 seconds if left unspecified.
+
+Under normal conditions the health query returns:
+```json
+{
+  "healthy":true,
+  "lastFinalTime":"2021-07-06T11:55:49.5Z"
+}
+```
+If the queries succeeded but the last final block is too old it will return:
+```json
+{
+  "healthy":false,
+  "reason":"The last final block is too old.",
+  "lastFinalTime":"2021-07-06T11:55:49.5Z"
+}
+```
+If one of the queries fail, it could return `healthy=false` with a reason, or an error.
+
 ## Notes on account balances.
 
 Suppose that at time t₀ you query the account balance and get a structure
@@ -590,6 +628,7 @@ wallet-proxy --grpc-ip 127.0.0.1\ # IP of the node
              --db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=postgres"\ # transaction outcome database connection string
              --ip-data identity-providers-with-metadata.json\ # JSON file with identity providers and anonymity revokers
              --drop-account gtu-drop-account-0.json # keys of the gtu drop account
+             --health-tolerance 30 # tolerated age of last final block in seconds before the health query returns false
 ```
 
 ## Identity providers metadata file
@@ -639,6 +678,15 @@ Where
 - the `arsInfos` field has the same format (minus the versioning) as the `anonymity_revokers.json` file generated by the genesis tool.
 - the `metadata` field needs to be constructed manually based on the desired setup and in communication with partners.
   - the `issuanceStart` link is where the wallet submits the initial identity creation request.
-  - the `icon` needs to be a base64 encoded png image that should be obtained from the releavant identity provider.
+  - the `icon` needs to be a base64 encoded png image that should be obtained from the relevant identity provider.
 
 NB: It is OK to have the same identity provider listed multiple times in this file, i.e., the same identity provider could have two verification backends, in which case they would be listed twice in the list, the difference between the two instances being the `issuanceStart` and `icon` fields.
+
+## Database setup
+
+The wallet-proxy needs access to the transaction logging database in the form of a PostgreSQL database.
+It assumes the layout and semantics is as described in the [transaction logging notes](https://github.com/Concordium/concordium-node/blob/main/docs/transaction-logging.md).
+The wallet-proxy queries the database in specific patterns. Every query filters by a single account/contract and narrows down by id.
+Some queries additionally filter out per transaction type or by time.
+To support efficient retrieval in the common cases it is necessary that the `ati` and `cti` tables have a primary key index on the joint `(account, id)` columns (and analogous columns `(index, subindex, id)` for the `cti` table).
+The order of columns matters, since PostgreSQL will make best use of these indices if the queries have an equality constraint on the leading columns and a relational constraint on the remaining ones.
