@@ -20,7 +20,6 @@ pipeline {
                       --build-arg base_image_tag="${base_image_tag}" \
                       --label base_image_tag="${base_image_tag}" \
                       --label git_commit="${GIT_COMMIT}" \
-                      -f scripts/Dockerfile \
                       .
                 '''
             }
