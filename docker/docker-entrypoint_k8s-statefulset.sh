@@ -3,7 +3,7 @@
 set -euxo pipefail
 
 # Get list of active reporter nodes and connection info from env.
-reporters="${REPORTER_LIST_JSON}"
+reporters="${REPORTERS_JSON}"
 pod_name="${K8S_POD_NAME}"
 
 # Extract index from pod name (format: "<name>-<index>")
@@ -12,7 +12,7 @@ index="${pod_name##*-}"
 
 # Parse reporter IP and DB credentials based on the pod index (using round-robin).
 # JSON format: "[{grpc: {host, port}, db: {host, name, port, user, password}}]".
-reporter_args_tsv="$(jq -r ".[${index} % (.|length)] | [.grpc.host, .grpc.port, db.host, .db.port, .db.user, .db.name, .db.password] | @tsv" <<< "${reporters}")"
+reporter_args_tsv="$(jq -r ".[${index} % (.|length)] | [.grpc.host, .grpc.port, .db.host, .db.port, .db.user, .db.name, .db.password] | @tsv" <<< "${reporters}")"
 IFS=$'\t' read -r grpc_host grpc_port db_host db_port db_user db_name db_password <<< "${reporter_args_tsv}"
 
 # Invoke default entrypoint - inherits env vars and args.
