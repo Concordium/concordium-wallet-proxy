@@ -791,7 +791,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
 
           details = case includeMemos of
             IncludeMemo -> object $ ["type" .= renderTransactionSummaryType tsType, "description" .= i18n i tsType] <> resultDetails
-            ExcludeMemo -> object $ ["type" .= renderTransactionSummaryTypeWithoutMemo tsType, "description" .= i18n i tsType] <> resultDetails
+            ExcludeMemo -> object $ ["type" .= renderTransactionSummaryType (forgetMemoInSummary tsType), "description" .= i18n i (forgetMemoInSummary tsType)] <> resultDetails
 
           costs
             | selfOrigin = case subtotal of
@@ -855,19 +855,15 @@ renderTransactionSummaryType (TSTAccountTransaction Nothing) = "Malformed accoun
 renderTransactionSummaryType (TSTCredentialDeploymentTransaction _) = "deployCredential"
 renderTransactionSummaryType (TSTUpdateTransaction _) = "chainUpdate"
 
--- |Like 'renderTransactionSummaryType' but maps transfers with memos to
--- corresponding transfers without memos. This is here for backwards
--- compatibility, so that existing wallets will continue to work, being able to
--- receive transfers with memos and render them appropriately.
-renderTransactionSummaryTypeWithoutMemo :: TransactionSummaryType -> Text
-renderTransactionSummaryTypeWithoutMemo (TSTAccountTransaction (Just tt)) = case tt of
-  TTTransferWithMemo -> "transfer"
-  TTEncryptedAmountTransferWithMemo -> "encryptedAmountTransfer"
-  TTTransferWithScheduleAndMemo -> "transferWithSchedule"
-  other -> renderTransactionType other
-renderTransactionSummaryTypeWithoutMemo (TSTAccountTransaction Nothing) = "Malformed account transaction"
-renderTransactionSummaryTypeWithoutMemo (TSTCredentialDeploymentTransaction _) = "deployCredential"
-renderTransactionSummaryTypeWithoutMemo (TSTUpdateTransaction _) = "chainUpdate"
+forgetMemoTransactionType :: TransactionType -> TransactionType
+forgetMemoTransactionType TTTransferWithMemo = TTTransfer
+forgetMemoTransactionType TTEncryptedAmountTransferWithMemo = TTEncryptedAmountTransfer
+forgetMemoTransactionType TTTransferWithScheduleAndMemo = TTTransferWithSchedule
+forgetMemoTransactionType other = other
+
+forgetMemoInSummary :: TransactionSummaryType -> TransactionSummaryType
+forgetMemoInSummary (TSTAccountTransaction (Just tt)) = TSTAccountTransaction $ Just $ forgetMemoTransactionType tt
+forgetMemoInSummary other = other
 
 
 eventSubtotal :: AccountAddress -> [Event] -> Maybe Integer
