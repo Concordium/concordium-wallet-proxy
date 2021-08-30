@@ -188,12 +188,13 @@ In case of success the response will always be a JSON object with required field
   conversion rates
 - `"energy"` which is the energy that is required be supplied for execution of this transaction.
 
-In case of invalid parameters the response will be with the following status codes
+In case of invalid parameters the response will be as described in the [errors section](#errors) with the following possible status codes
 - `400` if any of the following apply
   - the transaction type parameter is missing
   - numSignatures is present but it cannot be parsed as an integer
   - memoSize is present but it cannot be parsed as an integer
 - `404` if `memoSize` is present, but the node that backs the wallet-proxy is still running protocol version 1.
+- `502` if the wallet-proxy cannot access the node.
 
 ## Submission Status
 
