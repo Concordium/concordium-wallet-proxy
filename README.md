@@ -16,6 +16,7 @@ The wallet proxy provides the following endpoints:
 * `PUT /v0/submitCredential`: deploy a credential/create an account
 * `PUT /v0/submitTransfer`: perform a simple transfer
 * `GET /v0/accTransactions/{accountNumber}`: get the transactions affecting an account
+* `GET /v1/accTransactions/{accountNumber}`: get the transactions affecting an account, including memos
 * `PUT /v0/testnetGTUDrop/{accountNumber}`: request a GTU drop to the specified account
 * `GET /v0/health`: get a response specifying if the wallet proxy is up to date
 * `GET /v0/global`: get the cryptographic parameters obtained from the node it is connected to
@@ -176,13 +177,23 @@ The field is mandatory, and the value will always be a hex-encoded public key.
 ## Transaction cost.
 
 The cost for a transaction, both in energy and GTU is obtained on the
-`v0/transactionCost` endpoint. The request must have a parameter `type`, and an
-optional parameter `numSignatures`, which defaults to `1`. The currently
-supported types are `simpleTransfer` and `encryptedTransfer`. In case of success
-the response will always be a JSON object with required fields
+`v0/transactionCost` endpoint.
+The following query parameters are supported
+- `type`, the type of the transaction. This is mandatory and can be one of `simpleTransfer`, `encryptedTransfer`, `transferToSecret` or `transferToPublic`.
+- `numSignatures`, the number of signatures on the transaction, defaults to 1 if not present.
+- `memoSize`, the size of the transfer memo. Optionaly, and only supported if the node is running protocol version 2 or higher, and only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
+
+In case of success the response will always be a JSON object with required fields
 - `"cost"` which is an Amount of GTU this transfer will cost at current
   conversion rates
 - `"energy"` which is the energy that is required be supplied for execution of this transaction.
+
+In case of invalid parameters the response will be with the following status codes
+- `400` if any of the following apply
+  - the transaction type parameter is missing
+  - numSignatures is present but it cannot be parsed as an integer
+  - memoSize is present but it cannot be parsed as an integer
+- `404` if `memoSize` is present, but the node that backs the wallet-proxy is still running protocol version 1.
 
 ## Submission Status
 
@@ -301,7 +312,8 @@ a submission id is returned, which can be used to query the status of the transf
 ## Get transactions
 
 The endpoint `/accTransactions/{account address}` retrieves a partial list of transactions affecting an account.
-The following parameters are supported:
+There are two versions of the endpoint, `v0` and `v1`.
+They both support the following parameters.
 - `order`: whether to order the transactions in ascending or descending order of occurrence. A value beginning with `d` or `D` is interpreted as descending; any other (or no) value is interpreted as ascending.
 - `from`: a transaction id. If the order is ascending, return transactions with higher ids than this; if the order is descending, return transactions with lower ids.
 - `limit`: the maximum number of transactions to return; defaults to 20; values above 1000 are treated as 1000.
@@ -407,7 +419,7 @@ This is not present for special transactions.
 A JSON object containing more details about the transaction.
 It consists of the following fields:
 
-- `type` (required): one of the following:
+- `type` (required): in `v0` endpoint one of the following:
   - `"deployModule"`
   - `"initContract"`
   - `"update"`
@@ -431,17 +443,22 @@ It consists of the following fields:
   - `"updateAccountKeys"`
   - `"chainUpdate"`
   - `"Malformed account transaction"`
+  - in `v1` endpoint type can additionally be one of
+    - `transferWithMemo`
+    - `encryptedAmountTransferWithMemo`
+    - `transferWithScheduleAndMemo`
 - `description` (required): a brief localized description of the type of the transaction
 - `outcome` (required):
   - `"success"` if the transaction was executed successfully
   - `"reject"` if the transaction failed, in which case it had no effect other than charging the fee
 - `rejectReason` (when outcome is `"reject"`): a brief localized description of why the transaction was rejected
 - `events` (when outcome is `"success"`): an array of strings consisting of brief localized descriptions of the on-chain events resulting from the transaction
-- The following fields are present if the transaction is a simple transfer:
+- The following fields are present if the transaction is a simple transfer or a transfer with memo:
   - `transferSource`: account address of the source of the transfer
   - `transferDestination`: account address of the destination of the transfer
   - `transferAmount`: amount of the transfer
-- The following fields are present if the transaction is an encrypted amount transfer:
+  - in `v1` version if `type = transferWithMemo` then an additional field `memo` is present. It is a hex-encoded byte array.
+- The following fields are present if the transaction is an encrypted amount transfer or an encrypted amount transfer with memo:
   - `transferSource`: account address of the source of the transfer
   - `transferDestination`: account address of the destination of the transfer
   - `encryptedAmount`: the encrypted amount that is transferred in the transaction in hexadecimal encoding.
@@ -449,6 +466,7 @@ It consists of the following fields:
   - `aggregatedIndex`: the index up to which incoming amounts on the sender account have been combined during this operation.
   - `newIndex`: the index on the receiver's incomingAmounts that will be assigned to the transferred amount.
   - `newSelfEncryptedAmount`: the resulting self encrypted amount in the sender's account.
+  - in `v1` version if `type = encryptedAmountTransferWithMemo` then an additional field `memo` is present. It is a hex-encoded byte array.
 - The following fields are present if the transaction is a transfer to public transaction:
   - `transferSource`: account address of the source of the transfer
   - `amountAdded`: the plaintext of the amount that is added to the sender's public balance.
@@ -459,9 +477,10 @@ It consists of the following fields:
   - `transferSource`: account address of the source of the transfer
   - `amountSubtracted`: the plaintext of the amount that is subtracted from the sender's public balance.
   - `newSelfEncryptedAmount`: the resulting self encrypted amount in the sender's account.
-- The following fields are present if the transaction is a transfer with schedule:
+- The following fields are present if the transaction is a transfer with schedule or transfer with schedule and memo:
   - `transferDestination`: account address of the destination of the transfer
   - `transferAmount`: amount of the transfer
+  - in `v1` version if `type = transferWithScheduleAndMemo` then an additional field `memo` is present. It is a hex-encoded byte array.
 
 For the purposes of the above, a simple transfer is a transaction of type `"transfer"` which transfers funds from one account to another.
 A transactions of type `"transfer"` is not considered a simple transfer if the destination is a smart contract instance.

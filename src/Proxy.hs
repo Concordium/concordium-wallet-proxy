@@ -266,9 +266,11 @@ getAccountEncryptionKeyR addrText = do
   where doGetEncryptionKey = withBestBlockHash Nothing (getAccountInfo addrText)
 
 
--- |Get the cost of a transaction, based on its type. The transaction type is
--- given as a "type" parameter. An additional parameter is "numSignatures" that
--- defaults to one if not present.
+-- |Get the cost of a transaction, based on its type. The following query parameters are supported
+-- - "type", the type of the transaction. This is mandatory.
+-- - "numSignatures", the number of signatures on the transaction, defaults to 1 if not present.
+-- - "memoSize", the size of the transfer memo. Only supported if the node is running protocol version 2 or higher, and
+--   only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
 getTransactionCostR :: Handler TypedContent
 getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
   numSignatures <- fromMaybe "1" <$> lookupGetParam "numSignatures"
@@ -287,6 +289,11 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
             Just memoText ->
               case readMaybe (Text.unpack memoText) :: Maybe Word32 of
                 Nothing -> respond400Error (EMParseError "Could not parse `memoSize` value.") RequestInvalid
+                -- NB: In protocol version 1 the memo is not supported. This
+                -- implementation assumes that the transaction memo will be
+                -- supported in all future versions of the node.
+                -- The memo is charged for purely on its size. The "2 +" is there because the memo
+                -- is serialized by prepending 2 bytes for its length.
                 Just msize | pv /= P1 -> return $ fromIntegral (2 + msize)
                            | otherwise -> respond404Error EMActionNotCurrentlySupported
         case transactionType of
@@ -483,17 +490,22 @@ getSimpleTransactionStatus i trHash = do
           | all (h==) r -> return h
           | otherwise -> return ["outcome" .= String "ambiguous"]
 
-    -- helper functions to be used in view patterns in outcomeToPairs to match
-    -- both transfers and transfers with memo.
-    viewTransfer :: TransactionSummaryType -> Bool
-    viewTransfer (TSTAccountTransaction (Just TTTransfer)) = True
-    viewTransfer (TSTAccountTransaction (Just TTTransferWithMemo)) = True
-    viewTransfer _ = False
-    
-    viewEncryptedTransfer :: TransactionSummaryType -> Bool
-    viewEncryptedTransfer (TSTAccountTransaction (Just TTEncryptedAmountTransfer)) = True
-    viewEncryptedTransfer (TSTAccountTransaction (Just TTEncryptedAmountTransferWithMemo)) = True
-    viewEncryptedTransfer _ = False
+-- helper functions to be used in view patterns to match both transfers and
+-- transfers with memo.
+viewTransfer :: TransactionSummaryType -> Bool
+viewTransfer (TSTAccountTransaction (Just TTTransfer)) = True
+viewTransfer (TSTAccountTransaction (Just TTTransferWithMemo)) = True
+viewTransfer _ = False
+
+viewEncryptedTransfer :: TransactionSummaryType -> Bool
+viewEncryptedTransfer (TSTAccountTransaction (Just TTEncryptedAmountTransfer)) = True
+viewEncryptedTransfer (TSTAccountTransaction (Just TTEncryptedAmountTransferWithMemo)) = True
+viewEncryptedTransfer _ = False
+
+viewScheduledTransfer :: TransactionSummaryType -> Bool
+viewScheduledTransfer (TSTAccountTransaction (Just TTTransferWithSchedule)) = True
+viewScheduledTransfer (TSTAccountTransaction (Just TTTransferWithScheduleAndMemo)) = True
+viewScheduledTransfer _ = False
 
 
 -- Get the status of the submission.
@@ -507,14 +519,14 @@ getSubmissionStatusR submissionId =
 
 -- |Whether to include memos in formatted account transactions or not.
 -- If not, transfers with memos are mapped to a corresponding transfer without a memo.
-data IncludeMemos = Yes | No
+data IncludeMemos = IncludeMemo | ExcludeMemo
     deriving(Eq, Show)
 
 getAccountTransactionsV0R :: Text -> Handler TypedContent
-getAccountTransactionsV0R = getAccountTransactionsWorker No 
+getAccountTransactionsV0R = getAccountTransactionsWorker ExcludeMemo
 
 getAccountTransactionsV1R :: Text -> Handler TypedContent
-getAccountTransactionsV1R = getAccountTransactionsWorker Yes
+getAccountTransactionsV1R = getAccountTransactionsWorker IncludeMemo
 
 getAccountTransactionsWorker :: IncludeMemos -> Text -> Handler TypedContent
 getAccountTransactionsWorker includeMemos addrText = do
@@ -724,49 +736,40 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
           ]
       ]
     AE.Success (Left TransactionSummary{..}) -> do
-      let addMemo memo ps =
+      let addMemo mmemo ps =
             case includeMemos of
-              Yes -> ("memo" .= memo):ps
-              No -> ps
+              ExcludeMemo -> ps
+              IncludeMemo -> case mmemo of
+                [TransferMemo{..}] -> ("memo" .= tmMemo):ps
+                _ -> ps
       let (origin, selfOrigin) = case tsSender of
                                    Just sender
                                      | sender == self -> (object ["type" .= ("self" :: Text)], True)
                                      | otherwise -> (object ["type" .= ("account" :: Text), "address" .= sender], False)
                                    Nothing -> (object ["type" .= ("none" :: Text)], False)
 
-          -- If includeMemos == No then we filter out the TransferMemo event from the list of events
-          -- in order to maintain backwards compatibility.
-          filterTransferMemo x = includeMemos == Yes || case x of
+          -- If ExcludeMemo then we filter out the TransferMemo event from the
+          -- list of events in order to maintain backwards compatibility.
+          filterTransferMemo x = includeMemos == IncludeMemo || case x of
             TransferMemo{} -> False
             _ -> True
           (resultDetails, subtotal) = case tsResult of
             TxSuccess evts -> ((["outcome" .= ("success" :: Text), "events" .= (fmap (i18n i) . filter filterTransferMemo $ evts)]
                                 <> case (tsType, evts) of
-                                     (TSTAccountTransaction (Just TTTransfer), [Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr)]) ->
-                                       ["transferSource" .= fromAddr,
-                                        "transferDestination" .= toAddr,
-                                        "transferAmount" .= amt]
-                                     (TSTAccountTransaction (Just TTTransferWithMemo), [Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr), TransferMemo{..}]) ->
-                                       addMemo tmMemo ["transferSource" .= fromAddr,
-                                                       "transferDestination" .= toAddr,
-                                                       "transferAmount" .= amt]
-                                     (TSTAccountTransaction (Just TTEncryptedAmountTransfer), [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
-                                       ["transferSource" .= earAccount,
-                                        "transferDestination" .= neaAccount,
-                                        "encryptedAmount" .= neaEncryptedAmount,
-                                        "aggregatedIndex" .= earUpToIndex,
-                                        "inputEncryptedAmount" .= earInputAmount,
-                                        "newIndex" .= neaNewIndex,
-                                        "newSelfEncryptedAmount" .= earNewAmount]
-                                     (TSTAccountTransaction (Just TTEncryptedAmountTransferWithMemo), [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}, TransferMemo{..}]) ->
-                                       addMemo tmMemo ["transferSource" .= earAccount,
-                                                       "transferDestination" .= neaAccount,
-                                                       "encryptedAmount" .= neaEncryptedAmount,
-                                                       "aggregatedIndex" .= earUpToIndex,
-                                                       "inputEncryptedAmount" .= earInputAmount,
-                                                       "newIndex" .= neaNewIndex,
-                                                       "newSelfEncryptedAmount" .= earNewAmount
-                                                      ]
+                                     (viewTransfer -> True, Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr):mmemo) ->
+                                       addMemo mmemo [
+                                         "transferSource" .= fromAddr,
+                                         "transferDestination" .= toAddr,
+                                         "transferAmount" .= amt]
+                                     (viewEncryptedTransfer -> True, EncryptedAmountsRemoved{..}:NewEncryptedAmount{..}:mmemo) ->
+                                       addMemo mmemo [
+                                         "transferSource" .= earAccount,
+                                         "transferDestination" .= neaAccount,
+                                         "encryptedAmount" .= neaEncryptedAmount,
+                                         "aggregatedIndex" .= earUpToIndex,
+                                         "inputEncryptedAmount" .= earInputAmount,
+                                         "newIndex" .= neaNewIndex,
+                                         "newSelfEncryptedAmount" .= earNewAmount]
                                      (TSTAccountTransaction (Just TTTransferToPublic), [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}]) ->
                                        ["transferSource" .= earAccount,
                                         "amountAdded" .= aabdAmount,
@@ -777,22 +780,18 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                                        ["transferSource" .= eaaAccount,
                                         "amountSubtracted" .= eaaAmount,
                                         "newSelfEncryptedAmount" .= eaaNewAmount]
-                                     (TSTAccountTransaction (Just TTTransferWithSchedule), [TransferredWithSchedule{..}]) ->
-                                       ["transferDestination" .= etwsTo,
-                                        "transferAmount" .= foldl' (+) 0 (map snd etwsAmount)]
-                                     (TSTAccountTransaction (Just TTTransferWithScheduleAndMemo), [TransferredWithSchedule{..}, TransferMemo{..}]) ->
-                                       addMemo tmMemo ["transferDestination" .= etwsTo,
-                                                       "transferAmount" .= foldl' (+) 0 (map snd etwsAmount)
-                                                      ]
-
+                                     (viewScheduledTransfer -> True, TransferredWithSchedule{..}:mmemo) ->
+                                       addMemo mmemo [
+                                         "transferDestination" .= etwsTo,
+                                         "transferAmount" .= foldl' (+) 0 (map snd etwsAmount)]
                                      _ -> []), eventSubtotal self evts )
             TxReject reason ->
               let rawReason = if rawRejectReason then ["rawRejectReason" .= reason] else []
               in (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason] ++ rawReason, Nothing)
 
           details = case includeMemos of
-            Yes -> object $ ["type" .= renderTransactionSummaryType tsType, "description" .= i18n i tsType] <> resultDetails
-            No -> object $ ["type" .= renderTransactionSummaryTypeWithoutMemo tsType, "description" .= i18n i tsType] <> resultDetails
+            IncludeMemo -> object $ ["type" .= renderTransactionSummaryType tsType, "description" .= i18n i tsType] <> resultDetails
+            ExcludeMemo -> object $ ["type" .= renderTransactionSummaryTypeWithoutMemo tsType, "description" .= i18n i tsType] <> resultDetails
 
           costs
             | selfOrigin = case subtotal of
