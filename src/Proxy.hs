@@ -791,7 +791,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
 
           details = case includeMemos of
             IncludeMemo -> object $ ["type" .= renderTransactionSummaryType tsType, "description" .= i18n i tsType] <> resultDetails
-            ExcludeMemo -> object $ ["type" .= renderTransactionSummaryType (forgetMemoInSummary tsType), "description" .= i18n i (forgetMemoInSummary tsType)] <> resultDetails
+            ExcludeMemo -> object $ ["type" .= renderTransactionSummaryType (forgetMemoInSummary tsType), "description" .= i18n i tsType] <> resultDetails
 
           costs
             | selfOrigin = case subtotal of
