@@ -80,6 +80,7 @@ translation = I18n {..}
         i18nTransactionType TTInitContract = "Initialize smart contract"
         i18nTransactionType TTUpdate = "Invoke smart contract"
         i18nTransactionType TTTransfer = "Transfer"
+        i18nTransactionType TTTransferWithMemo = "Transfer with a memo"
         i18nTransactionType TTUpdateBakerStake = "Update baker stake"
         i18nTransactionType TTUpdateBakerKeys = "Update baker keys"
         i18nTransactionType TTUpdateBakerRestakeEarnings = "Update whether to restake baker earnings"
@@ -87,9 +88,11 @@ translation = I18n {..}
         i18nTransactionType TTRemoveBaker = "Remove baker"
         i18nTransactionType TTUpdateCredentialKeys = "Update credential keys"
         i18nTransactionType TTEncryptedAmountTransfer = "Shielded transfer"
+        i18nTransactionType TTEncryptedAmountTransferWithMemo = "Shielded transfer with a memo"
         i18nTransactionType TTTransferToEncrypted = "Shielded amount"
         i18nTransactionType TTTransferToPublic = "Unshielded amount"
         i18nTransactionType TTTransferWithSchedule = "Transfer with schedule"
+        i18nTransactionType TTTransferWithScheduleAndMemo = "Transfer with schedule and a memo"
         i18nTransactionType TTUpdateCredentials = "Update account credentials"
         i18nTransactionType TTRegisterData = "Register data on the chain"
 
@@ -131,6 +134,7 @@ translation = I18n {..}
         i18nEvent TransferredWithSchedule{..} = "Transferred with schedule from " <> descrAccount etwsFrom <> " to " <> descrAccount etwsTo
         i18nEvent CredentialsUpdated{..} = "Credentials on account " <> descrAccount cuAccount <> " updated."
         i18nEvent DataRegistered{} = "Data registered on the chain."
+        i18nEvent TransferMemo{..} = "Memo '" <> Text.pack (show tmMemo) <> "' included in a transfer." -- TODO: This would ideally try to render the Memo in a readable way, if it is a valid string or integer, say.
 
         i18nSpecialEvent BakingRewards{..} = "Baking rewards\n" <>
             Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)
@@ -172,3 +176,4 @@ translation = I18n {..}
         i18nErrorMessage EMConfigurationError = "Server configuration error"
         i18nErrorMessage EMAccountDoesNotExist = "Account does not exist"
         i18nErrorMessage EMMissingParameter = "Missing parameter"
+        i18nErrorMessage EMActionNotCurrentlySupported = "The required action is not supported. The node's protocol version is incompatible with it."

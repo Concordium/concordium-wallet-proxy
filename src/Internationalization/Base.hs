@@ -27,6 +27,8 @@ data ErrorMessage
     | EMConfigurationError
     | EMAccountDoesNotExist
     | EMMissingParameter
+    -- |Action not supported due to the node protocol version not allowing it.
+    | EMActionNotCurrentlySupported
 
 data I18n = I18n {
     i18nRejectReason :: RejectReason -> Text,

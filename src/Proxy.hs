@@ -39,6 +39,7 @@ import qualified Database.Esqueleto.PostgreSQL.JSON as EJ
 import qualified Database.Esqueleto.Internal.Internal as EInternal
 import System.Random
 import Data.Foldable
+import Data.Word
 
 import Data.Text(Text)
 import qualified Data.Text as Text
@@ -135,7 +136,7 @@ mkYesod "Proxy" [parseRoutes|
 /v0/accBalance/#Text AccountBalanceR GET
 /v0/accNonce/#Text AccountNonceR GET
 /v0/accEncryptionKey/#Text AccountEncryptionKeyR GET
-/v0/accTransactions/#Text AccountTransactionsR GET
+/v0/accTransactions/#Text AccountTransactionsV0R GET
 /v0/transactionCost TransactionCostR GET
 /v0/submissionStatus/#Text SubmissionStatusR GET
 /v0/submitCredential/ CredentialR PUT
@@ -144,9 +145,12 @@ mkYesod "Proxy" [parseRoutes|
 /v0/global GlobalFileR GET
 /v0/health HealthR GET
 /v0/ip_info IpsR GET
+/v1/accTransactions/#Text AccountTransactionsV1R GET
 |]
 
-respond400Error :: ErrorMessage -> ErrorCode -> Handler TypedContent
+-- |Terminate execution and respond with 400 status code with the given error
+-- description.
+respond400Error :: ErrorMessage -> ErrorCode -> Handler a
 respond400Error err code = do
   i <- internationalize
   sendResponseStatus badRequest400 $
@@ -154,7 +158,9 @@ respond400Error err code = do
             "error" .= fromEnum code
            ]
 
-respond404Error :: ErrorMessage -> Handler TypedContent
+-- |Terminate execution and respond with 404 status code with the given error
+-- description.
+respond404Error :: ErrorMessage -> Handler a
 respond404Error err = do
   i <- internationalize
   sendResponseStatus notFound404 $
@@ -260,31 +266,46 @@ getAccountEncryptionKeyR addrText = do
   where doGetEncryptionKey = withBestBlockHash Nothing (getAccountInfo addrText)
 
 
--- |Get the cost of a transaction, based on its type. The transaction type is
--- given as a "type" parameter. An additional parameter is "numSignatures" that
--- defaults to one if not present.
---
--- TODO: This currently assumes a conversion factor of 100 from
--- energy to GTU.
+-- |Get the cost of a transaction, based on its type. The following query parameters are supported
+-- - "type", the type of the transaction. This is mandatory.
+-- - "numSignatures", the number of signatures on the transaction, defaults to 1 if not present.
+-- - "memoSize", the size of the transfer memo. Only supported if the node is running protocol version 2 or higher, and
+--   only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
 getTransactionCostR :: Handler TypedContent
-getTransactionCostR = withExchangeRate $ \rate -> do
+getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
   numSignatures <- fromMaybe "1" <$> lookupGetParam "numSignatures"
   case readMaybe (Text.unpack numSignatures) of
-    Just x | x > 0 -> handleTransactionCost rate x
+    Just x | x > 0 -> handleTransactionCost pv rate x
     _ -> respond400Error (EMParseError "Could not parse `numSignatures` value.") RequestInvalid
 
   where
-      handleTransactionCost rate numSignatures = do
-          lookupGetParam "type" >>= \case
+      handleTransactionCost pv rate numSignatures = do
+        transactionType <- lookupGetParam "type"
+        -- compute the additional size of the transaction based on the memo
+        -- this only applies to transfer and encrypted transfer transaction types.
+        memoPayloadSize <- do
+          lookupGetParam "memoSize" >>= \case
+            Nothing -> return 0
+            Just memoText ->
+              case readMaybe (Text.unpack memoText) :: Maybe Word32 of
+                Nothing -> respond400Error (EMParseError "Could not parse `memoSize` value.") RequestInvalid
+                -- NB: In protocol version 1 the memo is not supported. This
+                -- implementation assumes that the transaction memo will be
+                -- supported in all future versions of the node.
+                -- The memo is charged for purely on its size. The "2 +" is there because the memo
+                -- is serialized by prepending 2 bytes for its length.
+                Just msize | pv /= P1 -> return $ fromIntegral (2 + msize)
+                           | otherwise -> respond404Error EMActionNotCurrentlySupported
+        case transactionType of
             Nothing -> respond400Error EMMissingParameter RequestInvalid
             Just tty -> case Text.unpack tty of
               "simpleTransfer" -> do
-                let energyCost = simpleTransferEnergyCost simpleTransferPayloadSize numSignatures
+                let energyCost = simpleTransferEnergyCost (simpleTransferPayloadSize + memoPayloadSize) numSignatures
                 sendResponse $ object ["cost" .= computeCost rate energyCost
                                       , "energy" .= energyCost
                                       ]
               y | y == "encryptedTransfer" -> do
-                let energyCost = encryptedTransferEnergyCost encryptedTransferPayloadSize numSignatures
+                let energyCost = encryptedTransferEnergyCost (encryptedTransferPayloadSize + memoPayloadSize) numSignatures
                 sendResponse $ object ["cost" .= computeCost rate energyCost
                                       , "energy" .= energyCost
                                       ]
@@ -299,24 +320,32 @@ getTransactionCostR = withExchangeRate $ \rate -> do
                                           , "energy" .= energyCost
                                           ]
               tty' -> respond400Error (EMParseError $ "Could not parse transaction type: " <> tty') RequestInvalid
-      fetchUpdates :: ClientMonad IO (Either String EnergyRate)
+      fetchUpdates :: ClientMonad IO (Either String (EnergyRate, ProtocolVersion))
       fetchUpdates = do
-          bbh <- getBestBlockHash
-          summary <- getBlockSummary bbh
-          -- This extraction of the parameter is not ideal for two reasons
-          -- - this is the exchange rate in the best block, which could already be obsolete.
-          --   This is not likely not matter since block times 10s on average, and it is always the case
-          --   that the transaction is committed after the current time. In any case this is only an estimate.
-          -- - It is manually parsing the return value, instead of using the Updates type. This should be fixed
-          --   and we want to use the same calculation in concordium-client, however that requires more restructuring
-          --   of the dependencies. The current solution is good enough in the meantime.
-          let energyRateParser = AE.withObject "Block summary" $ \obj -> do
-                updates <- obj AE..: "updates"
-                chainParameters <- updates AE..: "chainParameters"
-                euroPerEnergy <- chainParameters AE..: "euroPerEnergy"
-                microGTUPerEuro <- chainParameters AE..: "microGTUPerEuro"
-                return $ computeEnergyRate microGTUPerEuro euroPerEnergy
-          return $ parseEither energyRateParser =<< summary
+          getConsensusStatus >>= \case
+            Left err -> return $ Left err
+            Right cs -> case parseEither (withObject "Best block hash" $ \v -> v .: "bestBlock") cs of
+              Left err -> return $ Left err
+              Right bbh -> do
+                summary <- getBlockSummary bbh
+                -- This extraction of the parameter is not ideal for two reasons
+                -- - this is the exchange rate in the best block, which could already be obsolete.
+                --   This is not likely not matter since block times 10s on average, and it is always the case
+                --   that the transaction is committed after the current time. In any case this is only an estimate.
+                -- - It is manually parsing the return value, instead of using the Updates type. This should be fixed
+                --   and we want to use the same calculation in concordium-client, however that requires more restructuring
+                --   of the dependencies. The current solution is good enough in the meantime.
+                let energyRateParser = AE.withObject "Block summary" $ \obj -> do
+                      updates <- obj AE..: "updates"
+                      chainParameters <- updates AE..: "chainParameters"
+                      euroPerEnergy <- chainParameters AE..: "euroPerEnergy"
+                      microGTUPerEuro <- chainParameters AE..: "microGTUPerEuro"
+                      return $ computeEnergyRate microGTUPerEuro euroPerEnergy
+                return $ do
+                      rate <- parseEither energyRateParser =<< summary
+                      -- the old node that supported only P1 version did not return the protocol version in consensus status.
+                      pv <- parseEither (withObject "Protocol version" $ \v -> (v AE..:! "protocolVersion" AE..!= P1)) cs
+                      return (rate, pv)
       withExchangeRate = runGRPC fetchUpdates
 putCredentialR :: Handler TypedContent
 putCredentialR =
@@ -386,6 +415,10 @@ getSimpleTransactionStatus i trHash = do
             s -> throwError ("unexpected \"status\": " <> s)
         _ -> throwError "expected null or object"
   where
+    -- attach a memo to the pairs.
+    addMemo [TransferMemo memo] xs = ("memo" .= memo):xs
+    addMemo _ xs = xs
+
     outcomeToPairs :: TransactionSummary -> Either String [Pair]
     outcomeToPairs TransactionSummary{..} =
       (["transactionHash" .= tsHash
@@ -400,28 +433,29 @@ getSimpleTransactionStatus i trHash = do
               return ["outcome" .= String "success"]
             es ->
               Left $ "Unexpected outcome of credential deployment: " ++ show es
-        TSTAccountTransaction (Just TTTransfer) ->
+        (viewTransfer -> True) -> -- transaction is either a transfer or transfer with memo
           case tsResult of
-            TxSuccess [Transferred{etTo = AddressAccount addr,..}] ->
-              return ["outcome" .= String "success",
-                      "to" .= addr,
-                      "amount" .= etAmount]
+            TxSuccess (Transferred{etTo = AddressAccount addr,..}:mmemo) ->
+              return $ addMemo mmemo
+                ["outcome" .= String "success",
+                 "to" .= addr,
+                 "amount" .= etAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
               Left $ "Unexpected outcome of simple transfer: " ++ show es
-        TSTAccountTransaction (Just TTEncryptedAmountTransfer) ->
+        (viewEncryptedTransfer -> True) ->
           case tsResult of
-            TxSuccess [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}] ->
-              return ["outcome" .= String "success",
-                      "sender" .= earAccount,
-                      "to" .= neaAccount,
-                      "encryptedAmount" .= neaEncryptedAmount,
-                      "inputEncryptedAmount" .= earInputAmount,
-                      "aggregatedIndex" .= earUpToIndex,
-                      "newSelfEncryptedAmount" .= earNewAmount]
+            TxSuccess (EncryptedAmountsRemoved{..}:NewEncryptedAmount{..}:mmemo) ->
+              return $ addMemo mmemo ["outcome" .= String "success",
+                 "sender" .= earAccount,
+                 "to" .= neaAccount,
+                 "encryptedAmount" .= neaEncryptedAmount,
+                 "inputEncryptedAmount" .= earInputAmount,
+                 "aggregatedIndex" .= earUpToIndex,
+                 "newSelfEncryptedAmount" .= earNewAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
-              Left $ "Unexpected outcome of encrypted transfer: " ++ show es
+              Left $ "Unexpected outcome of encrypted transfer: " ++ show es  
         TSTAccountTransaction (Just TTTransferToPublic) ->
           case tsResult of
             TxSuccess [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}] ->
@@ -456,6 +490,24 @@ getSimpleTransactionStatus i trHash = do
           | all (h==) r -> return h
           | otherwise -> return ["outcome" .= String "ambiguous"]
 
+-- helper functions to be used in view patterns to match both transfers and
+-- transfers with memo.
+viewTransfer :: TransactionSummaryType -> Bool
+viewTransfer (TSTAccountTransaction (Just TTTransfer)) = True
+viewTransfer (TSTAccountTransaction (Just TTTransferWithMemo)) = True
+viewTransfer _ = False
+
+viewEncryptedTransfer :: TransactionSummaryType -> Bool
+viewEncryptedTransfer (TSTAccountTransaction (Just TTEncryptedAmountTransfer)) = True
+viewEncryptedTransfer (TSTAccountTransaction (Just TTEncryptedAmountTransferWithMemo)) = True
+viewEncryptedTransfer _ = False
+
+viewScheduledTransfer :: TransactionSummaryType -> Bool
+viewScheduledTransfer (TSTAccountTransaction (Just TTTransferWithSchedule)) = True
+viewScheduledTransfer (TSTAccountTransaction (Just TTTransferWithScheduleAndMemo)) = True
+viewScheduledTransfer _ = False
+
+
 -- Get the status of the submission.
 getSubmissionStatusR :: Text -> Handler TypedContent
 getSubmissionStatusR submissionId =
@@ -465,8 +517,19 @@ getSubmissionStatusR submissionId =
       i <- internationalize
       runGRPC (getSimpleTransactionStatus i txHash) (sendResponse . toJSON)
 
-getAccountTransactionsR :: Text -> Handler TypedContent
-getAccountTransactionsR addrText = do
+-- |Whether to include memos in formatted account transactions or not.
+-- If not, transfers with memos are mapped to a corresponding transfer without a memo.
+data IncludeMemos = IncludeMemo | ExcludeMemo
+    deriving(Eq, Show)
+
+getAccountTransactionsV0R :: Text -> Handler TypedContent
+getAccountTransactionsV0R = getAccountTransactionsWorker ExcludeMemo
+
+getAccountTransactionsV1R :: Text -> Handler TypedContent
+getAccountTransactionsV1R = getAccountTransactionsWorker IncludeMemo
+
+getAccountTransactionsWorker :: IncludeMemos -> Text -> Handler TypedContent
+getAccountTransactionsWorker includeMemos addrText = do
   i <- internationalize
   case addressFromText addrText of
     Left _ -> respond400Error EMMalformedAddress RequestInvalid
@@ -593,7 +656,7 @@ getAccountTransactionsR addrText = do
               -- Limit the number of returned rows
               E.limit limit
               return (e, s)
-          case mapM (formatEntry rawReason i addr) entries of
+          case mapM (formatEntry includeMemos rawReason i addr) entries of
             Left err -> do
               $(logError) $ "Error decoding transaction: " <> Text.pack err
               sendResponseStatus badGateway502 $ object [
@@ -612,12 +675,15 @@ timestampToFracSeconds :: Timestamp -> Double
 timestampToFracSeconds Timestamp{..} = fromRational (toInteger tsMillis Rational.% 1000)
 
 -- |Format a transaction affecting an account.
-formatEntry :: Bool -- ^ Whether to include a raw reject reason for account transactions or not.
+formatEntry :: IncludeMemos -- ^Whether to include memos in the enties. If not,
+                           -- then transfers with memos are mapped to
+                           -- corresponding transfers without memos.
+            -> Bool -- ^ Whether to include a raw reject reason for account transactions or not.
             -> I18n -- ^ Internationalization of messages.
             -> AccountAddress -- ^ Address of the account whose transactions we are formatting.
             -> (Entity Entry, Entity Summary) -- ^ Database entry to be formatted.
             -> Either String Value
-formatEntry rawRejectReason i self (Entity key Entry{}, Entity _ Summary{..}) = do
+formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Summary{..}) = do
   let blockDetails = ["blockHash" .= unBSS summaryBlock,
                       "blockTime" .= timestampToFracSeconds summaryTimestamp
                      ]
@@ -670,27 +736,40 @@ formatEntry rawRejectReason i self (Entity key Entry{}, Entity _ Summary{..}) = 
           ]
       ]
     AE.Success (Left TransactionSummary{..}) -> do
+      let addMemo mmemo ps =
+            case includeMemos of
+              ExcludeMemo -> ps
+              IncludeMemo -> case mmemo of
+                [TransferMemo{..}] -> ("memo" .= tmMemo):ps
+                _ -> ps
       let (origin, selfOrigin) = case tsSender of
                                    Just sender
                                      | sender == self -> (object ["type" .= ("self" :: Text)], True)
                                      | otherwise -> (object ["type" .= ("account" :: Text), "address" .= sender], False)
                                    Nothing -> (object ["type" .= ("none" :: Text)], False)
 
+          -- If ExcludeMemo then we filter out the TransferMemo event from the
+          -- list of events in order to maintain backwards compatibility.
+          filterTransferMemo x = includeMemos == IncludeMemo || case x of
+            TransferMemo{} -> False
+            _ -> True
           (resultDetails, subtotal) = case tsResult of
-            TxSuccess evts -> ((["outcome" .= ("success" :: Text), "events" .= fmap (i18n i) evts]
+            TxSuccess evts -> ((["outcome" .= ("success" :: Text), "events" .= (fmap (i18n i) . filter filterTransferMemo $ evts)]
                                 <> case (tsType, evts) of
-                                     (TSTAccountTransaction (Just TTTransfer), [Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr)]) ->
-                                       ["transferSource" .= fromAddr,
-                                        "transferDestination" .= toAddr,
-                                        "transferAmount" .= amt]
-                                     (TSTAccountTransaction (Just TTEncryptedAmountTransfer), [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
-                                       ["transferSource" .= earAccount,
-                                        "transferDestination" .= neaAccount,
-                                        "encryptedAmount" .= neaEncryptedAmount,
-                                        "aggregatedIndex" .= earUpToIndex,
-                                        "inputEncryptedAmount" .= earInputAmount,
-                                        "newIndex" .= neaNewIndex,
-                                        "newSelfEncryptedAmount" .= earNewAmount]
+                                     (viewTransfer -> True, Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr):mmemo) ->
+                                       addMemo mmemo [
+                                         "transferSource" .= fromAddr,
+                                         "transferDestination" .= toAddr,
+                                         "transferAmount" .= amt]
+                                     (viewEncryptedTransfer -> True, EncryptedAmountsRemoved{..}:NewEncryptedAmount{..}:mmemo) ->
+                                       addMemo mmemo [
+                                         "transferSource" .= earAccount,
+                                         "transferDestination" .= neaAccount,
+                                         "encryptedAmount" .= neaEncryptedAmount,
+                                         "aggregatedIndex" .= earUpToIndex,
+                                         "inputEncryptedAmount" .= earInputAmount,
+                                         "newIndex" .= neaNewIndex,
+                                         "newSelfEncryptedAmount" .= earNewAmount]
                                      (TSTAccountTransaction (Just TTTransferToPublic), [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}]) ->
                                        ["transferSource" .= earAccount,
                                         "amountAdded" .= aabdAmount,
@@ -701,16 +780,18 @@ formatEntry rawRejectReason i self (Entity key Entry{}, Entity _ Summary{..}) = 
                                        ["transferSource" .= eaaAccount,
                                         "amountSubtracted" .= eaaAmount,
                                         "newSelfEncryptedAmount" .= eaaNewAmount]
-                                     (TSTAccountTransaction (Just TTTransferWithSchedule), [TransferredWithSchedule{..}]) ->
-                                       ["transferDestination" .= etwsTo,
-                                        "transferAmount" .= foldl' (+) 0 (map snd etwsAmount)]
-
+                                     (viewScheduledTransfer -> True, TransferredWithSchedule{..}:mmemo) ->
+                                       addMemo mmemo [
+                                         "transferDestination" .= etwsTo,
+                                         "transferAmount" .= foldl' (+) 0 (map snd etwsAmount)]
                                      _ -> []), eventSubtotal self evts )
             TxReject reason ->
               let rawReason = if rawRejectReason then ["rawRejectReason" .= reason] else []
               in (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason] ++ rawReason, Nothing)
 
-          details = object $ ["type" .= renderTransactionSummaryType tsType, "description" .= i18n i tsType] <> resultDetails
+          details = case includeMemos of
+            IncludeMemo -> object $ ["type" .= renderTransactionSummaryType tsType, "description" .= i18n i tsType] <> resultDetails
+            ExcludeMemo -> object $ ["type" .= renderTransactionSummaryType (forgetMemoInSummary tsType), "description" .= i18n i tsType] <> resultDetails
 
           costs
             | selfOrigin = case subtotal of
@@ -755,13 +836,16 @@ renderTransactionType TTUpdateBakerStake = "updateBakerStake"
 renderTransactionType TTUpdateBakerKeys = "updateBakerKeys"
 renderTransactionType TTUpdateBakerRestakeEarnings = "updateBakerRestakeEarnings"
 renderTransactionType TTTransfer = "transfer"
+renderTransactionType TTTransferWithMemo = "transferWithMemo"
 renderTransactionType TTAddBaker = "addBaker"
 renderTransactionType TTRemoveBaker = "removeBaker"
 renderTransactionType TTUpdateCredentialKeys = "updateAccountKeys"
 renderTransactionType TTEncryptedAmountTransfer = "encryptedAmountTransfer"
+renderTransactionType TTEncryptedAmountTransferWithMemo = "encryptedAmountTransferWithMemo"
 renderTransactionType TTTransferToEncrypted = "transferToEncrypted"
 renderTransactionType TTTransferToPublic = "transferToPublic"
 renderTransactionType TTTransferWithSchedule = "transferWithSchedule"
+renderTransactionType TTTransferWithScheduleAndMemo = "transferWithScheduleAndMemo"
 renderTransactionType TTUpdateCredentials = "updateCredentials"
 renderTransactionType TTRegisterData = "registerData"
 
@@ -770,6 +854,17 @@ renderTransactionSummaryType (TSTAccountTransaction (Just tt)) = renderTransacti
 renderTransactionSummaryType (TSTAccountTransaction Nothing) = "Malformed account transaction"
 renderTransactionSummaryType (TSTCredentialDeploymentTransaction _) = "deployCredential"
 renderTransactionSummaryType (TSTUpdateTransaction _) = "chainUpdate"
+
+forgetMemoTransactionType :: TransactionType -> TransactionType
+forgetMemoTransactionType TTTransferWithMemo = TTTransfer
+forgetMemoTransactionType TTEncryptedAmountTransferWithMemo = TTEncryptedAmountTransfer
+forgetMemoTransactionType TTTransferWithScheduleAndMemo = TTTransferWithSchedule
+forgetMemoTransactionType other = other
+
+forgetMemoInSummary :: TransactionSummaryType -> TransactionSummaryType
+forgetMemoInSummary (TSTAccountTransaction (Just tt)) = TSTAccountTransaction $ Just $ forgetMemoTransactionType tt
+forgetMemoInSummary other = other
+
 
 eventSubtotal :: AccountAddress -> [Event] -> Maybe Integer
 eventSubtotal self evts = case catMaybes $ eventCost <$> evts of

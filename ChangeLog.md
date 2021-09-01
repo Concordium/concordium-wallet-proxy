@@ -1,6 +1,16 @@
 # Changelog for wallet-proxy
 
-## Unreleased changes
+## 0.7.0
+
+ - Add support for transfers with a memo.
+   - New endpoint v1/accTransactions which lists transfers with a memo.
+   - v0/transactionCost endpoint is updated to support new transfer types. The
+     change is backwards compatible.
+   - Existing v0/accTransactions endpoint converts outcomes of new transaction
+     types to old ones.
+   - Minimum supported node version is bumped to 1.2.
+
+## 0.6.0
 
  - Disable sessions since we don't use them.
  - Add query parameter `includeRawRejectReason` to the `accTransactions` query.
