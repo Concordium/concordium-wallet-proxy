@@ -803,7 +803,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
           encryptedCost = case tsSender of
             Just sender
               | sender == self -> case (tsType, tsResult) of
-                  (TSTAccountTransaction (Just TTEncryptedAmountTransfer), TxSuccess [EncryptedAmountsRemoved{..}, NewEncryptedAmount{..}]) ->
+                  (viewEncryptedTransfer -> True, TxSuccess (EncryptedAmountsRemoved{..}:NewEncryptedAmount{..}:_)) ->
                     ["encrypted" .= object ["encryptedAmount" .= neaEncryptedAmount,
                                             "newStartIndex" .= earUpToIndex,
                                             "newSelfEncryptedAmount" .= earNewAmount]]
@@ -814,7 +814,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                     ["encrypted" .= object ["newSelfEncryptedAmount" .= eaaNewAmount]]
                   _ -> []
               | otherwise -> case (tsType, tsResult) of
-                  (TSTAccountTransaction (Just TTEncryptedAmountTransfer), TxSuccess [EncryptedAmountsRemoved{}, NewEncryptedAmount{..}]) ->
+                  (viewEncryptedTransfer -> True, TxSuccess (EncryptedAmountsRemoved{}:NewEncryptedAmount{..}:_)) ->
                     ["encrypted" .= object ["encryptedAmount" .= neaEncryptedAmount,
                                             "newIndex" .= neaNewIndex]]
                   _ -> []
