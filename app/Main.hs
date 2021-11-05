@@ -87,7 +87,8 @@ main = do
         Right (dropAccount, dropKeys) -> return . Just $ GTUDropData {..}
   Right ipInfo <- AE.eitherDecode' <$> LBS.readFile pcIpInfo
   runStderrLoggingT $ withPostgresqlPool pcDBConnString 10 $ \dbConnectionPool -> liftIO $ do
-    runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
+    -- do not care about the gtu receipients database if gtu drop is not enabled
+    when (isJust gtuDropData) $ runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
     runExceptT (mkGrpcClient pcGRPC (Just logm)) >>= \case
       Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
       Right cfg -> do
