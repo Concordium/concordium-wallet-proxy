@@ -619,7 +619,8 @@ getAccountTransactionsWorker includeMemos addrText = do
           -- check if the transaction is encrypting, decrypting, or transferring an encrypted amount.
           in E.where_ $ extractedType E.==. E.val (Just "encryptedAmountTransfer") E.||.
                         extractedType E.==. E.val (Just "transferToEncrypted") E.||.
-                        extractedType E.==. E.val (Just "transferToPublic")
+                        extractedType E.==. E.val (Just "transferToPublic") E.||.
+                        extractedType E.==. E.val (Just "encryptedAmountTransferWithMemo")
         Just _ -> Nothing
 
       rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"

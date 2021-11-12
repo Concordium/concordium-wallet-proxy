@@ -1,5 +1,10 @@
 # Changelog for wallet-proxy
 
+## 0.8.0
+ - Fix bug where encrypted transfers with memo were not included in transaction
+   list when the encrypted filter was applied.
+ - Do not create gtu drop table in the database if not configured for GTU drop.
+
 ## 0.7.0
 
  - Add support for transfers with a memo.
