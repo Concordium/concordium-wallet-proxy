@@ -715,6 +715,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
     AE.Success (Right v@FinalizationRewards{..}) ->
       return [
       "origin" .= object ["type" .= ("reward" :: Text)],
+      -- FIXME: Only works if canonical address.
         "total" .= Map.lookup self (accountAmounts stoFinalizationRewards), -- this should always return Just due to the way we look up.
         "details" .= object [
           "type" .= ("finalizationReward" :: Text),
@@ -726,8 +727,8 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
     AE.Success (Right v@BlockReward{..}) ->
       return [
       "origin" .= object ["type" .= ("reward" :: Text)],
-        "total" .= if self == stoBaker && self == stoFoundationAccount then stoBakerReward + stoFoundationCharge
-                   else if self == stoBaker then stoBakerReward
+        "total" .= if sameAccount self stoBaker && sameAccount self stoFoundationAccount then stoBakerReward + stoFoundationCharge
+                   else if sameAccount self stoBaker then stoBakerReward
                    else stoFoundationCharge, -- due to the way we index, that is the only remaining option
         "details" .= object [
           "type" .= ("blockReward" :: Text),
@@ -745,7 +746,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                 _ -> ps
       let (origin, selfOrigin) = case tsSender of
                                    Just sender
-                                     | sender == self -> (object ["type" .= ("self" :: Text)], True)
+                                     | sameAccount sender self -> (object ["type" .= ("self" :: Text)], True)
                                      | otherwise -> (object ["type" .= ("account" :: Text), "address" .= sender], False)
                                    Nothing -> (object ["type" .= ("none" :: Text)], False)
 
@@ -803,7 +804,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
 
           encryptedCost = case tsSender of
             Just sender
-              | sender == self -> case (tsType, tsResult) of
+              | sameAccount sender self -> case (tsType, tsResult) of
                   (viewEncryptedTransfer -> True, TxSuccess (EncryptedAmountsRemoved{..}:NewEncryptedAmount{..}:_)) ->
                     ["encrypted" .= object ["encryptedAmount" .= neaEncryptedAmount,
                                             "newStartIndex" .= earUpToIndex,
@@ -828,6 +829,17 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
           "transactionHash" .= tsHash
           ] <> costs <> encryptedCost
   return $ object $ ["id" .= key] <> blockDetails <> transactionDetails
+
+-- |Check whether the two addresses point to the same account. In protocol
+-- versions 1 and 2 this should just be account address equality, and in
+-- protocol version 3 it should technically be checking on the chain as well
+-- since in principle there might be accounts which clash on the first 29 bytes.
+-- But that will not happen in practice and if it does before we update to P3 we
+-- can update the proxy with a more expensive and complex check. After we have
+-- successfully updated to P3 and there have been no clashes, there will be no
+-- further possible clashes.
+sameAccount :: AccountAddress -> AccountAddress -> Bool
+sameAccount a1 a2 = accountAddressEmbed a2 == accountAddressEmbed a2
 
 renderTransactionType :: TransactionType -> Text
 renderTransactionType TTDeployModule = "deployModule"
