@@ -34,6 +34,7 @@ import Yesod hiding (InternalError)
 import qualified Yesod
 import Database.Persist.Sql
 import Data.Maybe(catMaybes, fromMaybe, isJust)
+import Data.Either (fromRight)
 import Data.Time.Clock.POSIX
 import qualified Database.Esqueleto as E
 import qualified Database.Esqueleto.PostgreSQL.JSON as EJ
@@ -457,7 +458,7 @@ getSimpleTransactionStatus i trHash = do
                  "newSelfEncryptedAmount" .= earNewAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
-              Left $ "Unexpected outcome of encrypted transfer: " ++ show es  
+              Left $ "Unexpected outcome of encrypted transfer: " ++ show es
         TSTAccountTransaction (Just TTTransferToPublic) ->
           case tsResult of
             TxSuccess [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}] ->
@@ -530,17 +531,29 @@ getAccountTransactionsV0R = getAccountTransactionsWorker ExcludeMemo
 getAccountTransactionsV1R :: Text -> Handler TypedContent
 getAccountTransactionsV1R = getAccountTransactionsWorker IncludeMemo
 
--- |List transactions for the account. This currently only supports querying
--- accounts via their canonical addresses. This is all that is needed at the
--- moment for all the consumers, but it would be good to support querying by all
--- aliases in the future. This is not hard to add, but it does mean that a node
--- has to be queried to get the list of transactions.
+-- |List transactions for the account.
 getAccountTransactionsWorker :: IncludeMemos -> Text -> Handler TypedContent
 getAccountTransactionsWorker includeMemos addrText = do
   i <- internationalize
-  case addressFromText addrText of
-    Left _ -> respond400Error EMMalformedAddress RequestInvalid
-    Right addr -> do
+  -- Get the canonical address of the account.
+  -- This fails only if we cannot get an understandable response from the GRPC, i.e., if the node is not reachable,
+  -- or if it returns invalid JSON.
+  let getAddress k =
+        case addressFromText addrText of
+          Left _ -> respond400Error EMMalformedAddress RequestInvalid
+          Right givenAddr -> do
+            let doGetAccAddress = do
+                  lastFinBlock <- getLastFinalBlockHash
+                  ai <- getAccountInfo addrText lastFinBlock
+                  case ai of
+                    Right Null -> return $ Right givenAddr -- the account does not exist on the node, assume the given address is the one we want.
+                    -- if the account info does not have the account address field then the node does not support P3 protocol, so no
+                    -- aliases are supported
+                    Right val -> return $ Right (fromRight givenAddr (parseEither (withObject "account info" (.: "accountAddress")) val))
+                    -- This should not happen, accountInfo always returns valid JSON
+                    Left err -> return $ Left err
+            runGRPC doGetAccAddress k
+  getAddress $ \addr -> do
       order <- lookupGetParam "order"
       let (ordering, ordType :: Text, ordRel) = case order of
                         Just (Text.unpack . Text.toLower -> ('d':_)) -> (E.desc, "descending", (E.<.))
