@@ -713,6 +713,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
     AE.Success (Right v@BakingRewards{..}) ->
       return [
       "origin" .= object ["type" .= ("reward" :: Text)],
+        -- This lookup is correct in presence of aliases since rewards are given to canonical addresses.
         "total" .= Map.lookup self (accountAmounts stoBakerRewards), -- this should always return Just due to the way we look up.
         "details" .= object [
           "type" .= ("bakingReward" :: Text),
@@ -735,7 +736,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
     AE.Success (Right v@FinalizationRewards{..}) ->
       return [
       "origin" .= object ["type" .= ("reward" :: Text)],
-      -- FIXME: Only works if canonical address.
+        -- This lookup is correct in presence of aliases since rewards are given to canonical addresses.
         "total" .= Map.lookup self (accountAmounts stoFinalizationRewards), -- this should always return Just due to the way we look up.
         "details" .= object [
           "type" .= ("finalizationReward" :: Text),
