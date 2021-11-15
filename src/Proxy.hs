@@ -13,6 +13,7 @@ module Proxy where
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString as BS
 
+import Data.Version (showVersion)
 import qualified Data.Ratio as Rational
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Map.Strict as Map
@@ -47,6 +48,7 @@ import qualified Data.Text.Encoding as Text
 
 import Data.Time.Clock as Clock
 
+import Paths_wallet_proxy (version)
 import Concordium.Types
 import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
@@ -884,7 +886,7 @@ eventSubtotal self evts = case catMaybes $ eventCost <$> evts of
     [] -> Nothing
     l -> Just (sum l)
   where
-    isSelf (AddressAccount acc) = self == acc
+    isSelf (AddressAccount acc) = sameAccount self acc
     isSelf _ = False
     eventCost ContractInitialized{..} = Just (- toInteger ecAmount)
     eventCost Updated{..}
@@ -896,7 +898,7 @@ eventSubtotal self evts = case catMaybes $ eventCost <$> evts of
       (False, True) -> Just (toInteger etAmount)
       (False, False) -> Nothing
     eventCost TransferredWithSchedule{..} =
-      if self == etwsFrom then -- self transfers are not possible with schedule
+      if sameAccount self etwsFrom then -- self transfers are not possible with schedule
         Just (- toInteger (sum . map snd $ etwsAmount))
       else Just (toInteger (sum . map snd $ etwsAmount))
     eventCost AmountAddedByDecryption{..} = Just $ toInteger aabdAmount
@@ -1083,7 +1085,7 @@ getHealthR =
   runGRPC doGetBlockFinalInfo $ \case
       Nothing -> do
         $(logError) $ "Could not get response from GRPC."
-        sendResponse $ object $ ["healthy" .= False, "reason" .= ("Could not get response from GRPC.":: String)]
+        sendResponse $ object $ ["healthy" .= False, "reason" .= ("Could not get response from GRPC.":: String), "version" .= showVersion version]
       Just lastFinalBlockInfo -> do
         $(logInfo) "Successfully got best block info."
         _ :: [(Entity Entry, Entity Summary)] <- runDB $ E.select $
@@ -1094,13 +1096,13 @@ getHealthR =
         case fromJSON lastFinalBlockInfo of
           Error _ -> do
             i <- internationalize
-            sendResponseStatus badGateway502 $ object ["errorMessage" .= i18n i EMGRPCError, "error" .= fromEnum InternalError]
+            sendResponseStatus badGateway502 $ object ["errorMessage" .= i18n i EMGRPCError, "error" .= fromEnum InternalError, "version" .= showVersion version]
           Success (bir :: BlockInfoResult) -> do
             currentTime <- liftIO Clock.getCurrentTime
             Proxy{..} <- getYesod
             if (Clock.diffUTCTime currentTime (birBlockSlotTime bir)) < (Clock.secondsToNominalDiffTime $ fromIntegral healthTolerance)
-            then sendResponse $ object $ ["healthy" .= True, "lastFinalTime" .= (birBlockSlotTime bir)]
-            else sendResponse $ object $ ["healthy" .= False, "reason" .= ("The last final block is too old.":: String), "lastFinalTime" .= (birBlockSlotTime bir)]
+            then sendResponse $ object $ ["healthy" .= True, "lastFinalTime" .= (birBlockSlotTime bir), "version" .= showVersion version]
+            else sendResponse $ object $ ["healthy" .= False, "reason" .= ("The last final block is too old.":: String), "lastFinalTime" .= (birBlockSlotTime bir), "version" .= showVersion version]
   where
     doGetBlockFinalInfo :: ClientMonad IO (Either String (Maybe Value))
     doGetBlockFinalInfo = do
