@@ -50,11 +50,11 @@ import Data.Time.Clock as Clock
 
 import Paths_wallet_proxy (version)
 import Concordium.Types
+import Concordium.Types.Queries
 import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
 
-import Concordium.Client.Cli(BlockInfoResult, birBlockSlotTime)
 import Concordium.Client.GRPC
 import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
                                            transferWithSchedulePayloadSize,
@@ -530,6 +530,11 @@ getAccountTransactionsV0R = getAccountTransactionsWorker ExcludeMemo
 getAccountTransactionsV1R :: Text -> Handler TypedContent
 getAccountTransactionsV1R = getAccountTransactionsWorker IncludeMemo
 
+-- |List transactions for the account. This currently only supports querying
+-- accounts via their canonical addresses. This is all that is needed at the
+-- moment for all the consumers, but it would be good to support querying by all
+-- aliases in the future. This is not hard to add, but it does mean that a node
+-- has to be queried to get the list of transactions.
 getAccountTransactionsWorker :: IncludeMemos -> Text -> Handler TypedContent
 getAccountTransactionsWorker includeMemos addrText = do
   i <- internationalize
@@ -841,7 +846,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
 -- successfully updated to P3 and there have been no clashes, there will be no
 -- further possible clashes.
 sameAccount :: AccountAddress -> AccountAddress -> Bool
-sameAccount a1 a2 = accountAddressEmbed a2 == accountAddressEmbed a2
+sameAccount a1 a2 = accountAddressEmbed a1 == accountAddressEmbed a2
 
 renderTransactionType :: TransactionType -> Text
 renderTransactionType TTDeployModule = "deployModule"
@@ -1097,12 +1102,12 @@ getHealthR =
           Error _ -> do
             i <- internationalize
             sendResponseStatus badGateway502 $ object ["errorMessage" .= i18n i EMGRPCError, "error" .= fromEnum InternalError, "version" .= showVersion version]
-          Success (bir :: BlockInfoResult) -> do
+          Success (bir :: BlockInfo) -> do
             currentTime <- liftIO Clock.getCurrentTime
             Proxy{..} <- getYesod
-            if (Clock.diffUTCTime currentTime (birBlockSlotTime bir)) < (Clock.secondsToNominalDiffTime $ fromIntegral healthTolerance)
-            then sendResponse $ object $ ["healthy" .= True, "lastFinalTime" .= (birBlockSlotTime bir), "version" .= showVersion version]
-            else sendResponse $ object $ ["healthy" .= False, "reason" .= ("The last final block is too old.":: String), "lastFinalTime" .= (birBlockSlotTime bir), "version" .= showVersion version]
+            if (Clock.diffUTCTime currentTime (biBlockSlotTime bir)) < (Clock.secondsToNominalDiffTime $ fromIntegral healthTolerance)
+            then sendResponse $ object $ ["healthy" .= True, "lastFinalTime" .= (biBlockSlotTime bir), "version" .= showVersion version]
+            else sendResponse $ object $ ["healthy" .= False, "reason" .= ("The last final block is too old.":: String), "lastFinalTime" .= (biBlockSlotTime bir), "version" .= showVersion version]
   where
     doGetBlockFinalInfo :: ClientMonad IO (Either String (Maybe Value))
     doGetBlockFinalInfo = do

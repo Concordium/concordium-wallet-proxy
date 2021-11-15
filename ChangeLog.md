@@ -4,6 +4,8 @@
  - Fix bug where encrypted transfers with memo were not included in transaction
    list when the encrypted filter was applied.
  - Do not create gtu drop table in the database if not configured for GTU drop.
+ - Add support for account aliases.
+
 
 ## 0.7.0
 
