@@ -658,7 +658,8 @@ This must be a valid JSON file which contains an array of JSON objects of the fo
 {
   "metadata": {
     "issuanceStart": "https://identity.provider/issuance-start",
-    "icon": "base 64 encoded png image"
+    "icon": "base 64 encoded png image",
+    "support": "<support@identity-provider.id>"
   },
   "ipInfo": {
     "ipIdentity": 0,
@@ -699,6 +700,7 @@ Where
 - the `metadata` field needs to be constructed manually based on the desired setup and in communication with partners.
   - the `issuanceStart` link is where the wallet submits the initial identity creation request.
   - the `icon` needs to be a base64 encoded png image that should be obtained from the relevant identity provider.
+  - the `support` field must contain a valid support email of the identity provider.
 
 NB: It is OK to have the same identity provider listed multiple times in this file, i.e., the same identity provider could have two verification backends, in which case they would be listed twice in the list, the difference between the two instances being the `issuanceStart` and `icon` fields.
 
