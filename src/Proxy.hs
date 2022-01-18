@@ -807,6 +807,8 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                                        addMemo mmemo [
                                          "transferDestination" .= etwsTo,
                                          "transferAmount" .= foldl' (+) 0 (map snd etwsAmount)]
+                                     (TSTAccountTransaction (Just TTRegisterData), [DataRegistered{..}]) ->
+                                       ["registeredData" .= drData]
                                      _ -> []), eventSubtotal self evts )
             TxReject reason ->
               let rawReason = if rawRejectReason then ["rawRejectReason" .= reason] else []
