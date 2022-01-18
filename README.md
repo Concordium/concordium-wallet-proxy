@@ -482,6 +482,9 @@ It consists of the following fields:
   - `transferDestination`: account address of the destination of the transfer
   - `transferAmount`: amount of the transfer
   - in `v1` version if `type = transferWithScheduleAndMemo` then an additional field `memo` is present. It is a hex-encoded byte array.
+- The following field is present if the transaction is a register data
+  transaction.
+  - `registeredData`: hex encoding of the data that was registered
 
 For the purposes of the above, a simple transfer is a transaction of type `"transfer"` which transfers funds from one account to another.
 A transactions of type `"transfer"` is not considered a simple transfer if the destination is a smart contract instance.

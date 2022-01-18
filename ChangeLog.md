@@ -1,5 +1,9 @@
 # Changelog for wallet-proxy
 
+## 0.8.1
+ - Add the data field to a transaction list response when the transaction is a
+   register data transaction.
+
 ## 0.8.0
  - Fix bug where encrypted transfers with memo were not included in transaction
    list when the encrypted filter was applied.
