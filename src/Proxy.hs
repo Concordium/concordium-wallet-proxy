@@ -884,6 +884,8 @@ renderTransactionType TTTransferWithSchedule = "transferWithSchedule"
 renderTransactionType TTTransferWithScheduleAndMemo = "transferWithScheduleAndMemo"
 renderTransactionType TTUpdateCredentials = "updateCredentials"
 renderTransactionType TTRegisterData = "registerData"
+renderTransactionType TTConfigureBaker = "configureBaker"
+renderTransactionType TTConfigureDelegation = "configureDelegation"
 
 renderTransactionSummaryType :: TransactionSummaryType -> Text
 renderTransactionSummaryType (TSTAccountTransaction (Just tt)) = renderTransactionType tt
