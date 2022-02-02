@@ -135,6 +135,9 @@ translation = I18n {..}
         i18nEvent CredentialsUpdated{..} = "Credentials on account " <> descrAccount cuAccount <> " updated."
         i18nEvent DataRegistered{} = "Data registered on the chain."
         i18nEvent TransferMemo{..} = "Memo '" <> Text.pack (show tmMemo) <> "' included in a transfer." -- TODO: This would ideally try to render the Memo in a readable way, if it is a valid string or integer, say.
+        i18nEvent Interrupted{..} = "Execution of " <> descrInstance iAddress <> " triggered an operation."
+        i18nEvent Resumed{..} | rSuccess = "Operation succeeded and execution of " <> descrInstance rAddress <> " resumed."
+        i18nEvent Resumed{..} | otherwise = "Operation failed and execution of " <> descrInstance rAddress <> " resumed."
 
         i18nSpecialEvent BakingRewards{..} = "Baking rewards\n" <>
             Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)
