@@ -1,5 +1,8 @@
 # Changelog for wallet-proxy
 
+## Unreleased changes
+ - add support for events triggered by V1 smart contracts
+
 ## 0.8.2
  - Rename GTU to CCD in transaction details.
 
