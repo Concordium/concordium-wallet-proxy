@@ -29,7 +29,7 @@ import qualified Data.Aeson as AE
 import Data.Conduit(connect)
 import qualified Data.Serialize as S
 import Data.Conduit.Attoparsec  (sinkParserEither)
-import Network.HTTP.Types(badRequest400, notFound404, badGateway502)
+import Network.HTTP.Types(badRequest400, notFound404, badGateway502, conflict409)
 import Yesod hiding (InternalError)
 import qualified Yesod
 import Database.Persist.Sql
@@ -76,7 +76,7 @@ import Concordium.SQL.Helpers
 
 import Internationalization
 
-data ErrorCode = InternalError | RequestInvalid | DataNotFound
+data ErrorCode = InternalError | RequestInvalid | DataNotFound | Duplicate
     deriving(Eq, Show, Enum)
 
 data Proxy = Proxy {
@@ -171,6 +171,15 @@ respond404Error err = do
             "error" .= fromEnum DataNotFound
            ]
 
+-- |Terminate execution and respond with 409 'Conflict' status code.
+respond409Error :: Handler a
+respond409Error = do
+  i <- internationalize
+  sendResponseStatus conflict409 $
+    object ["errorMessage" .= i18n i EMDuplicate,
+            "error" .= fromEnum Duplicate
+           ]
+
 runGRPC :: ClientMonad IO (Either String a) -> (a -> Handler TypedContent) -> Handler TypedContent
 runGRPC c k = do
   cfg <- grpcEnvData <$> getYesod
@@ -186,12 +195,16 @@ runGRPC c k = do
         "error" .= fromEnum InternalError
         ]
     Right (Left err) -> do
-      $(logError) $ "GRPC call failed: " <> Text.pack err
-      i <- internationalize
-      sendResponseStatus badGateway502 $ object [
-        "errorMessage" .= i18n i EMGRPCError,
-        "error" .= fromEnum InternalError
-        ]
+      -- todo: fix this when the Concordium Client offers a more detailed result type.
+      if err == "gRPC error: Duplicate entry" then
+        respond409Error
+      else do
+        $(logError) $ "GRPC call failed: " <> Text.pack err
+        i <- internationalize
+        sendResponseStatus badGateway502 $ object [
+          "errorMessage" .= i18n i EMGRPCError,
+          "error" .= fromEnum InternalError
+          ]
     Right (Right a) -> k a
 
 
