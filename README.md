@@ -303,12 +303,24 @@ the node is alive the server will respond with a submission id which can be
 queried via the `/submissionStatus` endpoint.
 
 
+Submitting a duplicate credential will result in
+
+```console
+  {"error":3,"errorMessage":"The transaction is a duplicate"}
+```
+
 ## Submit transfer
 
 When submitting a transfer you should make a PUT request to `/v0/submitTransfer` endpoint.
 The data that should be sent is as the one returned from the library provided as part of the concordium-base repository.
 After submission of the transaction the responses are the same as for the submission of the credential. If successful
 a submission id is returned, which can be used to query the status of the transfer via the `/v0/submissionStatus` endpoint.
+
+Submitting a duplicate transaction will result in
+
+```console
+  {"error":3,"errorMessage":"The transaction is a duplicate"}
+```
 
 ## Get transactions
 

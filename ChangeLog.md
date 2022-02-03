@@ -1,5 +1,8 @@
 # Changelog for wallet-proxy
 
+## Unreleased changes
+ - PUT'ing duplicate credential deployments or transfers will now yield a 409 'Conflict' HTTP response code.
+
 ## 0.8.1
  - Add the data field to a transaction list response when the transaction is a
    register data transaction.

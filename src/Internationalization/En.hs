@@ -177,3 +177,4 @@ translation = I18n {..}
         i18nErrorMessage EMAccountDoesNotExist = "Account does not exist"
         i18nErrorMessage EMMissingParameter = "Missing parameter"
         i18nErrorMessage EMActionNotCurrentlySupported = "The required action is not supported. The node's protocol version is incompatible with it."
+        i18nErrorMessage EMDuplicate = "The transaction is a duplicate"
