@@ -58,7 +58,7 @@ descrInstance :: ContractAddress -> Text
 descrInstance = Text.pack . show
 
 descrAmount :: Amount -> Text
-descrAmount amount = pack (amountToString amount) <> " GTU"
+descrAmount amount = pack (amountToString amount) <> " CCD"
 
 descrBaker :: BakerId -> AccountAddress -> Text
 descrBaker bid addr = Text.pack $ show addr ++ "(ID " ++ show bid ++ ")"
