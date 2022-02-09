@@ -21,7 +21,7 @@ translation = I18n {..}
         i18nUpdateTransaction UpdateProtocol = "Protocol update"
         i18nUpdateTransaction UpdateElectionDifficulty = "Update election difficulty"
         i18nUpdateTransaction UpdateEuroPerEnergy = "Update Euro per Energy exchange rate"
-        i18nUpdateTransaction UpdateMicroGTUPerEuro = "Update micro GTU per Euro exchange rate"
+        i18nUpdateTransaction UpdateMicroGTUPerEuro = "Update micro CCD per Euro exchange rate"
         i18nUpdateTransaction UpdateFoundationAccount = "Update the foundation account address"
         i18nUpdateTransaction UpdateMintDistribution = "Update parameters of the mint distribution"
         i18nUpdateTransaction UpdateTransactionFeeDistribution = "Update transaction fee distribution"
@@ -56,7 +56,7 @@ translation = I18n {..}
         i18nRejectReason (EncryptedAmountSelfTransfer _) = "An encrypted amount transfer from the account to itself is not allowed."
         i18nRejectReason InvalidTransferToPublicProof  = "The secret to public transfer has an invalid proof."
         i18nRejectReason InvalidIndexOnEncryptedTransfer = "The provided encryped amount index is out of bounds."
-        i18nRejectReason ZeroScheduledAmount = "Attempt to transfer 0 GTU with schedule."
+        i18nRejectReason ZeroScheduledAmount = "Attempt to transfer 0 CCD with schedule."
         i18nRejectReason NonIncreasingSchedule = "Attempt to transfer amount with non-increasing schedule."
         i18nRejectReason FirstScheduledReleaseExpired = "The first scheduled release is in the past."
         i18nRejectReason (ScheduledSelfTransfer _) = "Attempt to transfer from account A to A with schedule."
@@ -138,7 +138,7 @@ translation = I18n {..}
 
         i18nSpecialEvent BakingRewards{..} = "Baking rewards\n" <>
             Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)
-        i18nSpecialEvent Mint{..} = "New GTU minted\n " <>
+        i18nSpecialEvent Mint{..} = "New CCD minted\n " <>
             Text.unlines [
               "  - " <> descrAmount stoMintBakingReward <> " to the baking reward account",
               "  - " <> descrAmount stoMintFinalizationReward <> " to the finalization reward account",
@@ -155,7 +155,7 @@ translation = I18n {..}
               ]
 
         i18nSpecialOutcomeShort BakingRewards{} = "Baking rewards"
-        i18nSpecialOutcomeShort Mint{} = "New GTU minted"
+        i18nSpecialOutcomeShort Mint{} = "New CCD minted"
         i18nSpecialOutcomeShort FinalizationRewards{} = "Finalization rewards"
         i18nSpecialOutcomeShort BlockReward{} = "Block rewards"
 
