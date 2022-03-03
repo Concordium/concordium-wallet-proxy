@@ -67,7 +67,10 @@ descrAmountFraction :: AmountFraction -> Text
 descrAmountFraction = Text.pack . show
 
 descrAmount :: Amount -> Text
-descrAmount amount = pack (amountToString amount) <> " GTU"
+descrAmount amount = pack (amountToString amount) <> " CCD"
+
+descrBakerId :: BakerId -> Text
+descrBakerId = Text.pack . show
 
 descrBaker :: BakerId -> AccountAddress -> Text
 descrBaker bid addr = Text.pack $ show addr ++ "(ID " ++ show bid ++ ")"

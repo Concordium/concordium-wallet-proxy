@@ -17,7 +17,7 @@ The wallet proxy provides the following endpoints:
 * `PUT /v0/submitTransfer`: perform a simple transfer
 * `GET /v0/accTransactions/{accountNumber}`: get the transactions affecting an account
 * `GET /v1/accTransactions/{accountNumber}`: get the transactions affecting an account, including memos
-* `PUT /v0/testnetGTUDrop/{accountNumber}`: request a GTU drop to the specified account
+* `PUT /v0/testnetGTUDrop/{accountNumber}`: request a CCD drop to the specified account
 * `GET /v0/health`: get a response specifying if the wallet proxy is up to date
 * `GET /v0/global`: get the cryptographic parameters obtained from the node it is connected to
 * `GET /v0/ip_info`: get the identity providers information, including links for
@@ -176,7 +176,7 @@ The field is mandatory, and the value will always be a hex-encoded public key.
 
 ## Transaction cost.
 
-The cost for a transaction, both in energy and GTU is obtained on the
+The cost for a transaction, both in energy and CCD is obtained on the
 `v0/transactionCost` endpoint.
 The following query parameters are supported
 - `type`, the type of the transaction. This is mandatory and can be one of `simpleTransfer`, `encryptedTransfer`, `transferToSecret` or `transferToPublic`.
@@ -184,7 +184,7 @@ The following query parameters are supported
 - `memoSize`, the size of the transfer memo. Optionaly, and only supported if the node is running protocol version 2 or higher, and only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
 
 In case of success the response will always be a JSON object with required fields
-- `"cost"` which is an Amount of GTU this transfer will cost at current
+- `"cost"` which is an Amount of CCD this transfer will cost at current
   conversion rates
 - `"energy"` which is the energy that is required be supplied for execution of this transaction.
 
@@ -254,7 +254,7 @@ The value is either the account address of the sender for a simple transfer, or 
 #### `cost` (optional)
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is not `ambiguous`.
 The value is a number representing the actual cost of the transaction to the sender.
-(The value is an integer in the smallest denomination of GTU.)
+(The value is an integer in the smallest denomination of CCD.)
 
 #### `to` (optional)
 This field is present if the `status` field is `committed` or `finalized`, the `outcome` field is `success`, and the transaction is a simple or encrypted transfer.
@@ -263,7 +263,7 @@ The value is the account address of the recipient of the transfer.
 #### `amount` (optional)
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is a simple transfer.
 The value is a number representing the amount transferred from the sender to the recipient.
-(The value is an integer in the smallest denomination of GTU.)
+(The value is an integer in the smallest denomination of CCD.)
 
 #### `blockHashes`
 This field is present if the `status` field is `committed` or `finalized`.
@@ -439,6 +439,10 @@ It consists of the following fields:
   - `"platformDevelopmentCharge"` (only returned when viewing the foundation account)
   - `"finalizationReward"`
   - `"blockReward"`
+  - `"paydayFoundationReward"`
+  - `"paydayAccountReward"`
+  - `"blockAccrueReward"` (in practice, this is not possible, as the transaction does not pertain to any particular account)
+  - `"paydayPoolReward"` (in practice, this is not possible, as the transaction does not pertain to any particular account)
   - `"deployCredential"`
   - `"updateCredentials"`
   - `"updateAccountKeys"`
@@ -544,9 +548,9 @@ $ curl -XGET http://localhost:3000/v0/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8A
 }
 ```
 
-## Testnet GTU Drop
+## Testnet CCD Drop
 
-Request a GTU drop to the specified account.
+Request a CCD drop to the specified account.
 On success, this returns a JSON object with the field `submissionId`, which contains a transaction hash that may be used to query the status of the drop transaction via the `/submissionStatus` endpoint.
 
 
@@ -640,7 +644,7 @@ The wallet proxy must have access to
 - a transaction outcome database, a postgres database
 - when it starts it needs to be given a file with the list of identity providers
   and anonymity revokers, and their public keys and metadata.
-- optionally, private keys of the GTU drop account. If this is not provided then
+- optionally, private keys of the CCD drop account. If this is not provided then
   the gtu drop functionality will be disabled.
 
 An example invocation is

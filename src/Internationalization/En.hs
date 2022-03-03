@@ -21,7 +21,7 @@ translation = I18n {..}
         i18nUpdateTransaction UpdateProtocol = "Protocol update"
         i18nUpdateTransaction UpdateElectionDifficulty = "Update election difficulty"
         i18nUpdateTransaction UpdateEuroPerEnergy = "Update Euro per Energy exchange rate"
-        i18nUpdateTransaction UpdateMicroGTUPerEuro = "Update micro GTU per Euro exchange rate"
+        i18nUpdateTransaction UpdateMicroGTUPerEuro = "Update micro CCD per Euro exchange rate"
         i18nUpdateTransaction UpdateFoundationAccount = "Update the foundation account address"
         i18nUpdateTransaction UpdateMintDistribution = "Update parameters of the mint distribution"
         i18nUpdateTransaction UpdateTransactionFeeDistribution = "Update transaction fee distribution"
@@ -58,7 +58,7 @@ translation = I18n {..}
         i18nRejectReason (EncryptedAmountSelfTransfer _) = "An encrypted amount transfer from the account to itself is not allowed."
         i18nRejectReason InvalidTransferToPublicProof  = "The secret to public transfer has an invalid proof."
         i18nRejectReason InvalidIndexOnEncryptedTransfer = "The provided encryped amount index is out of bounds."
-        i18nRejectReason ZeroScheduledAmount = "Attempt to transfer 0 GTU with schedule."
+        i18nRejectReason ZeroScheduledAmount = "Attempt to transfer 0 CCD with schedule."
         i18nRejectReason NonIncreasingSchedule = "Attempt to transfer amount with non-increasing schedule."
         i18nRejectReason FirstScheduledReleaseExpired = "The first scheduled release is in the past."
         i18nRejectReason (ScheduledSelfTransfer _) = "Attempt to transfer from account A to A with schedule."
@@ -150,6 +150,10 @@ translation = I18n {..}
         i18nEvent CredentialsUpdated{..} = "Credentials on account " <> descrAccount cuAccount <> " updated."
         i18nEvent DataRegistered{} = "Data registered on the chain."
         i18nEvent TransferMemo{..} = "Memo '" <> Text.pack (show tmMemo) <> "' included in a transfer." -- TODO: This would ideally try to render the Memo in a readable way, if it is a valid string or integer, say.
+        i18nEvent Interrupted{..} = "Execution of " <> descrInstance iAddress <> " triggered an operation."
+        i18nEvent Resumed{..} | rSuccess = "Operation succeeded and execution of " <> descrInstance rAddress <> " resumed."
+        i18nEvent Resumed{..} | otherwise = "Operation failed and execution of " <> descrInstance rAddress <> " resumed."
+
         i18nEvent BakerSetOpenStatus{..} = "Open status of baker " <> descrBaker ebsosBakerId ebsosAccount <> " set to " <> descrOpenStatus ebsosOpenStatus
         i18nEvent BakerSetMetadataURL{..} = "Metadata URL of baker " <> descrBaker ebsmuBakerId ebsmuAccount <> " set to " <> descrMetadataURL ebsmuMetadataURL
         i18nEvent BakerSetTransactionFeeCommission{..} = "Transaction fee commission of baker " <> descrBaker ebstfcBakerId ebstfcAccount <> " set to " <> descrAmountFraction ebstfcTransactionFeeCommission
@@ -166,7 +170,7 @@ translation = I18n {..}
         i18nEvent DelegationRemoved{..} = "Removed delegator " <> descrDelegator edrDelegatorId edrAccount
         i18nSpecialEvent BakingRewards{..} = "Baking rewards\n" <>
             Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)
-        i18nSpecialEvent Mint{..} = "New GTU minted\n " <>
+        i18nSpecialEvent Mint{..} = "New CCD minted\n " <>
             Text.unlines [
               "  - " <> descrAmount stoMintBakingReward <> " to the baking reward account",
               "  - " <> descrAmount stoMintFinalizationReward <> " to the finalization reward account",
@@ -181,11 +185,43 @@ translation = I18n {..}
               "  - " <> descrAmount stoBakerReward <> " awarded to the block baker to address " <> descrAccount stoBaker,
               "  - " <> descrAmount stoFoundationCharge <> " awarded to the foundation account " <> descrAccount stoFoundationAccount
               ]
+        i18nSpecialEvent PaydayFoundationReward{..} = "Foundation development charge payout: " <>
+                descrAmount stoDevelopmentCharge <> " to " <> descrAccount stoFoundationAccount
+        i18nSpecialEvent PaydayAccountReward{..} = "Reward payout of " <> descrAmount total <>
+                "  to " <> descrAccount stoAccount <> ": \n" <>
+                Text.unlines [
+                    "  - " <> descrAmount stoTransactionFees <> " from transaction fees",
+                    "  - " <> descrAmount stoBakerReward <> " from baking rewards",
+                    "  - " <> descrAmount stoFinalizationReward <> " from finalization rewards"
+                ]
+            where
+                total = stoTransactionFees + stoBakerReward + stoFinalizationReward
+        i18nSpecialEvent BlockAccrueReward{..} = "Block rewards\n" <>
+            Text.unlines [
+              "  - " <> descrAmount stoTransactionFees <> " transaction fees in the block",
+              "  - " <> descrAmount stoOldGASAccount <> " was the old balance of the GAS account",
+              "  - " <> descrAmount stoNewGASAccount <> " is the new balance of the GAS account",
+              "  - " <> descrAmount stoBakerReward <> " accrued to pool with ID " <> descrBakerId stoBakerId,
+              "  - " <> descrAmount stoLPoolReward <> " accrued to the L-pool",
+              "  - " <> descrAmount stoFoundationCharge <> " accrued to the foundation"
+              ]
+        i18nSpecialEvent PaydayPoolReward{..} = "Payday rewards to " <> poolName <> ":\n" <>
+                Text.unlines [
+                    "  - " <> descrAmount stoTransactionFees <> " from transaction fees",
+                    "  - " <> descrAmount stoBakerReward <> " from baking rewards",
+                    "  - " <> descrAmount stoFinalizationReward <> " from finalization rewards"
+                ]
+            where
+                poolName = maybe "L-pool" (\bid -> "pool with ID " <> descrBakerId bid) stoPoolOwner
 
         i18nSpecialOutcomeShort BakingRewards{} = "Baking rewards"
-        i18nSpecialOutcomeShort Mint{} = "New GTU minted"
+        i18nSpecialOutcomeShort Mint{} = "New CCD minted"
         i18nSpecialOutcomeShort FinalizationRewards{} = "Finalization rewards"
         i18nSpecialOutcomeShort BlockReward{} = "Block rewards"
+        i18nSpecialOutcomeShort PaydayFoundationReward{} = "Foundation development charge payout"
+        i18nSpecialOutcomeShort PaydayAccountReward{} = "Reward payout"
+        i18nSpecialOutcomeShort BlockAccrueReward{} = "Accrual of block rewards"
+        i18nSpecialOutcomeShort PaydayPoolReward{} = "Pool rewards"
 
         i18nErrorMessage (EMErrorResponse NotFound) = "Not found"
         i18nErrorMessage (EMErrorResponse InternalError{}) = "Internal server error"

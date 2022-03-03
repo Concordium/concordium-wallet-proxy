@@ -758,6 +758,50 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
             "events" .= [i18n i v]
           ]
       ]
+    AE.Success (Right v@PaydayFoundationReward{..}) ->
+      return [
+        "origin" .= object ["type" .= ("reward" :: Text)],
+        "total" .= stoDevelopmentCharge,
+        "details" .= object [
+            "type" .= ("paydayFoundationReward" :: Text),
+            "outcome" .= ("success" :: Text),
+            "description" .= i18n i (ShortDescription v),
+            "events" .= [i18n i v]
+        ]
+      ]
+    AE.Success (Right v@PaydayAccountReward{..}) ->
+      return [
+        "origin" .= object ["type" .= ("reward" :: Text)],
+        "total" .= (stoTransactionFees + stoBakerReward + stoFinalizationReward),
+        "details" .= object [
+            "type" .= ("paydayAccountReward" :: Text),
+            "outcome" .= ("success" :: Text),
+            "description" .= i18n i (ShortDescription v),
+            "events" .= [i18n i v]
+        ]
+      ]
+    AE.Success (Right v@BlockAccrueReward{}) ->
+      return [
+        "origin" .= object ["type" .= ("reward" :: Text)],
+        "total" .= (0 :: Amount), -- Zero, since this is not a payment to a specific account
+        "details" .= object [
+            "type" .= ("blockAccrueReward" :: Text),
+            "outcome" .= ("success" :: Text),
+            "description" .= i18n i (ShortDescription v),
+            "events" .= [i18n i v]
+        ]
+      ]
+    AE.Success (Right v@PaydayPoolReward{}) ->
+      return [
+        "origin" .= object ["type" .= ("reward" :: Text)],
+        "total" .= (0 :: Amount), -- Zero, since this is not a payment to a specific account
+        "details" .= object [
+            "type" .= ("paydayPoolReward" :: Text),
+            "outcome" .= ("success" :: Text),
+            "description" .= i18n i (ShortDescription v),
+            "events" .= [i18n i v]
+        ]
+      ]
     AE.Success (Left TransactionSummary{..}) -> do
       let addMemo mmemo ps =
             case includeMemos of
