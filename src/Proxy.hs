@@ -149,6 +149,7 @@ mkYesod "Proxy" [parseRoutes|
 /v0/health HealthR GET
 /v0/ip_info IpsR GET
 /v1/accTransactions/#Text AccountTransactionsV1R GET
+/v0/bakerPool/#Word64 BakerPoolR GET
 |]
 
 -- |Terminate execution and respond with 400 status code with the given error
@@ -481,6 +482,17 @@ getSimpleTransactionStatus i trHash = do
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
               Left $ "Unexpected outcome of public to secret transfer: " ++ show es
+        TSTAccountTransaction (Just TTConfigureBaker) ->
+            case tsResult of
+                TxSuccess ((eventBakerId -> (Just bid)) : _) ->
+                    return ["outcome" .= String "success",
+                            "bakerId" .= bid]
+                TxSuccess _ -> return ["outcome" .= String "success"]
+                TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
+        TSTAccountTransaction (Just TTConfigureDelegation) ->
+            case tsResult of
+                TxSuccess _ -> return ["outcome" .= String "success"]
+                TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
         _ ->
           Left "Unsupported transaction type for simple statuses."
     outcomesToPairs :: [TransactionSummary] -> Either String [Pair]
@@ -510,6 +522,15 @@ viewScheduledTransfer (TSTAccountTransaction (Just TTTransferWithSchedule)) = Tr
 viewScheduledTransfer (TSTAccountTransaction (Just TTTransferWithScheduleAndMemo)) = True
 viewScheduledTransfer _ = False
 
+-- |Get the baker ID from a baker configuration event
+eventBakerId :: Event -> Maybe BakerId
+eventBakerId BakerAdded{..} = Just ebaBakerId
+eventBakerId BakerRemoved{..} = Just ebrBakerId
+eventBakerId BakerStakeIncreased{..} = Just ebsiBakerId
+eventBakerId BakerStakeDecreased{..} = Just ebsiBakerId
+eventBakerId BakerSetRestakeEarnings{..} = Just ebsreBakerId
+eventBakerId BakerKeysUpdated{..} = Just ebkuBakerId
+eventBakerId _ = Nothing
 
 -- Get the status of the submission.
 getSubmissionStatusR :: Text -> Handler TypedContent
@@ -1181,3 +1202,7 @@ getHealthR =
 
 getIpsR :: Handler TypedContent
 getIpsR = toTypedContent . ipInfo <$> getYesod
+
+getBakerR :: Word64 -> Handler TypedContent
+getBakerR bid = 
+    runGRPC (withLastFinalBlockHash Maybe Text Text -> ClientMonad m b)

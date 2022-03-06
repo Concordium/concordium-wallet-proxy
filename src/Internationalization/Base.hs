@@ -73,10 +73,10 @@ descrBakerId :: BakerId -> Text
 descrBakerId = Text.pack . show
 
 descrBaker :: BakerId -> AccountAddress -> Text
-descrBaker bid addr = Text.pack $ show addr ++ "(ID " ++ show bid ++ ")"
+descrBaker bid addr = Text.pack $ show addr ++ " (ID " ++ show bid ++ ")"
 
 descrDelegator :: DelegatorId  -> AccountAddress -> Text
-descrDelegator did addr = Text.pack $ show addr ++ "(ID " ++ show did ++ ")"
+descrDelegator did addr = Text.pack $ show addr ++ " (ID " ++ show did ++ ")"
 
 descrAddress :: Address -> Text
 descrAddress (AddressAccount addr) = descrAccount addr
