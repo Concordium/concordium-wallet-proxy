@@ -188,7 +188,7 @@ translation = I18n {..}
         i18nSpecialEvent PaydayFoundationReward{..} = "Foundation development charge payout: " <>
                 descrAmount stoDevelopmentCharge <> " to " <> descrAccount stoFoundationAccount
         i18nSpecialEvent PaydayAccountReward{..} = "Reward payout of " <> descrAmount total <>
-                "  to " <> descrAccount stoAccount <> ": \n" <>
+                " to " <> descrAccount stoAccount <> ": \n" <>
                 Text.unlines [
                     "  - " <> descrAmount stoTransactionFees <> " from transaction fees",
                     "  - " <> descrAmount stoBakerReward <> " from baking rewards",

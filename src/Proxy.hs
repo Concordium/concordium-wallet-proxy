@@ -300,29 +300,84 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                 -- is serialized by prepending 2 bytes for its length.
                 Just msize | pv /= P1 -> return $ fromIntegral (2 + msize)
                            | otherwise -> respond404Error EMActionNotCurrentlySupported
+        let costResponse energyCost = sendResponse $ object ["cost" .= computeCost rate energyCost
+                                      , "energy" .= energyCost
+                                      ]
         case transactionType of
             Nothing -> respond400Error EMMissingParameter RequestInvalid
             Just tty -> case Text.unpack tty of
-              "simpleTransfer" -> do
-                let energyCost = simpleTransferEnergyCost (simpleTransferPayloadSize + memoPayloadSize) numSignatures
-                sendResponse $ object ["cost" .= computeCost rate energyCost
-                                      , "energy" .= energyCost
-                                      ]
-              y | y == "encryptedTransfer" -> do
-                let energyCost = encryptedTransferEnergyCost (encryptedTransferPayloadSize + memoPayloadSize) numSignatures
-                sendResponse $ object ["cost" .= computeCost rate energyCost
-                                      , "energy" .= energyCost
-                                      ]
-                | y == "transferToSecret" -> do
-                    let energyCost = accountEncryptEnergyCost accountEncryptPayloadSize numSignatures
-                    sendResponse $ object ["cost" .= computeCost rate energyCost
-                                          , "energy" .= energyCost
-                                          ]
-                | y == "transferToPublic" -> do
-                    let energyCost = accountDecryptEnergyCost accountDecryptPayloadSize numSignatures
-                    sendResponse $ object ["cost" .= computeCost rate energyCost
-                                          , "energy" .= energyCost
-                                          ]
+              "simpleTransfer" ->
+                costResponse $ simpleTransferEnergyCost (simpleTransferPayloadSize + memoPayloadSize) numSignatures
+              "encryptedTransfer" ->
+                costResponse $ encryptedTransferEnergyCost (encryptedTransferPayloadSize + memoPayloadSize) numSignatures
+              "transferToSecret" -> 
+                costResponse $ accountEncryptEnergyCost accountEncryptPayloadSize numSignatures
+              "transferToPublic" ->
+                costResponse $ accountDecryptEnergyCost accountDecryptPayloadSize numSignatures
+              "registerDelegation" -> do
+                isTargetLPool <- isJust <$> lookupGetParam "lPool"
+                costResponse $
+                  delegationConfigureEnergyCost
+                    (registerDelegationPayloadSize isTargetLPool)
+                    numSignatures
+              "updateDelegation" -> do
+                isAmountUpdated <- isJust <$> lookupGetParam "amount"
+                isRestakeUpdated <- isJust <$> lookupGetParam "restake"
+                isTargetUpdated <- isJust <$> lookupGetParam "target"
+                isTargetLPool <- isJust <$> lookupGetParam "lPool"
+                let pSize = updateDelegationPayloadSize isAmountUpdated isRestakeUpdated isTargetUpdated isTargetLPool
+                costResponse $ delegationConfigureEnergyCost pSize numSignatures
+              "removeDelegation" ->
+                costResponse $ delegationConfigureEnergyCost removeDelegationPayloadSize numSignatures
+              "registerBaker" -> do
+                metasize <- lookupGetParam "metadataSize" >>= \case
+                  Nothing -> return $ Just maxUrlTextLength
+                  Just ms -> case readMaybe ms of
+                    Nothing -> respond400Error (EMParseError "Could not parse `metadataSize` value.")
+                    Just v -> return $ Just v
+                let pSize = bakerConfigurePayloadSize True True True True metasize True True True
+                costResponse $ bakerConfigureEnergyCostWithKeys pSize numSignatures
+              "updateBakerStake" -> do
+                isAmountUpdated <- isJust <$> lookupGetParam "amount"
+                isRestakeUpdated <- isJust <$> lookupGetParam "restake"
+                let pSize = bakerConfigurePayloadSize isAmountUpdate isRestakeUpdated False False Nothing False False False
+                costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
+              "updateBakerPool" -> do
+                metasize <- lookupGetParam "metadataSize" >>= \case
+                  Nothing -> return Nothing
+                  Just ms -> case readMaybe ms of
+                    Nothing -> respond400Error (EMParseError "Could not parse `metadataSize` value.")
+                    Just v -> return $ Just v
+                isOpenStatusUpdated <- isJust <$> lookupGetParam "openStatus"
+                isTComUpdated <- isJust <$> lookupGetParam "transactionCommission"
+                isBComUpdated <- isJust <$> lookupGetParam "bakerRewardCommission"
+                isFComUpdated <- isJust <$> lookupGetParam "finalizationRewardCommission"
+                let pSize = bakerConfigurePayloadSize False False isOpenStatusUpdated False metasize isTComUpdated isBComUpdated isFComUpdated
+                costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
+              "updateBakerKeys" -> do
+                let pSize = bakerConfigurePayloadSize False False False True Nothing False False False
+                costResponse $ bakerConfigureEnergyCostWithKeys pSize numSignatures
+              "removeBaker" -> do
+                let pSize = bakerConfigurePayloadSize True False False False Nothing False False False
+                costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
+              "configureBaker" -> do
+                metasize <- lookupGetParam "metadataSize" >>= \case
+                  Nothing -> return Nothing
+                  Just ms -> case readMaybe ms of
+                    Nothing -> respond400Error (EMParseError "Could not parse `metadataSize` value.")
+                    Just v -> return $ Just v
+                isAmountUpdated <- isJust <$> lookupGetParam "amount"
+                isRestakeUpdated <- isJust <$> lookupGetParam "restake"
+                isOpenStatusUpdated <- isJust <$> lookupGetParam "openStatus"
+                areKeysUpdated <- isJust <$> lookupGetParam "keys"
+                isTComUpdated <- isJust <$> lookupGetParam "transactionCommission"
+                isBComUpdated <- isJust <$> lookupGetParam "bakerRewardCommission"
+                isFComUpdated <- isJust <$> lookupGetParam "finalizationRewardCommission"
+                let pSize = bakerConfigurePayloadSize isAmountUpdate isRestakeUpdated isOpenStatusUpdated areKeysUpdated metasize isTComUpdated isBComUpdated isFComUpdated
+                costResponse $
+                  (if areKeysUpdated then bakerConfigureEnergyCostWithKeys else bakerConfigureEnergyCostWithoutKeys)
+                    pSize
+                    numSignatures
               tty' -> respond400Error (EMParseError $ "Could not parse transaction type: " <> tty') RequestInvalid
       fetchUpdates :: ClientMonad IO (Either String (EnergyRate, ProtocolVersion))
       fetchUpdates = do
@@ -1203,6 +1258,12 @@ getHealthR =
 getIpsR :: Handler TypedContent
 getIpsR = toTypedContent . ipInfo <$> getYesod
 
+{-
 getBakerR :: Word64 -> Handler TypedContent
 getBakerR bid = 
-    runGRPC (withLastFinalBlockHash Maybe Text Text -> ClientMonad m b)
+    runGRPC doGetBaker $ \_ -> undefined
+  where
+    doGetBaker = do
+      getPoolStatus (BakerId bid) 
+    (withLastFinalBlockHash Maybe Text Text -> ClientMonad m b)
+    -}
