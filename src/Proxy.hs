@@ -52,6 +52,7 @@ import Data.Time.Clock as Clock
 import Paths_wallet_proxy (version)
 import Concordium.Types
 import Concordium.Types.Queries
+import Concordium.Types.Accounts
 import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
@@ -197,6 +198,18 @@ runGRPC c k = do
         ]
     Right (Right a) -> k a
 
+pendingChangeToJSON :: AE.KeyValue kv => StakePendingChange' UTCTime -> [kv]
+pendingChangeToJSON NoChange = []
+pendingChangeToJSON (ReduceStake amt eff) =
+    [ "pendingChange"
+        .= object
+            ["change" .= String "ReduceStake", "newStake" .= amt, "effectiveTime" .= utcTimeToTimestamp eff]
+    ]
+pendingChangeToJSON (RemoveStake eff) =
+    [ "pendingChange"
+        .= object
+            ["change" .= String "RemoveStake", "effectiveTime" .= utcTimeToTimestamp eff]
+    ]
 
 -- |Get the balance of an account.  If successful, the result is a JSON
 -- object consisting of the following optional fields:
@@ -215,21 +228,41 @@ getAccountBalanceR addrText =
           -- We're doing it in this low-level way to avoid parsing anything that
           -- is not needed, especially the encrypted amounts, since those are
           -- fairly expensive to parse.
-          getBal (Object obj) = do
-            publicAmount <- HM.lookup "accountAmount" obj
-            encryptedAmount <- HM.lookup "accountEncryptedAmount" obj
-            nnce <- HM.lookup "accountNonce" obj
-            releases <- HM.lookup "accountReleaseSchedule" obj
-            let staked = case HM.lookup "accountBaker" obj of
-                  Nothing -> case HM.lookup "accountDelegation" obj of
-                    Nothing -> []
-                    Just b -> ["accountDelegation" .= b]
-                  Just b -> ["accountBaker" .= b]
-            return . object $ staked ++ ["accountAmount" .= publicAmount,
-                                         "accountEncryptedAmount" .= encryptedAmount,
-                                         "accountNonce" .= nnce,
-                                         "accountReleaseSchedule" .= releases]
-          getBal _ = Nothing
+          -- getBal (Object obj) = do
+          getBal v =
+            case AE.fromJSON v of
+                AE.Error _ -> Nothing
+                AE.Success Nothing -> Nothing
+                AE.Success (Just AccountInfo{..}) ->
+                  let staked =
+                        case aiStakingInfo of
+                          AccountStakingNone -> []
+                          AccountStakingBaker{..} ->
+                            let bi = object $
+                                  [
+                                    "stakedAmount" .= asiStakedAmount,
+                                    "restakeEarnings" .= asiStakeEarnings,
+                                    "bakerId" .= _bakerIdentity asiBakerInfo,
+                                    "bakerElectionVerifyKey" .= _bakerElectionVerifyKey asiBakerInfo,
+                                    "bakerSignatureVerifyKey" .= _bakerSignatureVerifyKey asiBakerInfo,
+                                    "bakerAggregationVerifyKey" .= _bakerAggregationVerifyKey asiBakerInfo
+                                  ]
+                                  <> pendingChangeToJSON asiPendingChange
+                                  <> maybe [] (\bpi -> ["bakerPoolInfo" .= bpi]) asiPoolInfo
+                            in ["accountBaker" .= bi]
+                          AccountStakingDelegated{..} ->
+                            let di = object $
+                                  [
+                                    "stakedAmount" .= asiStakedAmount,
+                                    "restakeEarnings" .= asiStakeEarnings,
+                                    "delegationTarget" .= asiDelegationTarget
+                                  ]
+                                  <> pendingChangeToJSON asiDelegationPendingChange
+                            in ["accountDelegation" .= di]
+                  in Just $ object $ staked ++ ["accountAmount" .= aiAccountAmount,
+                                               "accountEncryptedAmount" .= aiAccountEncryptedAmount,
+                                               "accountNonce" .= aiAccountNonce,
+                                               "accountReleaseSchedule" .= aiAccountReleaseSchedule]
 
           lastFinBal = getBal lastFinInfo
           bestBal = getBal bestInfo
