@@ -55,6 +55,7 @@ import Concordium.Types.Queries
 import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
+import qualified Concordium.Types.Parameters as Parameters
 
 import Concordium.Client.GRPC
 import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
@@ -66,7 +67,7 @@ import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
                                            accountEncryptEnergyCost,
                                            accountEncryptPayloadSize,
                                            accountDecryptEnergyCost,
-                                           accountDecryptPayloadSize,
+                                           accountDecryptPayloadSize, delegationConfigureEnergyCost, registerDelegationPayloadSize, updateDelegationPayloadSize, removeDelegationPayloadSize, bakerConfigurePayloadSize, bakerConfigureEnergyCostWithKeys, bakerConfigureEnergyCostWithoutKeys
                                            )
 import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex, CredentialIndex)
 import Concordium.Crypto.SignatureScheme (KeyPair)
@@ -150,6 +151,7 @@ mkYesod "Proxy" [parseRoutes|
 /v0/ip_info IpsR GET
 /v1/accTransactions/#Text AccountTransactionsV1R GET
 /v0/bakerPool/#Word64 BakerPoolR GET
+/v0/poolParameters PoolParametersR GET
 |]
 
 -- |Terminate execution and respond with 400 status code with the given error
@@ -219,7 +221,9 @@ getAccountBalanceR addrText =
             nnce <- HM.lookup "accountNonce" obj
             releases <- HM.lookup "accountReleaseSchedule" obj
             let staked = case HM.lookup "accountBaker" obj of
-                  Nothing -> []
+                  Nothing -> case HM.lookup "accountDelegation" obj of
+                    Nothing -> []
+                    Just b -> ["accountDelegation" .= b]
                   Just b -> ["accountBaker" .= b]
             return . object $ staked ++ ["accountAmount" .= publicAmount,
                                          "accountEncryptedAmount" .= encryptedAmount,
@@ -331,22 +335,22 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                 costResponse $ delegationConfigureEnergyCost removeDelegationPayloadSize numSignatures
               "registerBaker" -> do
                 metasize <- lookupGetParam "metadataSize" >>= \case
-                  Nothing -> return $ Just maxUrlTextLength
-                  Just ms -> case readMaybe ms of
-                    Nothing -> respond400Error (EMParseError "Could not parse `metadataSize` value.")
+                  Nothing -> return $ Just $ fromIntegral maxUrlTextLength
+                  Just ms -> case readMaybe $ Text.unpack ms of
+                    Nothing -> respond400Error (EMParseError "Could not parse `metadataSize` value.") RequestInvalid
                     Just v -> return $ Just v
                 let pSize = bakerConfigurePayloadSize True True True True metasize True True True
                 costResponse $ bakerConfigureEnergyCostWithKeys pSize numSignatures
               "updateBakerStake" -> do
                 isAmountUpdated <- isJust <$> lookupGetParam "amount"
                 isRestakeUpdated <- isJust <$> lookupGetParam "restake"
-                let pSize = bakerConfigurePayloadSize isAmountUpdate isRestakeUpdated False False Nothing False False False
+                let pSize = bakerConfigurePayloadSize isAmountUpdated isRestakeUpdated False False Nothing False False False
                 costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
               "updateBakerPool" -> do
                 metasize <- lookupGetParam "metadataSize" >>= \case
                   Nothing -> return Nothing
-                  Just ms -> case readMaybe ms of
-                    Nothing -> respond400Error (EMParseError "Could not parse `metadataSize` value.")
+                  Just ms -> case readMaybe $ Text.unpack ms of
+                    Nothing -> respond400Error (EMParseError "Could not parse `metadataSize` value.") RequestInvalid
                     Just v -> return $ Just v
                 isOpenStatusUpdated <- isJust <$> lookupGetParam "openStatus"
                 isTComUpdated <- isJust <$> lookupGetParam "transactionCommission"
@@ -363,8 +367,8 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
               "configureBaker" -> do
                 metasize <- lookupGetParam "metadataSize" >>= \case
                   Nothing -> return Nothing
-                  Just ms -> case readMaybe ms of
-                    Nothing -> respond400Error (EMParseError "Could not parse `metadataSize` value.")
+                  Just ms -> case readMaybe $ Text.unpack ms of
+                    Nothing -> respond400Error (EMParseError "Could not parse `metadataSize` value.") RequestInvalid
                     Just v -> return $ Just v
                 isAmountUpdated <- isJust <$> lookupGetParam "amount"
                 isRestakeUpdated <- isJust <$> lookupGetParam "restake"
@@ -373,7 +377,7 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                 isTComUpdated <- isJust <$> lookupGetParam "transactionCommission"
                 isBComUpdated <- isJust <$> lookupGetParam "bakerRewardCommission"
                 isFComUpdated <- isJust <$> lookupGetParam "finalizationRewardCommission"
-                let pSize = bakerConfigurePayloadSize isAmountUpdate isRestakeUpdated isOpenStatusUpdated areKeysUpdated metasize isTComUpdated isBComUpdated isFComUpdated
+                let pSize = bakerConfigurePayloadSize isAmountUpdated isRestakeUpdated isOpenStatusUpdated areKeysUpdated metasize isTComUpdated isBComUpdated isFComUpdated
                 costResponse $
                   (if areKeysUpdated then bakerConfigureEnergyCostWithKeys else bakerConfigureEnergyCostWithoutKeys)
                     pSize
@@ -1258,12 +1262,26 @@ getHealthR =
 getIpsR :: Handler TypedContent
 getIpsR = toTypedContent . ipInfo <$> getYesod
 
-{-
-getBakerR :: Word64 -> Handler TypedContent
-getBakerR bid = 
-    runGRPC doGetBaker $ \_ -> undefined
+
+getBakerPoolR :: Word64 -> Handler TypedContent
+getBakerPoolR bid =
+    runGRPC doGetBaker $ \v -> do
+      $(logInfo) "Successfully got baker pool status."
+      sendResponse v
   where
-    doGetBaker = do
-      getPoolStatus (BakerId bid) 
-    (withLastFinalBlockHash Maybe Text Text -> ClientMonad m b)
-    -}
+    doGetBaker = withLastFinalBlockHash Nothing (getPoolStatus (BakerId $ AccountIndex bid) False)
+
+getPoolParametersR :: Handler TypedContent
+getPoolParametersR =
+    runGRPC doGetParameters $ \(v :: Parameters.ChainParameters' 'ChainParametersV1) -> do
+      let poolParameters = Parameters._cpPoolParameters v
+      $(logInfo) "Successfully got baker pool status."
+      sendResponse $ toJSON poolParameters
+  where
+    doGetParameters = do
+      summary <- withLastFinalBlockHash Nothing getBlockSummary
+      return $ parseEither (withObject "Best finalized block" $ \v -> do
+            updates <- v AE..: "updates"
+            updates AE..: "chainParameters"
+        ) =<< summary
+
