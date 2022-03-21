@@ -215,7 +215,7 @@ The following query parameters are supported
 - `bakerRewardCommission`, whether the baker reward commission of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
 - `finalizationRewardCommission`, whether the finalization reward of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
 
-Notice that when `type` is `configureBaker`, the cost of all possible "configure baker" transactions can be calculated. This means for instance that /v0/transactionCost?type=updateBakerKeys and /v0/transactionCost?type=configureBaker&keys would yield the same JSON output.
+Notice that when `type` is `configureBaker`, the cost of all possible "configure baker" transactions can be calculated. This means for instance that `/v0/transactionCost?type=updateBakerKeys` and `/v0/transactionCost?type=configureBaker&keys` would yield the same JSON output.
 
 In case of success the response will always be a JSON object with required fields
 - `"cost"` which is an Amount of CCD this transfer will cost at current
