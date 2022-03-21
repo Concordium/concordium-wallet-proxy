@@ -22,6 +22,8 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/global`: get the cryptographic parameters obtained from the node it is connected to
 * `GET /v0/ip_info`: get the identity providers information, including links for
   submitting initial identity issuance requests.
+* `GET /v0/bakerPool/{bakerId}`: get the status of a baker pool given the baker ID.
+* `GET /v0/poolParameters`: get the pool parameters.
 
 ### Errors
 
@@ -129,6 +131,14 @@ The `AccountBalance` value is always an object with the following four fields
   - `"bakerAggregationVerifyKey"` (required): public key to verify aggregate signatures in which the baker participates.
   - `"bakerElectionVerifyKey"` (required): public key to verify the baker has won the election.
   - `"bakerSignatureVerifyKey"` (required): public key to verify block signatures signed by the baker.
+* `"accountDelegation"` (optional) if present indicates that this account is
+  registered as a delegator. If present, the value is always an object with fields
+  - `"stakedAmount"` (required): the amount that is currently staked
+  - `"restakeEarnings"` (required): a boolean indicating whether earnings are
+  - `"delegationTarget"` (required): the delegation target consisting of
+    * `"delegatorType"` (required): the type of delegation which value is either `"delegateToLPool"` or `"delegateToBaker"`
+    * `"bakerId"` (optional): If the value `"delegatorType"` is `"delegateToBaker"`, then `"bakerId"` is the ID of the target pool,
+       otherwise not present.
 
 ## Account Nonce
 
@@ -179,9 +189,33 @@ The field is mandatory, and the value will always be a hex-encoded public key.
 The cost for a transaction, both in energy and CCD is obtained on the
 `v0/transactionCost` endpoint.
 The following query parameters are supported
-- `type`, the type of the transaction. This is mandatory and can be one of `simpleTransfer`, `encryptedTransfer`, `transferToSecret` or `transferToPublic`.
+- `type`, the type of the transaction. This is mandatory and can be one of
+  - `simpleTransfer`,
+  - `encryptedTransfer`,
+  - `transferToSecret`,
+  - `transferToPublic`
+  - `registerDelegation`
+  - `updateDelegation`
+  - `removeDelegation`
+  - `registerBaker`
+  - `updateBakerStake`
+  - `updateBakerPool`
+  - `updateBakerKeys`
+  - `removeBaker`
+  - `configureBaker`.
 - `numSignatures`, the number of signatures on the transaction, defaults to 1 if not present.
 - `memoSize`, the size of the transfer memo. Optionaly, and only supported if the node is running protocol version 2 or higher, and only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
+- `amount`, whether the staked amount is updated. Optionally, and only applies when `type` is either `updateDelegation`, `updateBakerStake` and `configureBaker`.
+- `restake`, whether it is updated to restake earnings. Optionally, and only applies when `type` is either `updateDelegation`, `updateBakerStake` and `configureBaker`.
+- `lPool`, whether the delegation target is set to the L-pool. Optionally, and only applies when `type` is either `registerDelegation` or `updateDelegation`.
+- `target`, whether the delegation target is updated. Optionally, and only applies when `type` is `updateDelegation`.
+- `metadataSize`, the size of the metadata url of a baker pool. Optionally, and only applies when `type` is either `registerBaker`, `updateBakerPool` or `configureBaker`. If not present when `type` is `registerBaker`, the maximum url size is used in the cost calculation. If not present when `type` is `updateBakerPool` or `configureBaker`, it is assumed that the metadata url is not updated.
+- `openStatus`, whether the open status of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
+- `transactionCommission`, whether the transaction fee commission of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
+- `bakerRewardCommission`, whether the baker reward commission of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
+- `finalizationRewardCommission`, whether the finalization reward of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
+
+Notice that when `type` is `configureBaker`, the cost of all possible "configure baker" transactions can be calculated. This means for instance that /v0/transactionCost?type=updateBakerKeys and /v0/transactionCost?type=configureBaker&keys would yield the same JSON output.
 
 In case of success the response will always be a JSON object with required fields
 - `"cost"` which is an Amount of CCD this transfer will cost at current
@@ -636,6 +670,72 @@ In this case the wallet must have made some action to cause this (or the user
 has used account externally), in both of these cases you can do a similar
 analysis with indices to determine the partial balance that you have already
 decrypted, but of course in this case it will change.
+
+## Baker Pool Status
+A GET request to `/v0/bakerPool/n` returns a
+JSON object containing various information about the baker pool with ID `n`.
+On success, the response is of the following form:
+```json
+{
+    "poolType": "BakerPool",
+    "bakerId": 0,
+    "bakerEquityCapital": "3000000000000",
+    "delegatedCapitalCap": "1000500230710",
+    "poolInfo": {
+        "commissionRates": {
+            "transactionCommission": 5.0e-2,
+            "finalizationCommission": 1.0,
+            "bakingCommission": 5.0e-2
+        },
+        "openStatus": "openForAll",
+        "metadataUrl": ""
+    },
+    "bakerStakePendingChange": {
+        "pendingChangeType": "NoChange"
+    },
+    "bakerAddress": "2zmRFpd7g12oBAZHSDqnbJ3Eg5HGr2sE9aFCL6mD3pyUSsiDSJ",
+    "delegatedCapital": "1500480508",
+    "currentPaydayStatus": {
+        "finalizationLive": true,
+        "effectiveStake": "3001500480508",
+        "transactionFeesEarned": "0",
+        "bakerEquityCapital": "3000000000000",
+        "lotteryPower": 0.20008001762276778,
+        "blocksBaked": 27,
+        "delegatedCapital": "1500480508"
+    }
+}
+```
+
+## Pool Parameters
+A GET request to `/v0/poolParameters` returns a
+JSON object containing the pool parameters of the chain.
+On success, the response is of the following form:
+```json
+{
+    "capitalBound": 0.25,
+    "transactionCommissionLPool": 0.1,
+    "leverageBound": {
+        "denominator": 1,
+        "numerator": 3
+    },
+    "finalizationCommissionLPool": 1.0,
+    "bakingCommissionRange": {
+        "max": 5.0e-2,
+        "min": 5.0e-2
+    },
+    "bakingCommissionLPool": 0.1,
+    "finalizationCommissionRange": {
+        "max": 1.0,
+        "min": 1.0
+    },
+    "transactionCommissionRange": {
+        "max": 5.0e-2,
+        "min": 5.0e-2
+    },
+    "minimumEquityCapital": "14000"
+}
+```
 
 # Deployment
 
