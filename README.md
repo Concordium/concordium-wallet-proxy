@@ -193,15 +193,15 @@ The following query parameters are supported
   - `simpleTransfer`,
   - `encryptedTransfer`,
   - `transferToSecret`,
-  - `transferToPublic`
-  - `registerDelegation`
-  - `updateDelegation`
-  - `removeDelegation`
-  - `registerBaker`
-  - `updateBakerStake`
-  - `updateBakerPool`
-  - `updateBakerKeys`
-  - `removeBaker`
+  - `transferToPublic`,
+  - `registerDelegation`,
+  - `updateDelegation`,
+  - `removeDelegation`,
+  - `registerBaker`,
+  - `updateBakerStake`,
+  - `updateBakerPool`,
+  - `updateBakerKeys`,
+  - `removeBaker`, or
   - `configureBaker`.
 - `numSignatures`, the number of signatures on the transaction, defaults to 1 if not present.
 - `memoSize`, the size of the transfer memo. Optionaly, and only supported if the node is running protocol version 2 or higher, and only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
