@@ -152,7 +152,8 @@ mkYesod "Proxy" [parseRoutes|
 /v0/ip_info IpsR GET
 /v1/accTransactions/#Text AccountTransactionsV1R GET
 /v0/bakerPool/#Word64 BakerPoolR GET
-/v0/poolParameters PoolParametersR GET
+/v0/chainParameters ChainParametersR GET
+/v0/nextPayday NextPaydayR GET
 |]
 
 -- |Terminate execution and respond with 400 status code with the given error
@@ -1304,12 +1305,11 @@ getBakerPoolR bid =
   where
     doGetBaker = withLastFinalBlockHash Nothing (getPoolStatus (BakerId $ AccountIndex bid) False)
 
-getPoolParametersR :: Handler TypedContent
-getPoolParametersR =
+getChainParametersR :: Handler TypedContent
+getChainParametersR =
     runGRPC doGetParameters $ \(v :: Parameters.ChainParameters' 'ChainParametersV1) -> do
-      let poolParameters = Parameters._cpPoolParameters v
-      $(logInfo) "Successfully got baker pool status."
-      sendResponse $ toJSON poolParameters
+      $(logInfo) "Successfully got chain parameters."
+      sendResponse $ toJSON v
   where
     doGetParameters = do
       summary <- withLastFinalBlockHash Nothing getBlockSummary
@@ -1317,4 +1317,17 @@ getPoolParametersR =
             updates <- v AE..: "updates"
             updates AE..: "chainParameters"
         ) =<< summary
+
+getNextPaydayR :: Handler TypedContent
+getNextPaydayR =
+    runGRPC doGetParameters $ \(v :: UTCTime) -> do
+      let timestampObject = object ["nextPaydayTime" .= utcTimeToTimestamp v]
+      $(logInfo) "Successfully got next payday."
+      sendResponse $ toJSON timestampObject
+  where
+    doGetParameters = do
+      rewardStatus <- withLastFinalBlockHash Nothing getRewardStatus
+      return $ parseEither (withObject "Best finalized block" $ \v -> do
+            v AE..: "nextPaydayTime"
+        ) =<< rewardStatus
 

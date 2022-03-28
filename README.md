@@ -136,8 +136,8 @@ The `AccountBalance` value is always an object with the following four fields
   - `"stakedAmount"` (required): the amount that is currently staked
   - `"restakeEarnings"` (required): a boolean indicating whether earnings are
   - `"delegationTarget"` (required): the delegation target consisting of
-    * `"delegatorType"` (required): the type of delegation which value is either `"delegateToLPool"` or `"delegateToBaker"`
-    * `"bakerId"` (optional): If the value `"delegatorType"` is `"delegateToBaker"`, then `"bakerId"` is the ID of the target pool,
+    * `"delegateType"` (required): the type of delegation which value is either `"L-Pool"` or `"Baker"`
+    * `"bakerId"` (optional): If the value `"delegateType"` is `"Baker"`, then `"bakerId"` is the ID of the target pool,
        otherwise not present.
 
 ## Account Nonce
@@ -707,35 +707,76 @@ On success, the response is of the following form:
 }
 ```
 
-## Pool Parameters
-A GET request to `/v0/poolParameters` returns a
-JSON object containing the pool parameters of the chain.
+## Chain Parameters
+A GET request to `/v0/chainParameters` returns a
+JSON object containing the chain parameters.
 On success, the response is of the following form:
 ```json
 {
-    "capitalBound": 0.25,
+    "mintPerPayday": 7.48246766e-6,
+    "rewardParameters": {
+        "mintDistribution": {
+            "bakingReward": 0.45,
+            "finalizationReward": 0.35
+        },
+        "transactionFeeDistribution": {
+            "gasAccount": 0.45,
+            "baker": 0.45
+        },
+        "gASRewards": {
+            "chainUpdate": 5.0e-3,
+            "accountCreation": 2.0e-3,
+            "baker": 0.25,
+            "finalizationProof": 5.0e-3
+        }
+    },
+    "poolOwnerCooldown": 10801,
+    "capitalBound": 0.3,
+    "microGTUPerEuro": {
+        "denominator": 472657102571,
+        "numerator": 12054725891240307000
+    },
+    "rewardPeriodLength": 3,
     "transactionCommissionLPool": 0.1,
     "leverageBound": {
         "denominator": 1,
-        "numerator": 3
+        "numerator": 2
     },
+    "foundationAccountIndex": 5,
     "finalizationCommissionLPool": 1.0,
+    "delegatorCooldown": 7201,
     "bakingCommissionRange": {
         "max": 5.0e-2,
         "min": 5.0e-2
     },
     "bakingCommissionLPool": 0.1,
+    "accountCreationLimit": 10,
     "finalizationCommissionRange": {
         "max": 1.0,
         "min": 1.0
+    },
+    "electionDifficulty": 2.5e-2,
+    "euroPerEnergy": {
+        "denominator": 1000000,
+        "numerator": 1
     },
     "transactionCommissionRange": {
         "max": 5.0e-2,
         "min": 5.0e-2
     },
-    "minimumEquityCapital": "14000"
+    "minimumEquityCapital": "1000000000"
 }
 ```
+
+## Next Payday
+A GET request to `/v0/chainParameters` returns the timestamp of the next payday.
+Example:
+```json
+{
+  "nextPaydayTime":1648480726500
+}
+```
+
 
 # Deployment
 
