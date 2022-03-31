@@ -204,12 +204,12 @@ pendingChangeToJSON NoChange = []
 pendingChangeToJSON (ReduceStake amt eff) =
     [ "pendingChange"
         .= object
-            ["change" .= String "ReduceStake", "newStake" .= amt, "effectiveTime" .= utcTimeToTimestamp eff]
+            ["change" .= String "ReduceStake", "newStake" .= amt, "effectiveTime" .= eff]
     ]
 pendingChangeToJSON (RemoveStake eff) =
     [ "pendingChange"
         .= object
-            ["change" .= String "RemoveStake", "effectiveTime" .= utcTimeToTimestamp eff]
+            ["change" .= String "RemoveStake", "effectiveTime" .= eff]
     ]
 
 -- |Get the balance of an account.  If successful, the result is a JSON
@@ -1321,7 +1321,7 @@ getChainParametersR =
 getNextPaydayR :: Handler TypedContent
 getNextPaydayR =
     runGRPC doGetParameters $ \(v :: UTCTime) -> do
-      let timestampObject = object ["nextPaydayTime" .= utcTimeToTimestamp v]
+      let timestampObject = object ["nextPaydayTime" .= v]
       $(logInfo) "Successfully got next payday."
       sendResponse $ toJSON timestampObject
   where

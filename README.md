@@ -123,7 +123,7 @@ The `AccountBalance` value is always an object with the following four fields
     }
   ```
 * `"accountBaker"` (optional) if present indicates that this account is
- registered as a baker. If present, the value is always an object with fields
+  registered as a baker. If present, the value is always an object with fields
   - `"stakedAmount"` (required): the amount that is currently staked
   - `"bakerId"` (required): the baker id the account is registered as
   - `"restakeEarnings"` (required): a boolean indicating whether earnings are
@@ -131,6 +131,14 @@ The `AccountBalance` value is always an object with the following four fields
   - `"bakerAggregationVerifyKey"` (required): public key to verify aggregate signatures in which the baker participates.
   - `"bakerElectionVerifyKey"` (required): public key to verify the baker has won the election.
   - `"bakerSignatureVerifyKey"` (required): public key to verify block signatures signed by the baker.
+  - `"pendingChange"` (optional): if present indicates that the baker is in a cooldown due to removal or a change of stake.
+    If present, the value is an object with the fields
+    * `"change"` (required): indicating the kind of change which value is either `"reduceStake"` indicating that the
+      baker's stake is reduced at the end of the cooldown period, or `"removeStake"` indicating that the baker is being
+      removed at the end of the cooldown period.
+    * `"effectiveTime"` (required): the time at which the cooldown ends and the change takes effect, e.g. `"2022-03-30T16:43:53.5Z"`.
+    * `"newStake"` (optional): This field is present if the value of the field `"change"` is `"reduceStake"`,
+        and the value is the new stake after the cooldown.
 * `"accountDelegation"` (optional) if present indicates that this account is
   registered as a delegator. If present, the value is always an object with fields
   - `"stakedAmount"` (required): the amount that is currently staked
@@ -139,6 +147,14 @@ The `AccountBalance` value is always an object with the following four fields
     * `"delegateType"` (required): the type of delegation which value is either `"L-Pool"` or `"Baker"`
     * `"bakerId"` (optional): If the value `"delegateType"` is `"Baker"`, then `"bakerId"` is the ID of the target pool,
        otherwise not present.
+  - `"pendingChange"` (optional): if present indicates that the delegator is in a cooldown due to removal or a change of stake.
+    If present, the value is an object with the fields
+    * `"change"` (required): indicating the kind of change which value is either `"reduceStake"` indicating that the
+      delegators's stake is reduced at the end of the cooldown period, or `"removeStake"` indicating that the delegator is being
+      removed at the end of the cooldown period.
+    * `"effectiveTime"` (required): the time at which the cooldown ends and the change takes effect, e.g. `"2022-03-30T16:43:53.5Z"`.
+    * `"newStake"` (optional): This field is present if the value of the field `"change"` is `"reduceStake"`,
+        and the value is the new stake after the cooldown.
 
 ## Account Nonce
 
@@ -688,7 +704,7 @@ On success, the response is of the following form:
             "bakingCommission": 5.0e-2
         },
         "openStatus": "openForAll",
-        "metadataUrl": ""
+        "metadataUrl": "http://example"
     },
     "bakerStakePendingChange": {
         "pendingChangeType": "NoChange"
@@ -706,6 +722,30 @@ On success, the response is of the following form:
     }
 }
 ```
+In the above, the value `"bakerStakePendingChange"` is either of the form
+```json
+{
+    "pendingChangeType": "NoChange"
+}
+```
+in the case that the baker is NOT in a cooldown period, or
+```json
+{
+    "bakerEquityCapital": "1000000000",
+    "pendingChangeType": "ReduceBakerCapital",
+    "effectiveTime": "2022-03-30T16:43:53.5Z"
+}
+```
+in case that the baker's stake is reduced, or
+```json
+{
+    "pendingChangeType": "RemovePool",
+    "effectiveTime": "2022-03-31T23:54:48.25Z"
+}
+```
+in case that the baker pool is removed.
+The value of `"openStatus"` is either `"openForAll"`, `"closedForNew"` or `"closedForAll"`.
+
 
 ## Chain Parameters
 A GET request to `/v0/chainParameters` returns a
@@ -773,7 +813,7 @@ A GET request to `/v0/chainParameters` returns the timestamp of the next payday.
 Example:
 ```json
 {
-  "nextPaydayTime":1648480726500
+  "nextPaydayTime":"2022-03-31T15:41:16.5Z"
 }
 ```
 
