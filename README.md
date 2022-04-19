@@ -122,6 +122,7 @@ The `AccountBalance` value is always an object with the following four fields
       "total" : totalamount
     }
   ```
+* `"accountIndex"`(required) the index of the account.
 * `"accountBaker"` (optional) if present indicates that this account is
   registered as a baker. If present, the value is always an object with fields
   - `"stakedAmount"` (required): the amount that is currently staked

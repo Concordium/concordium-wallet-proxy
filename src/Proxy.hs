@@ -263,7 +263,8 @@ getAccountBalanceR addrText =
                   in Just $ object $ staked ++ ["accountAmount" .= aiAccountAmount,
                                                "accountEncryptedAmount" .= aiAccountEncryptedAmount,
                                                "accountNonce" .= aiAccountNonce,
-                                               "accountReleaseSchedule" .= aiAccountReleaseSchedule]
+                                               "accountReleaseSchedule" .= aiAccountReleaseSchedule,
+                                               "accountIndex" .= aiAccountIndex]
 
           lastFinBal = getBal lastFinInfo
           bestBal = getBal bestInfo
