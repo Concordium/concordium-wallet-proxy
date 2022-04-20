@@ -810,7 +810,7 @@ On success, the response is of the following form:
 ```
 
 ## Next Payday
-A GET request to `/v0/chainParameters` returns the timestamp of the next payday.
+A GET request to `/v0/nextPayday` returns the timestamp of the next payday.
 Example:
 ```json
 {
