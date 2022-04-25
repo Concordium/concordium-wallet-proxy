@@ -354,17 +354,17 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
               "transferToPublic" ->
                 costResponse $ accountDecryptEnergyCost accountDecryptPayloadSize numSignatures
               "registerDelegation" -> do
-                isTargetLPool <- isJust <$> lookupGetParam "lPool"
+                isTargetPassiveDelegation <- isJust <$> lookupGetParam "passive"
                 costResponse $
                   delegationConfigureEnergyCost
-                    (registerDelegationPayloadSize isTargetLPool)
+                    (registerDelegationPayloadSize isTargetPassiveDelegation)
                     numSignatures
               "updateDelegation" -> do
                 isAmountUpdated <- isJust <$> lookupGetParam "amount"
                 isRestakeUpdated <- isJust <$> lookupGetParam "restake"
                 isTargetUpdated <- isJust <$> lookupGetParam "target"
-                isTargetLPool <- isJust <$> lookupGetParam "lPool"
-                let pSize = updateDelegationPayloadSize isAmountUpdated isRestakeUpdated isTargetUpdated isTargetLPool
+                isTargetPassiveDelegation <- isJust <$> lookupGetParam "passive"
+                let pSize = updateDelegationPayloadSize isAmountUpdated isRestakeUpdated isTargetUpdated isTargetPassiveDelegation
                 costResponse $ delegationConfigureEnergyCost pSize numSignatures
               "removeDelegation" ->
                 costResponse $ delegationConfigureEnergyCost removeDelegationPayloadSize numSignatures
@@ -1308,9 +1308,9 @@ getBakerPoolR bid =
 
 getChainParametersR :: Handler TypedContent
 getChainParametersR =
-    runGRPC doGetParameters $ \(v :: Parameters.ChainParameters' 'ChainParametersV1) -> do
+    runGRPC doGetParameters $ \(v :: Value) -> do
       $(logInfo) "Successfully got chain parameters."
-      sendResponse $ toJSON v
+      sendResponse v
   where
     doGetParameters = do
       summary <- withLastFinalBlockHash Nothing getBlockSummary

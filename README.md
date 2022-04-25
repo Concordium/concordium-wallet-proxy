@@ -23,7 +23,7 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/ip_info`: get the identity providers information, including links for
   submitting initial identity issuance requests.
 * `GET /v0/bakerPool/{bakerId}`: get the status of a baker pool given the baker ID.
-* `GET /v0/poolParameters`: get the pool parameters.
+* `GET /v0/chainParameters`: get the chain parameters.
 
 ### Errors
 
@@ -145,7 +145,7 @@ The `AccountBalance` value is always an object with the following four fields
   - `"stakedAmount"` (required): the amount that is currently staked
   - `"restakeEarnings"` (required): a boolean indicating whether earnings are
   - `"delegationTarget"` (required): the delegation target consisting of
-    * `"delegateType"` (required): the type of delegation which value is either `"L-Pool"` or `"Baker"`
+    * `"delegateType"` (required): the type of delegation which value is either `"Passive"` or `"Baker"`
     * `"bakerId"` (optional): If the value `"delegateType"` is `"Baker"`, then `"bakerId"` is the ID of the target pool,
        otherwise not present.
   - `"pendingChange"` (optional): if present indicates that the delegator is in a cooldown due to removal or a change of stake.
@@ -224,7 +224,7 @@ The following query parameters are supported
 - `memoSize`, the size of the transfer memo. Optionaly, and only supported if the node is running protocol version 2 or higher, and only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
 - `amount`, whether the staked amount is updated. Optionally, and only applies when `type` is either `updateDelegation`, `updateBakerStake` and `configureBaker`.
 - `restake`, whether it is updated to restake earnings. Optionally, and only applies when `type` is either `updateDelegation`, `updateBakerStake` and `configureBaker`.
-- `lPool`, whether the delegation target is set to the L-pool. Optionally, and only applies when `type` is either `registerDelegation` or `updateDelegation`.
+- `passive`, whether the delegation target is set to passive delegation. Optionally, and only applies when `type` is either `registerDelegation` or `updateDelegation`.
 - `target`, whether the delegation target is updated. Optionally, and only applies when `type` is `updateDelegation`.
 - `metadataSize`, the size of the metadata url of a baker pool. Optionally, and only applies when `type` is either `registerBaker`, `updateBakerPool` or `configureBaker`. If not present when `type` is `registerBaker`, the maximum url size is used in the cost calculation. If not present when `type` is `updateBakerPool` or `configureBaker`, it is assumed that the metadata url is not updated.
 - `openStatus`, whether the open status of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
@@ -751,14 +751,53 @@ The value of `"openStatus"` is either `"openForAll"`, `"closedForNew"` or `"clos
 ## Chain Parameters
 A GET request to `/v0/chainParameters` returns a
 JSON object containing the chain parameters.
-On success, the response is of the following form:
+
+The format depends on the protocol version.
+
+In protocol version <= 3, on success, the response is of the following form:
 ```json
 {
-    "mintPerPayday": 7.48246766e-6,
+    "minimumThresholdForBaking": "14000000000",
     "rewardParameters": {
         "mintDistribution": {
-            "bakingReward": 0.45,
-            "finalizationReward": 0.35
+            "mintPerSlot": 7.55567831e-10,
+            "bakingReward": 0.6,
+            "finalizationReward": 0.3
+        },
+        "transactionFeeDistribution": {
+            "gasAccount": 0.45,
+            "baker": 0.45
+        },
+        "gASRewards": {
+            "chainUpdate": 5.0e-3,
+            "accountCreation": 2.0e-2,
+            "baker": 0.25,
+            "finalizationProof": 5.0e-3
+        }
+    },
+    "microGTUPerEuro": {
+        "denominator": 459103742749,
+        "numerator": 13805735799344988160
+    },
+    "foundationAccountIndex": 10,
+    "accountCreationLimit": 10,
+    "bakerCooldownEpochs": 166,
+    "electionDifficulty": 2.5e-2,
+    "euroPerEnergy": {
+        "denominator": 50000,
+        "numerator": 1
+    }
+}
+```
+
+In protocol version > 3, on success, the response is of the following form:
+```json
+{
+    "mintPerPayday": 1.088e-5,
+    "rewardParameters": {
+        "mintDistribution": {
+            "bakingReward": 0.6,
+            "finalizationReward": 0.3
         },
         "transactionFeeDistribution": {
             "gasAccount": 0.45,
@@ -771,30 +810,30 @@ On success, the response is of the following form:
             "finalizationProof": 5.0e-3
         }
     },
-    "poolOwnerCooldown": 10801,
-    "capitalBound": 0.3,
+    "poolOwnerCooldown": 10800,
+    "capitalBound": 0.25,
     "microGTUPerEuro": {
-        "denominator": 472657102571,
-        "numerator": 12054725891240307000
+        "denominator": 520665778663,
+        "numerator": 15680480332915073024
     },
-    "rewardPeriodLength": 3,
-    "transactionCommissionLPool": 0.1,
+    "rewardPeriodLength": 4,
+    "passiveTransactionCommission": 0.1,
     "leverageBound": {
         "denominator": 1,
-        "numerator": 2
+        "numerator": 3
     },
     "foundationAccountIndex": 5,
-    "finalizationCommissionLPool": 1.0,
-    "delegatorCooldown": 7201,
+    "passiveFinalizationCommission": 1.0,
+    "delegatorCooldown": 7200,
     "bakingCommissionRange": {
         "max": 5.0e-2,
         "min": 5.0e-2
     },
-    "bakingCommissionLPool": 0.1,
+    "passiveBakingCommission": 0.1,
     "accountCreationLimit": 10,
     "finalizationCommissionRange": {
-        "max": 1.0,
-        "min": 1.0
+        "max": 5.0e-2,
+        "min": 5.0e-2
     },
     "electionDifficulty": 2.5e-2,
     "euroPerEnergy": {
@@ -805,7 +844,7 @@ On success, the response is of the following form:
         "max": 5.0e-2,
         "min": 5.0e-2
     },
-    "minimumEquityCapital": "1000000000"
+    "minimumEquityCapital": "14000000000"
 }
 ```
 

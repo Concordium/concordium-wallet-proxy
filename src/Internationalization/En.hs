@@ -166,7 +166,7 @@ translation = I18n {..}
         i18nEvent DelegationSetRestakeEarnings{..} = "Delegator " <> descrDelegator edsreDelegatorId edsreAccount <> if edsreRestakeEarnings then " set to restake earnings." else " unset restaking of earnings."
         i18nEvent DelegationSetDelegationTarget{..} = "Delegator " <> descrDelegator edsdtDelegatorId edsdtAccount <> " set delegation target to " <>
           case edsdtDelegationTarget of
-            DelegateToLPool -> "L-pool"
+            DelegatePassive -> "passive delegation"
             DelegateToBaker bid -> "baker pool " <> Text.pack (show bid)
         i18nEvent DelegationAdded{..} = "Added delegator " <> descrDelegator edaDelegatorId edaAccount
         i18nEvent DelegationRemoved{..} = "Removed delegator " <> descrDelegator edrDelegatorId edrAccount
@@ -204,7 +204,7 @@ translation = I18n {..}
               "  - " <> descrAmount stoOldGASAccount <> " was the old balance of the GAS account",
               "  - " <> descrAmount stoNewGASAccount <> " is the new balance of the GAS account",
               "  - " <> descrAmount stoBakerReward <> " accrued to pool with ID " <> descrBakerId stoBakerId,
-              "  - " <> descrAmount stoLPoolReward <> " accrued to the L-pool",
+              "  - " <> descrAmount stoPassiveReward <> " accrued by passive delegation",
               "  - " <> descrAmount stoFoundationCharge <> " accrued to the foundation"
               ]
         i18nSpecialEvent PaydayPoolReward{..} = "Payday rewards to " <> poolName <> ":\n" <>
@@ -214,7 +214,7 @@ translation = I18n {..}
                     "  - " <> descrAmount stoFinalizationReward <> " from finalization rewards"
                 ]
             where
-                poolName = maybe "L-pool" (\bid -> "pool with ID " <> descrBakerId bid) stoPoolOwner
+                poolName = maybe "passive delegators" (\bid -> "pool with ID " <> descrBakerId bid) stoPoolOwner
 
         i18nSpecialOutcomeShort BakingRewards{} = "Baking rewards"
         i18nSpecialOutcomeShort Mint{} = "New CCD minted"
