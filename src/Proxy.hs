@@ -587,8 +587,9 @@ getSimpleTransactionStatus i trHash = do
             case tsResult of
                 TxSuccess _ -> return ["outcome" .= String "success"]
                 TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
-        _ ->
-          Left "Unsupported transaction type for simple statuses."
+        _ -> case tsResult of
+              TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
+              _ -> Left "Unsupported transaction type for simple statuses."
     outcomesToPairs :: [TransactionSummary] -> Either String [Pair]
     outcomesToPairs l = do
       outcomes <- mapM outcomeToPairs l
