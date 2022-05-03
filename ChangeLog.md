@@ -3,8 +3,11 @@
 ## Unreleased changes
  - add `GET /v0/bakerPool/{bakerId}` endpoint
  - add `GET /v0/chainParameters` endpoint
+ - add `GET /v0/nextPayday` endpoint
  - add support for delegation events and new baker and delegation transactions
    in the `submissionStatus` endpoint.
+ - add support for the cost of the new baker and delegation transactions
+   in the `transactionCost` endpoint.
  - add support for events triggered by V1 smart contracts
 
 ## 0.8.2
