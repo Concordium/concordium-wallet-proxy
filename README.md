@@ -24,6 +24,7 @@ The wallet proxy provides the following endpoints:
   submitting initial identity issuance requests.
 * `GET /v0/bakerPool/{bakerId}`: get the status of a baker pool given the baker ID.
 * `GET /v0/chainParameters`: get the chain parameters.
+* `GET /v0/nextPayday`: get the next payday.
 
 ### Errors
 

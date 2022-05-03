@@ -56,7 +56,6 @@ import Concordium.Types.Accounts
 import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
-import qualified Concordium.Types.Parameters as Parameters
 
 import Concordium.Client.GRPC
 import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
