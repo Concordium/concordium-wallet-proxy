@@ -57,11 +57,26 @@ descrAccount = Text.pack . show
 descrInstance :: ContractAddress -> Text
 descrInstance = Text.pack . show
 
+descrOpenStatus :: OpenStatus -> Text
+descrOpenStatus = Text.pack . show
+
+descrMetadataURL :: UrlText -> Text
+descrMetadataURL (UrlText t) = t
+
+descrAmountFraction :: AmountFraction -> Text
+descrAmountFraction = Text.pack . show
+
 descrAmount :: Amount -> Text
 descrAmount amount = pack (amountToString amount) <> " CCD"
 
+descrBakerId :: BakerId -> Text
+descrBakerId = Text.pack . show
+
 descrBaker :: BakerId -> AccountAddress -> Text
-descrBaker bid addr = Text.pack $ show addr ++ "(ID " ++ show bid ++ ")"
+descrBaker bid addr = Text.pack $ show addr ++ " (ID " ++ show bid ++ ")"
+
+descrDelegator :: DelegatorId  -> AccountAddress -> Text
+descrDelegator did addr = Text.pack $ show addr ++ " (ID " ++ show did ++ ")"
 
 descrAddress :: Address -> Text
 descrAddress (AddressAccount addr) = descrAccount addr

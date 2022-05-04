@@ -52,6 +52,7 @@ import Data.Time.Clock as Clock
 import Paths_wallet_proxy (version)
 import Concordium.Types
 import Concordium.Types.Queries
+import Concordium.Types.Accounts
 import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
@@ -66,7 +67,7 @@ import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
                                            accountEncryptEnergyCost,
                                            accountEncryptPayloadSize,
                                            accountDecryptEnergyCost,
-                                           accountDecryptPayloadSize,
+                                           accountDecryptPayloadSize, delegationConfigureEnergyCost, registerDelegationPayloadSize, updateDelegationPayloadSize, removeDelegationPayloadSize, bakerConfigurePayloadSize, bakerConfigureEnergyCostWithKeys, bakerConfigureEnergyCostWithoutKeys
                                            )
 import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex, CredentialIndex)
 import Concordium.Crypto.SignatureScheme (KeyPair)
@@ -149,6 +150,9 @@ mkYesod "Proxy" [parseRoutes|
 /v0/health HealthR GET
 /v0/ip_info IpsR GET
 /v1/accTransactions/#Text AccountTransactionsV1R GET
+/v0/bakerPool/#Word64 BakerPoolR GET
+/v0/chainParameters ChainParametersR GET
+/v0/nextPayday NextPaydayR GET
 |]
 
 -- |Terminate execution and respond with 400 status code with the given error
@@ -194,6 +198,18 @@ runGRPC c k = do
         ]
     Right (Right a) -> k a
 
+pendingChangeToJSON :: AE.KeyValue kv => StakePendingChange' UTCTime -> [kv]
+pendingChangeToJSON NoChange = []
+pendingChangeToJSON (ReduceStake amt eff) =
+    [ "pendingChange"
+        .= object
+            ["change" .= String "ReduceStake", "newStake" .= amt, "effectiveTime" .= eff]
+    ]
+pendingChangeToJSON (RemoveStake eff) =
+    [ "pendingChange"
+        .= object
+            ["change" .= String "RemoveStake", "effectiveTime" .= eff]
+    ]
 
 -- |Get the balance of an account.  If successful, the result is a JSON
 -- object consisting of the following optional fields:
@@ -212,19 +228,42 @@ getAccountBalanceR addrText =
           -- We're doing it in this low-level way to avoid parsing anything that
           -- is not needed, especially the encrypted amounts, since those are
           -- fairly expensive to parse.
-          getBal (Object obj) = do
-            publicAmount <- HM.lookup "accountAmount" obj
-            encryptedAmount <- HM.lookup "accountEncryptedAmount" obj
-            nnce <- HM.lookup "accountNonce" obj
-            releases <- HM.lookup "accountReleaseSchedule" obj
-            let staked = case HM.lookup "accountBaker" obj of
-                  Nothing -> []
-                  Just b -> ["accountBaker" .= b]
-            return . object $ staked ++ ["accountAmount" .= publicAmount,
-                                         "accountEncryptedAmount" .= encryptedAmount,
-                                         "accountNonce" .= nnce,
-                                         "accountReleaseSchedule" .= releases]
-          getBal _ = Nothing
+          -- getBal (Object obj) = do
+          getBal v =
+            case AE.fromJSON v of
+                AE.Error _ -> Nothing
+                AE.Success Nothing -> Nothing
+                AE.Success (Just AccountInfo{..}) ->
+                  let staked =
+                        case aiStakingInfo of
+                          AccountStakingNone -> []
+                          AccountStakingBaker{..} ->
+                            let bi = object $
+                                  [
+                                    "stakedAmount" .= asiStakedAmount,
+                                    "restakeEarnings" .= asiStakeEarnings,
+                                    "bakerId" .= _bakerIdentity asiBakerInfo,
+                                    "bakerElectionVerifyKey" .= _bakerElectionVerifyKey asiBakerInfo,
+                                    "bakerSignatureVerifyKey" .= _bakerSignatureVerifyKey asiBakerInfo,
+                                    "bakerAggregationVerifyKey" .= _bakerAggregationVerifyKey asiBakerInfo
+                                  ]
+                                  <> pendingChangeToJSON asiPendingChange
+                                  <> maybe [] (\bpi -> ["bakerPoolInfo" .= bpi]) asiPoolInfo
+                            in ["accountBaker" .= bi]
+                          AccountStakingDelegated{..} ->
+                            let di = object $
+                                  [
+                                    "stakedAmount" .= asiStakedAmount,
+                                    "restakeEarnings" .= asiStakeEarnings,
+                                    "delegationTarget" .= asiDelegationTarget
+                                  ]
+                                  <> pendingChangeToJSON asiDelegationPendingChange
+                            in ["accountDelegation" .= di]
+                  in Just $ object $ staked ++ ["accountAmount" .= aiAccountAmount,
+                                               "accountEncryptedAmount" .= aiAccountEncryptedAmount,
+                                               "accountNonce" .= aiAccountNonce,
+                                               "accountReleaseSchedule" .= aiAccountReleaseSchedule,
+                                               "accountIndex" .= aiAccountIndex]
 
           lastFinBal = getBal lastFinInfo
           bestBal = getBal bestInfo
@@ -299,29 +338,84 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                 -- is serialized by prepending 2 bytes for its length.
                 Just msize | pv /= P1 -> return $ fromIntegral (2 + msize)
                            | otherwise -> respond404Error EMActionNotCurrentlySupported
+        let costResponse energyCost = sendResponse $ object ["cost" .= computeCost rate energyCost
+                                      , "energy" .= energyCost
+                                      ]
         case transactionType of
             Nothing -> respond400Error EMMissingParameter RequestInvalid
             Just tty -> case Text.unpack tty of
-              "simpleTransfer" -> do
-                let energyCost = simpleTransferEnergyCost (simpleTransferPayloadSize + memoPayloadSize) numSignatures
-                sendResponse $ object ["cost" .= computeCost rate energyCost
-                                      , "energy" .= energyCost
-                                      ]
-              y | y == "encryptedTransfer" -> do
-                let energyCost = encryptedTransferEnergyCost (encryptedTransferPayloadSize + memoPayloadSize) numSignatures
-                sendResponse $ object ["cost" .= computeCost rate energyCost
-                                      , "energy" .= energyCost
-                                      ]
-                | y == "transferToSecret" -> do
-                    let energyCost = accountEncryptEnergyCost accountEncryptPayloadSize numSignatures
-                    sendResponse $ object ["cost" .= computeCost rate energyCost
-                                          , "energy" .= energyCost
-                                          ]
-                | y == "transferToPublic" -> do
-                    let energyCost = accountDecryptEnergyCost accountDecryptPayloadSize numSignatures
-                    sendResponse $ object ["cost" .= computeCost rate energyCost
-                                          , "energy" .= energyCost
-                                          ]
+              "simpleTransfer" ->
+                costResponse $ simpleTransferEnergyCost (simpleTransferPayloadSize + memoPayloadSize) numSignatures
+              "encryptedTransfer" ->
+                costResponse $ encryptedTransferEnergyCost (encryptedTransferPayloadSize + memoPayloadSize) numSignatures
+              "transferToSecret" -> 
+                costResponse $ accountEncryptEnergyCost accountEncryptPayloadSize numSignatures
+              "transferToPublic" ->
+                costResponse $ accountDecryptEnergyCost accountDecryptPayloadSize numSignatures
+              "registerDelegation" -> do
+                isTargetPassiveDelegation <- isJust <$> lookupGetParam "passive"
+                costResponse $
+                  delegationConfigureEnergyCost
+                    (registerDelegationPayloadSize isTargetPassiveDelegation)
+                    numSignatures
+              "updateDelegation" -> do
+                isAmountUpdated <- isJust <$> lookupGetParam "amount"
+                isRestakeUpdated <- isJust <$> lookupGetParam "restake"
+                isTargetUpdated <- isJust <$> lookupGetParam "target"
+                isTargetPassiveDelegation <- isJust <$> lookupGetParam "passive"
+                let pSize = updateDelegationPayloadSize isAmountUpdated isRestakeUpdated isTargetUpdated isTargetPassiveDelegation
+                costResponse $ delegationConfigureEnergyCost pSize numSignatures
+              "removeDelegation" ->
+                costResponse $ delegationConfigureEnergyCost removeDelegationPayloadSize numSignatures
+              "registerBaker" -> do
+                metasize <- lookupGetParam "metadataSize" >>= \case
+                  Nothing -> return $ Just $ fromIntegral maxUrlTextLength
+                  Just ms -> case readMaybe $ Text.unpack ms of
+                    Nothing -> respond400Error (EMParseError "Could not parse `metadataSize` value.") RequestInvalid
+                    Just v -> return $ Just v
+                let pSize = bakerConfigurePayloadSize True True True True metasize True True True
+                costResponse $ bakerConfigureEnergyCostWithKeys pSize numSignatures
+              "updateBakerStake" -> do
+                isAmountUpdated <- isJust <$> lookupGetParam "amount"
+                isRestakeUpdated <- isJust <$> lookupGetParam "restake"
+                let pSize = bakerConfigurePayloadSize isAmountUpdated isRestakeUpdated False False Nothing False False False
+                costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
+              "updateBakerPool" -> do
+                metasize <- lookupGetParam "metadataSize" >>= \case
+                  Nothing -> return Nothing
+                  Just ms -> case readMaybe $ Text.unpack ms of
+                    Nothing -> respond400Error (EMParseError "Could not parse `metadataSize` value.") RequestInvalid
+                    Just v -> return $ Just v
+                isOpenStatusUpdated <- isJust <$> lookupGetParam "openStatus"
+                isTComUpdated <- isJust <$> lookupGetParam "transactionCommission"
+                isBComUpdated <- isJust <$> lookupGetParam "bakerRewardCommission"
+                isFComUpdated <- isJust <$> lookupGetParam "finalizationRewardCommission"
+                let pSize = bakerConfigurePayloadSize False False isOpenStatusUpdated False metasize isTComUpdated isBComUpdated isFComUpdated
+                costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
+              "updateBakerKeys" -> do
+                let pSize = bakerConfigurePayloadSize False False False True Nothing False False False
+                costResponse $ bakerConfigureEnergyCostWithKeys pSize numSignatures
+              "removeBaker" -> do
+                let pSize = bakerConfigurePayloadSize True False False False Nothing False False False
+                costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
+              "configureBaker" -> do
+                metasize <- lookupGetParam "metadataSize" >>= \case
+                  Nothing -> return Nothing
+                  Just ms -> case readMaybe $ Text.unpack ms of
+                    Nothing -> respond400Error (EMParseError "Could not parse `metadataSize` value.") RequestInvalid
+                    Just v -> return $ Just v
+                isAmountUpdated <- isJust <$> lookupGetParam "amount"
+                isRestakeUpdated <- isJust <$> lookupGetParam "restake"
+                isOpenStatusUpdated <- isJust <$> lookupGetParam "openStatus"
+                areKeysUpdated <- isJust <$> lookupGetParam "keys"
+                isTComUpdated <- isJust <$> lookupGetParam "transactionCommission"
+                isBComUpdated <- isJust <$> lookupGetParam "bakerRewardCommission"
+                isFComUpdated <- isJust <$> lookupGetParam "finalizationRewardCommission"
+                let pSize = bakerConfigurePayloadSize isAmountUpdated isRestakeUpdated isOpenStatusUpdated areKeysUpdated metasize isTComUpdated isBComUpdated isFComUpdated
+                costResponse $
+                  (if areKeysUpdated then bakerConfigureEnergyCostWithKeys else bakerConfigureEnergyCostWithoutKeys)
+                    pSize
+                    numSignatures
               tty' -> respond400Error (EMParseError $ "Could not parse transaction type: " <> tty') RequestInvalid
       fetchUpdates :: ClientMonad IO (Either String (EnergyRate, ProtocolVersion))
       fetchUpdates = do
@@ -481,8 +575,20 @@ getSimpleTransactionStatus i trHash = do
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
               Left $ "Unexpected outcome of public to secret transfer: " ++ show es
-        _ ->
-          Left "Unsupported transaction type for simple statuses."
+        TSTAccountTransaction (Just TTConfigureBaker) ->
+            case tsResult of
+                TxSuccess ((eventBakerId -> (Just bid)) : _) ->
+                    return ["outcome" .= String "success",
+                            "bakerId" .= bid]
+                TxSuccess _ -> return ["outcome" .= String "success"]
+                TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
+        TSTAccountTransaction (Just TTConfigureDelegation) ->
+            case tsResult of
+                TxSuccess _ -> return ["outcome" .= String "success"]
+                TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
+        _ -> case tsResult of
+              TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
+              _ -> Left "Unsupported transaction type for simple statuses."
     outcomesToPairs :: [TransactionSummary] -> Either String [Pair]
     outcomesToPairs l = do
       outcomes <- mapM outcomeToPairs l
@@ -510,6 +616,15 @@ viewScheduledTransfer (TSTAccountTransaction (Just TTTransferWithSchedule)) = Tr
 viewScheduledTransfer (TSTAccountTransaction (Just TTTransferWithScheduleAndMemo)) = True
 viewScheduledTransfer _ = False
 
+-- |Get the baker ID from a baker configuration event
+eventBakerId :: Event -> Maybe BakerId
+eventBakerId BakerAdded{..} = Just ebaBakerId
+eventBakerId BakerRemoved{..} = Just ebrBakerId
+eventBakerId BakerStakeIncreased{..} = Just ebsiBakerId
+eventBakerId BakerStakeDecreased{..} = Just ebsiBakerId
+eventBakerId BakerSetRestakeEarnings{..} = Just ebsreBakerId
+eventBakerId BakerKeysUpdated{..} = Just ebkuBakerId
+eventBakerId _ = Nothing
 
 -- Get the status of the submission.
 getSubmissionStatusR :: Text -> Handler TypedContent
@@ -758,6 +873,50 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
             "events" .= [i18n i v]
           ]
       ]
+    AE.Success (Right v@PaydayFoundationReward{..}) ->
+      return [
+        "origin" .= object ["type" .= ("reward" :: Text)],
+        "total" .= stoDevelopmentCharge,
+        "details" .= object [
+            "type" .= ("paydayFoundationReward" :: Text),
+            "outcome" .= ("success" :: Text),
+            "description" .= i18n i (ShortDescription v),
+            "events" .= [i18n i v]
+        ]
+      ]
+    AE.Success (Right v@PaydayAccountReward{..}) ->
+      return [
+        "origin" .= object ["type" .= ("reward" :: Text)],
+        "total" .= (stoTransactionFees + stoBakerReward + stoFinalizationReward),
+        "details" .= object [
+            "type" .= ("paydayAccountReward" :: Text),
+            "outcome" .= ("success" :: Text),
+            "description" .= i18n i (ShortDescription v),
+            "events" .= [i18n i v]
+        ]
+      ]
+    AE.Success (Right v@BlockAccrueReward{}) ->
+      return [
+        "origin" .= object ["type" .= ("reward" :: Text)],
+        "total" .= (0 :: Amount), -- Zero, since this is not a payment to a specific account
+        "details" .= object [
+            "type" .= ("blockAccrueReward" :: Text),
+            "outcome" .= ("success" :: Text),
+            "description" .= i18n i (ShortDescription v),
+            "events" .= [i18n i v]
+        ]
+      ]
+    AE.Success (Right v@PaydayPoolReward{}) ->
+      return [
+        "origin" .= object ["type" .= ("reward" :: Text)],
+        "total" .= (0 :: Amount), -- Zero, since this is not a payment to a specific account
+        "details" .= object [
+            "type" .= ("paydayPoolReward" :: Text),
+            "outcome" .= ("success" :: Text),
+            "description" .= i18n i (ShortDescription v),
+            "events" .= [i18n i v]
+        ]
+      ]
     AE.Success (Left TransactionSummary{..}) -> do
       let addMemo mmemo ps =
             case includeMemos of
@@ -884,6 +1043,8 @@ renderTransactionType TTTransferWithSchedule = "transferWithSchedule"
 renderTransactionType TTTransferWithScheduleAndMemo = "transferWithScheduleAndMemo"
 renderTransactionType TTUpdateCredentials = "updateCredentials"
 renderTransactionType TTRegisterData = "registerData"
+renderTransactionType TTConfigureBaker = "configureBaker"
+renderTransactionType TTConfigureDelegation = "configureDelegation"
 
 renderTransactionSummaryType :: TransactionSummaryType -> Text
 renderTransactionSummaryType (TSTAccountTransaction (Just tt)) = renderTransactionType tt
@@ -1135,3 +1296,39 @@ getHealthR =
 
 getIpsR :: Handler TypedContent
 getIpsR = toTypedContent . ipInfo <$> getYesod
+
+
+getBakerPoolR :: Word64 -> Handler TypedContent
+getBakerPoolR bid =
+    runGRPC doGetBaker $ \v -> do
+      $(logInfo) "Successfully got baker pool status."
+      sendResponse v
+  where
+    doGetBaker = withLastFinalBlockHash Nothing (getPoolStatus (BakerId $ AccountIndex bid) False)
+
+getChainParametersR :: Handler TypedContent
+getChainParametersR =
+    runGRPC doGetParameters $ \(v :: Value) -> do
+      $(logInfo) "Successfully got chain parameters."
+      sendResponse v
+  where
+    doGetParameters = do
+      summary <- withLastFinalBlockHash Nothing getBlockSummary
+      return $ parseEither (withObject "Best finalized block" $ \v -> do
+            updates <- v AE..: "updates"
+            updates AE..: "chainParameters"
+        ) =<< summary
+
+getNextPaydayR :: Handler TypedContent
+getNextPaydayR =
+    runGRPC doGetParameters $ \(v :: UTCTime) -> do
+      let timestampObject = object ["nextPaydayTime" .= v]
+      $(logInfo) "Successfully got next payday."
+      sendResponse $ toJSON timestampObject
+  where
+    doGetParameters = do
+      rewardStatus <- withLastFinalBlockHash Nothing getRewardStatus
+      return $ parseEither (withObject "Best finalized block" $ \v -> do
+            v AE..: "nextPaydayTime"
+        ) =<< rewardStatus
+

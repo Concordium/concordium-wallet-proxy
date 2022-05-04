@@ -22,6 +22,9 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/global`: get the cryptographic parameters obtained from the node it is connected to
 * `GET /v0/ip_info`: get the identity providers information, including links for
   submitting initial identity issuance requests.
+* `GET /v0/bakerPool/{bakerId}`: get the status of a baker pool given the baker ID.
+* `GET /v0/chainParameters`: get the chain parameters.
+* `GET /v0/nextPayday`: get the next payday.
 
 ### Errors
 
@@ -120,8 +123,9 @@ The `AccountBalance` value is always an object with the following four fields
       "total" : totalamount
     }
   ```
+* `"accountIndex"`(required) the index of the account.
 * `"accountBaker"` (optional) if present indicates that this account is
- registered as a baker. If present, the value is always an object with fields
+  registered as a baker. If present, the value is always an object with fields
   - `"stakedAmount"` (required): the amount that is currently staked
   - `"bakerId"` (required): the baker id the account is registered as
   - `"restakeEarnings"` (required): a boolean indicating whether earnings are
@@ -129,6 +133,30 @@ The `AccountBalance` value is always an object with the following four fields
   - `"bakerAggregationVerifyKey"` (required): public key to verify aggregate signatures in which the baker participates.
   - `"bakerElectionVerifyKey"` (required): public key to verify the baker has won the election.
   - `"bakerSignatureVerifyKey"` (required): public key to verify block signatures signed by the baker.
+  - `"pendingChange"` (optional): if present indicates that the baker is in a cooldown due to removal or a change of stake.
+    If present, the value is an object with the fields
+    * `"change"` (required): indicating the kind of change which value is either `"reduceStake"` indicating that the
+      baker's stake is reduced at the end of the cooldown period, or `"removeStake"` indicating that the baker is being
+      removed at the end of the cooldown period.
+    * `"effectiveTime"` (required): the time at which the cooldown ends and the change takes effect, e.g. `"2022-03-30T16:43:53.5Z"`.
+    * `"newStake"` (optional): This field is present if the value of the field `"change"` is `"reduceStake"`,
+        and the value is the new stake after the cooldown.
+* `"accountDelegation"` (optional) if present indicates that this account is
+  registered as a delegator. If present, the value is always an object with fields
+  - `"stakedAmount"` (required): the amount that is currently staked
+  - `"restakeEarnings"` (required): a boolean indicating whether earnings are
+  - `"delegationTarget"` (required): the delegation target consisting of
+    * `"delegateType"` (required): the type of delegation which value is either `"Passive"` or `"Baker"`
+    * `"bakerId"` (optional): If the value `"delegateType"` is `"Baker"`, then `"bakerId"` is the ID of the target pool,
+       otherwise not present.
+  - `"pendingChange"` (optional): if present indicates that the delegator is in a cooldown due to removal or a change of stake.
+    If present, the value is an object with the fields
+    * `"change"` (required): indicating the kind of change which value is either `"reduceStake"` indicating that the
+      delegators's stake is reduced at the end of the cooldown period, or `"removeStake"` indicating that the delegator is being
+      removed at the end of the cooldown period.
+    * `"effectiveTime"` (required): the time at which the cooldown ends and the change takes effect, e.g. `"2022-03-30T16:43:53.5Z"`.
+    * `"newStake"` (optional): This field is present if the value of the field `"change"` is `"reduceStake"`,
+        and the value is the new stake after the cooldown.
 
 ## Account Nonce
 
@@ -179,9 +207,33 @@ The field is mandatory, and the value will always be a hex-encoded public key.
 The cost for a transaction, both in energy and CCD is obtained on the
 `v0/transactionCost` endpoint.
 The following query parameters are supported
-- `type`, the type of the transaction. This is mandatory and can be one of `simpleTransfer`, `encryptedTransfer`, `transferToSecret` or `transferToPublic`.
+- `type`, the type of the transaction. This is mandatory and can be one of
+  - `simpleTransfer`,
+  - `encryptedTransfer`,
+  - `transferToSecret`,
+  - `transferToPublic`,
+  - `registerDelegation`,
+  - `updateDelegation`,
+  - `removeDelegation`,
+  - `registerBaker`,
+  - `updateBakerStake`,
+  - `updateBakerPool`,
+  - `updateBakerKeys`,
+  - `removeBaker`, or
+  - `configureBaker`.
 - `numSignatures`, the number of signatures on the transaction, defaults to 1 if not present.
 - `memoSize`, the size of the transfer memo. Optionaly, and only supported if the node is running protocol version 2 or higher, and only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
+- `amount`, whether the staked amount is updated. Optionally, and only applies when `type` is either `updateDelegation`, `updateBakerStake` and `configureBaker`.
+- `restake`, whether it is updated to restake earnings. Optionally, and only applies when `type` is either `updateDelegation`, `updateBakerStake` and `configureBaker`.
+- `passive`, whether the delegation target is set to passive delegation. Optionally, and only applies when `type` is either `registerDelegation` or `updateDelegation`.
+- `target`, whether the delegation target is updated. Optionally, and only applies when `type` is `updateDelegation`.
+- `metadataSize`, the size of the metadata url of a baker pool. Optionally, and only applies when `type` is either `registerBaker`, `updateBakerPool` or `configureBaker`. If not present when `type` is `registerBaker`, the maximum url size is used in the cost calculation. If not present when `type` is `updateBakerPool` or `configureBaker`, it is assumed that the metadata url is not updated.
+- `openStatus`, whether the open status of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
+- `transactionCommission`, whether the transaction fee commission of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
+- `bakerRewardCommission`, whether the baker reward commission of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
+- `finalizationRewardCommission`, whether the finalization reward of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
+
+Notice that when `type` is `configureBaker`, the cost of all possible "configure baker" transactions can be calculated. This means for instance that `/v0/transactionCost?type=updateBakerKeys` and `/v0/transactionCost?type=configureBaker&keys` would yield the same JSON output.
 
 In case of success the response will always be a JSON object with required fields
 - `"cost"` which is an Amount of CCD this transfer will cost at current
@@ -439,6 +491,10 @@ It consists of the following fields:
   - `"platformDevelopmentCharge"` (only returned when viewing the foundation account)
   - `"finalizationReward"`
   - `"blockReward"`
+  - `"paydayFoundationReward"`
+  - `"paydayAccountReward"`
+  - `"blockAccrueReward"` (in practice, this is not possible, as the transaction does not pertain to any particular account)
+  - `"paydayPoolReward"` (in practice, this is not possible, as the transaction does not pertain to any particular account)
   - `"deployCredential"`
   - `"updateCredentials"`
   - `"updateAccountKeys"`
@@ -632,6 +688,176 @@ In this case the wallet must have made some action to cause this (or the user
 has used account externally), in both of these cases you can do a similar
 analysis with indices to determine the partial balance that you have already
 decrypted, but of course in this case it will change.
+
+## Baker Pool Status
+A GET request to `/v0/bakerPool/n` returns a
+JSON object containing various information about the baker pool with ID `n`.
+On success, the response is of the following form:
+```json
+{
+    "poolType": "BakerPool",
+    "bakerId": 0,
+    "bakerEquityCapital": "3000000000000",
+    "delegatedCapitalCap": "1000500230710",
+    "poolInfo": {
+        "commissionRates": {
+            "transactionCommission": 5.0e-2,
+            "finalizationCommission": 1.0,
+            "bakingCommission": 5.0e-2
+        },
+        "openStatus": "openForAll",
+        "metadataUrl": "http://example"
+    },
+    "bakerStakePendingChange": {
+        "pendingChangeType": "NoChange"
+    },
+    "bakerAddress": "2zmRFpd7g12oBAZHSDqnbJ3Eg5HGr2sE9aFCL6mD3pyUSsiDSJ",
+    "delegatedCapital": "1500480508",
+    "currentPaydayStatus": {
+        "finalizationLive": true,
+        "effectiveStake": "3001500480508",
+        "transactionFeesEarned": "0",
+        "bakerEquityCapital": "3000000000000",
+        "lotteryPower": 0.20008001762276778,
+        "blocksBaked": 27,
+        "delegatedCapital": "1500480508"
+    }
+}
+```
+In the above, the value `"bakerStakePendingChange"` is either of the form
+```json
+{
+    "pendingChangeType": "NoChange"
+}
+```
+in the case that the baker is NOT in a cooldown period, or
+```json
+{
+    "bakerEquityCapital": "1000000000",
+    "pendingChangeType": "ReduceBakerCapital",
+    "effectiveTime": "2022-03-30T16:43:53.5Z"
+}
+```
+in case that the baker's stake is reduced, or
+```json
+{
+    "pendingChangeType": "RemovePool",
+    "effectiveTime": "2022-03-31T23:54:48.25Z"
+}
+```
+in case that the baker pool is removed.
+The value of `"openStatus"` is either `"openForAll"`, `"closedForNew"` or `"closedForAll"`.
+
+
+## Chain Parameters
+A GET request to `/v0/chainParameters` returns a
+JSON object containing the chain parameters.
+
+The format depends on the protocol version.
+
+In protocol version <= 3, on success, the response is of the following form:
+```json
+{
+    "minimumThresholdForBaking": "14000000000",
+    "rewardParameters": {
+        "mintDistribution": {
+            "mintPerSlot": 7.55567831e-10,
+            "bakingReward": 0.6,
+            "finalizationReward": 0.3
+        },
+        "transactionFeeDistribution": {
+            "gasAccount": 0.45,
+            "baker": 0.45
+        },
+        "gASRewards": {
+            "chainUpdate": 5.0e-3,
+            "accountCreation": 2.0e-2,
+            "baker": 0.25,
+            "finalizationProof": 5.0e-3
+        }
+    },
+    "microGTUPerEuro": {
+        "denominator": 459103742749,
+        "numerator": 13805735799344988160
+    },
+    "foundationAccountIndex": 10,
+    "accountCreationLimit": 10,
+    "bakerCooldownEpochs": 166,
+    "electionDifficulty": 2.5e-2,
+    "euroPerEnergy": {
+        "denominator": 50000,
+        "numerator": 1
+    }
+}
+```
+
+In protocol version > 3, on success, the response is of the following form:
+```json
+{
+    "mintPerPayday": 1.088e-5,
+    "rewardParameters": {
+        "mintDistribution": {
+            "bakingReward": 0.6,
+            "finalizationReward": 0.3
+        },
+        "transactionFeeDistribution": {
+            "gasAccount": 0.45,
+            "baker": 0.45
+        },
+        "gASRewards": {
+            "chainUpdate": 5.0e-3,
+            "accountCreation": 2.0e-3,
+            "baker": 0.25,
+            "finalizationProof": 5.0e-3
+        }
+    },
+    "poolOwnerCooldown": 10800,
+    "capitalBound": 0.25,
+    "microGTUPerEuro": {
+        "denominator": 520665778663,
+        "numerator": 15680480332915073024
+    },
+    "rewardPeriodLength": 4,
+    "passiveTransactionCommission": 0.1,
+    "leverageBound": {
+        "denominator": 1,
+        "numerator": 3
+    },
+    "foundationAccountIndex": 5,
+    "passiveFinalizationCommission": 1.0,
+    "delegatorCooldown": 7200,
+    "bakingCommissionRange": {
+        "max": 5.0e-2,
+        "min": 5.0e-2
+    },
+    "passiveBakingCommission": 0.1,
+    "accountCreationLimit": 10,
+    "finalizationCommissionRange": {
+        "max": 5.0e-2,
+        "min": 5.0e-2
+    },
+    "electionDifficulty": 2.5e-2,
+    "euroPerEnergy": {
+        "denominator": 1000000,
+        "numerator": 1
+    },
+    "transactionCommissionRange": {
+        "max": 5.0e-2,
+        "min": 5.0e-2
+    },
+    "minimumEquityCapital": "14000000000"
+}
+```
+
+## Next Payday
+A GET request to `/v0/nextPayday` returns the timestamp of the next payday.
+Example:
+```json
+{
+  "nextPaydayTime":"2022-03-31T15:41:16.5Z"
+}
+```
+
 
 # Deployment
 
