@@ -1,6 +1,8 @@
 # Changelog for wallet-proxy
 
 ## Unreleased changes
+
+## 0.13.4
  - add `GET /v0/bakerPool/{bakerId}` endpoint
  - add `GET /v0/chainParameters` endpoint
  - add `GET /v0/nextPayday` endpoint
