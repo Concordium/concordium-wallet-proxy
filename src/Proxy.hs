@@ -1335,9 +1335,9 @@ getNextPaydayR =
 
 getPassiveDelegationR :: Handler TypedContent
 getPassiveDelegationR =
-    runGRPC doGetBaker $ \v -> do
+    runGRPC doGetPassiveDelegation $ \v -> do
       $(logInfo) "Successfully got baker pool status."
       sendResponse v
   where
-    doGetBaker = withLastFinalBlockHash Nothing (getPoolStatus (BakerId $ AccountIndex 0) True)
+    doGetPassiveDelegation = withLastFinalBlockHash Nothing (getPoolStatus (BakerId $ AccountIndex 0) True)
 
