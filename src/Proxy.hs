@@ -153,6 +153,7 @@ mkYesod "Proxy" [parseRoutes|
 /v0/bakerPool/#Word64 BakerPoolR GET
 /v0/chainParameters ChainParametersR GET
 /v0/nextPayday NextPaydayR GET
+/v0/passiveDelegation PassiveDelegationR GET
 |]
 
 -- |Terminate execution and respond with 400 status code with the given error
@@ -1331,4 +1332,12 @@ getNextPaydayR =
       return $ parseEither (withObject "Best finalized block" $ \v -> do
             v AE..: "nextPaydayTime"
         ) =<< rewardStatus
+
+getPassiveDelegationR :: Handler TypedContent
+getPassiveDelegationR =
+    runGRPC doGetPassiveDelegation $ \v -> do
+      $(logInfo) "Successfully got baker pool status."
+      sendResponse v
+  where
+    doGetPassiveDelegation = withLastFinalBlockHash Nothing (getPoolStatus (BakerId $ AccountIndex 0) True)
 

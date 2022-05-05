@@ -25,6 +25,7 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/bakerPool/{bakerId}`: get the status of a baker pool given the baker ID.
 * `GET /v0/chainParameters`: get the chain parameters.
 * `GET /v0/nextPayday`: get the next payday.
+* `GET /v0/passiveDelegation`: get the status of passive delegation.
 
 ### Errors
 
@@ -858,6 +859,24 @@ Example:
 }
 ```
 
+## Passive Delegation
+A GET request to `/v0/passiveDelegation` returns a
+JSON object containing various information about passive delegation.
+On success, the response is of the following form:
+```json
+{
+    "commissionRates": {
+        "transactionCommission": 0.1,
+        "finalizationCommission": 0.0,
+        "bakingCommission": 0.1
+    },
+    "poolType": "PassiveDelegation",
+    "currentPaydayDelegatedCapital": "0",
+    "allPoolTotalCapital": "15098889000938",
+    "currentPaydayTransactionFeesEarned": "0",
+    "delegatedCapital": "0"
+}
+```
 
 # Deployment
 
