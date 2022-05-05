@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.13.5
+ - add `GET /v0/passiveDelegation` endpoint
+ - correct calculation of cost of the configure baker transaction
+
 ## 0.13.4
  - add `GET /v0/bakerPool/{bakerId}` endpoint
  - add `GET /v0/chainParameters` endpoint
