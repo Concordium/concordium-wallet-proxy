@@ -42,6 +42,7 @@ import qualified Database.Esqueleto.Internal.Internal as EInternal
 import System.Random
 import Data.Foldable
 import Data.Word
+import Data.Range
 
 import Data.Text(Text)
 import qualified Data.Text as Text
@@ -80,10 +81,23 @@ import Internationalization
 data ErrorCode = InternalError | RequestInvalid | DataNotFound
     deriving(Eq, Show, Enum)
 
+-- |Configuration for the @appSettings@ endpoint that returns whether the app is
+-- out of date or not.
+data ForcedUpdateConfig = ForcedUpdateConfig {
+  -- |Versions which are forced to update.
+  fucForceUpdate :: [Range Word],
+  -- |Versions which are going to be suggested to update.
+  fucSuggestUpdate :: [Range Word],
+  -- |URL to update to if the version matches any of the above.
+  fucURL :: String
+  } deriving (Show)
+
 data Proxy = Proxy {
   grpcEnvData :: !EnvData,
   dbConnectionPool :: ConnectionPool,
   gtuDropData :: Maybe GTUDropData,
+  forcedUpdateConfigIOS :: Maybe ForcedUpdateConfig,
+  forcedUpdateConfigAndroid :: Maybe ForcedUpdateConfig,
   healthTolerance :: Int,
   globalInfo :: Value,
   ipInfo :: Value
@@ -154,6 +168,7 @@ mkYesod "Proxy" [parseRoutes|
 /v0/chainParameters ChainParametersR GET
 /v0/nextPayday NextPaydayR GET
 /v0/passiveDelegation PassiveDelegationR GET
+/v0/appSettings AppSettings GET
 |]
 
 -- |Terminate execution and respond with 400 status code with the given error
@@ -1340,4 +1355,36 @@ getPassiveDelegationR =
       sendResponse v
   where
     doGetPassiveDelegation = withLastFinalBlockHash Nothing (getPoolStatus (BakerId $ AccountIndex 0) True)
+
+matchesVersion :: Word -> Maybe ForcedUpdateConfig -> AE.Value
+matchesVersion _ Nothing = AE.object ["status" AE..= String "ok"]
+matchesVersion queryVersion (Just ForcedUpdateConfig{..})
+  | inRanges fucForceUpdate queryVersion = AE.object [
+      "status" AE..= String "needsUpdate",
+      "url" AE..= fucURL
+    ]
+  | inRanges fucSuggestUpdate queryVersion = AE.object [
+      "status" AE..= String "warning",
+      "url" AE..= fucURL
+      ]
+  | otherwise = AE.object ["status" AE..= String "ok"]
+
+getAppSettings :: Handler TypedContent
+getAppSettings = do
+  Proxy{..} <- getYesod
+  mPlatform <- lookupGetParam "platform"
+  mVersion <- lookupGetParam "appVersion"
+  case (Text.strip <$> mPlatform, readMaybe . Text.unpack =<< mVersion) of
+    (Just platform, Just queryVersion) -> do
+      if platform == "android" then
+        sendResponse (matchesVersion queryVersion forcedUpdateConfigAndroid)
+      else if platform == "ios" then
+        sendResponse (matchesVersion queryVersion forcedUpdateConfigIOS)
+      else
+        respond400Error (EMParseError "'param' should either be 'android' or 'ios'") RequestInvalid
+    (Just _, Nothing) -> respond400Error (EMParseError "'version' parameter is not present or readable. It must be a non-negative integer.") RequestInvalid
+    (Nothing, Just _) -> respond400Error (EMParseError "'platform' field is not present.") RequestInvalid
+    (Nothing, Nothing) -> respond400Error (EMParseError "'platform' field is not present and 'version' field is either not present or not readable.") RequestInvalid
+
+
 
