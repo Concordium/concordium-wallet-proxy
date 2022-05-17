@@ -50,6 +50,7 @@ dependencies:
 - yesod >= 1.6
 - warp >= 3.2
 - time
+- range >= 0.3
 - concordium-client
 
 default-extensions:
