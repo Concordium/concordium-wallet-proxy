@@ -1010,7 +1010,7 @@ present.
 The field
 - `forceUpdateVersions` must be a string that denotes ranges of app versions
   that should be forced to update.
-- `suggestUpdateVersions` must a string that denotes ranges of app versions where
+- `suggestUpdateVersions` must be a string that denotes ranges of app versions where
   the users should upgrade, but are not required to.
   
 The range format is fairly standard, e.g., `5,8,10-17` denotes app versions `5`,
