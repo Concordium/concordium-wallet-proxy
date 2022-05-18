@@ -2,6 +2,9 @@
 
 ## Unreleased changes
 
+## 0.14.0
+ - add `GET /v0/appSettings` endpoint
+
 ## 0.13.5
  - add `GET /v0/passiveDelegation` endpoint
  - correct calculation of cost of the configure baker transaction
