@@ -26,6 +26,7 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/chainParameters`: get the chain parameters.
 * `GET /v0/nextPayday`: get the next payday.
 * `GET /v0/passiveDelegation`: get the status of passive delegation.
+* `GET /v0/appSettings`: get the up-to-date status of the app.
 
 ### Errors
 
@@ -878,6 +879,26 @@ On success, the response is of the following form:
 }
 ```
 
+## Up-to-date status of the mobile apps
+
+A GET request to `v0/appSettings` is intended to convey the information about
+the current version of the app, and whether the version that requests the
+information is up to date.
+
+This request has two **mandatory** parameters
+
+- `platform` must be either `ios` or `android`
+- `appVersion` must be a non-negative integer
+
+In case the parameters are not present or readable the response is a standard
+JSON error response with status code 400.
+
+In case of success the response is a JSON object with fields
+- `status` (mandatory) is a string that has value either `ok`, `warning` or `needsUpdate`
+- `url` (optional) is present exactly if the `status` is `warning` or
+  `needsUpdate`. It is a string that will contain a URL where the updated
+  version of the app can be found.
+
 # Deployment
 
 The wallet proxy must have access to
@@ -887,6 +908,8 @@ The wallet proxy must have access to
   and anonymity revokers, and their public keys and metadata.
 - optionally, private keys of the CCD drop account. If this is not provided then
   the gtu drop functionality will be disabled.
+- optionally, the configuration file for the `v0/appSettings` endpoint. See
+  [Forced update configuration file](#forced-update-configuration-file) for the format of the file.
 
 An example invocation is
 ```console
@@ -894,7 +917,8 @@ wallet-proxy --grpc-ip 127.0.0.1\ # IP of the node
              --grpc-port 10000\ # GRPC port the node is listening on
              --db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=postgres"\ # transaction outcome database connection string
              --ip-data identity-providers-with-metadata.json\ # JSON file with identity providers and anonymity revokers
-             --drop-account gtu-drop-account-0.json # keys of the gtu drop account
+             --drop-account gtu-drop-account-0.json\ # keys of the gtu drop account
+             --forced-update-config forced-update-config.json\ # file with app update configuration
              --health-tolerance 30 # tolerated age of last final block in seconds before the health query returns false
 ```
 
@@ -959,3 +983,37 @@ The wallet-proxy queries the database in specific patterns. Every query filters 
 Some queries additionally filter out per transaction type or by time.
 To support efficient retrieval in the common cases it is necessary that the `ati` and `cti` tables have a primary key index on the joint `(account, id)` columns (and analogous columns `(index, subindex, id)` for the `cti` table).
 The order of columns matters, since PostgreSQL will make best use of these indices if the queries have an equality constraint on the leading columns and a relational constraint on the remaining ones.
+
+## Forced update configuration file
+
+If the update configuration file is not present then the `/v0/appSettings`
+endpoint will always return `ok`. If the file is present it must be a valid JSON
+file in the following format
+
+```json
+{
+    "ios": {
+        "forceUpdateVersions": "5,8,10-17",
+        "suggestUpdateVersions": "9",
+        "url": "link to app store"
+    },
+    "android": {
+        "forceUpdateVersions": "-64",
+        "suggestUpdateVersions": "65-80",
+        "url": "link to app store"
+    }
+}
+```
+where both `ios` and `android` are optional and default to empty ranges if not
+present.
+
+The field
+- `forceUpdateVersions` must be a string that denotes ranges of app versions
+  that should be forced to update.
+- `suggestUpdateVersions` must a string that denotes ranges of app versions where
+  the users should upgrade, but are not required to.
+  
+The range format is fairly standard, e.g., `5,8,10-17` denotes app versions `5`,
+`8`, and `10` to `17`, inclusive. Infinite ranges are also supported, e.g.,
+`-64` denotes the range of versions `<= 64`.
+ 

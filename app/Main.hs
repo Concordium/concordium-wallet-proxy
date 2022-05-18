@@ -9,6 +9,7 @@ import Database.Persist.Postgresql
 import qualified Network.Wai.Handler.Warp
 import Data.ByteString(ByteString)
 import Data.Maybe
+import Data.String
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Aeson as AE
 import qualified Data.Aeson.Types as AE
@@ -42,8 +43,8 @@ parser = info (helper <*> parseProxyConfig)
     parseProxyConfig = mkProxyConfig
       <$> backendParser
       <*> strOption (long "db" <> metavar "STR" <> help "database connection string")
-      <*> optional (strOption (long "drop-account" <> metavar "FILE" <> help "file with GTU drop account credentials (only used for stagenet and testnet)."))
-      <*> optional (strOption (long "forced-update-config" <> metavar "FILE" <> help "file with GTU drop account credentials (only used for stagenet and testnet)."))
+      <*> optional (strOption (long "drop-account" <> metavar "FILE" <> help "file with CCD drop account credentials (only used for stagenet and testnet)."))
+      <*> optional (strOption (long "forced-update-config" <> metavar "FILE" <> help "file with the version configuration for forced app updates."))
       <*> optional (option auto (long "health-tolerance" <> metavar "SECONDS" <> help "the maximum tolerated age of the last final block in seconds before the health query returns false."))
       <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and private information on the identity providers, together with metadata.")
     mkProxyConfig backend = ProxyConfig $ GrpcConfig
@@ -118,11 +119,14 @@ main = do
     Nothing -> return (Nothing, Nothing)
     Just fuFileName -> do
       fuFile <- LBS.readFile fuFileName
-      let getKeys = AE.eitherDecode' fuFile >>= AE.parseEither forcedUpdateParser
-      case getKeys of
+      let getUpdateConfig = AE.eitherDecode' fuFile >>= AE.parseEither forcedUpdateParser
+      case getUpdateConfig of
         Left err -> die $ "Cannot parse forced update config: " ++ show err
         Right cfg -> return cfg
   Right ipInfo <- AE.eitherDecode' <$> LBS.readFile pcIpInfo
+  runStderrLoggingT $ do
+    $logDebug ("Using iOS update config: " <> fromString (show forcedUpdateConfigIOS))
+    $logDebug ("Using Android update config: " <> fromString (show forcedUpdateConfigAndroid))
   runStderrLoggingT $ withPostgresqlPool pcDBConnString 10 $ \dbConnectionPool -> liftIO $ do
     -- do not care about the gtu receipients database if gtu drop is not enabled
     when (isJust gtuDropData) $ runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
