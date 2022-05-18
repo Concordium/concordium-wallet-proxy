@@ -1374,7 +1374,7 @@ getAppSettings = do
   Proxy{..} <- getYesod
   mPlatform <- lookupGetParam "platform"
   mVersion <- lookupGetParam "appVersion"
-  case (Text.strip <$> mPlatform, readMaybe . Text.unpack =<< mVersion) of
+  case (mPlatform, readMaybe . Text.unpack =<< mVersion) of
     (Just platform, Just queryVersion) -> do
       if platform == "android" then
         sendResponse (matchesVersion queryVersion forcedUpdateConfigAndroid)
