@@ -169,6 +169,7 @@ mkYesod "Proxy" [parseRoutes|
 /v0/nextPayday NextPaydayR GET
 /v0/passiveDelegation PassiveDelegationR GET
 /v0/appSettings AppSettings GET
+/v0/epochLength EpochLengthR GET
 |]
 
 -- |Terminate execution and respond with 400 status code with the given error
@@ -1386,5 +1387,15 @@ getAppSettings = do
     (Nothing, Just _) -> respond400Error (EMParseError "'platform' field is not present.") RequestInvalid
     (Nothing, Nothing) -> respond400Error (EMParseError "'platform' field is not present and 'version' field is either not present or not readable.") RequestInvalid
 
-
-
+getEpochLengthR :: Handler TypedContent
+getEpochLengthR =
+    runGRPC doGetEpochLength $ \(v :: Duration) -> do
+      let epochLengthObject = object ["epochLength" .= v]
+      $(logInfo) "Successfully got epoch length."
+      sendResponse $ toJSON epochLengthObject
+  where
+    doGetEpochLength = do
+      consensusStatus <- getConsensusStatus
+      return $ parseEither (withObject "Consensus status" $ \v -> do
+            v AE..: "epochDuration"
+        ) =<< consensusStatus

@@ -27,6 +27,7 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/nextPayday`: get the next payday.
 * `GET /v0/passiveDelegation`: get the status of passive delegation.
 * `GET /v0/appSettings`: get the up-to-date status of the app.
+* `GET /v0/epochLength`: get the epoch length in milliseconds.
 
 ### Errors
 
@@ -899,6 +900,15 @@ In case of success the response is a JSON object with fields
   `needsUpdate`. It is a string that will contain a URL where the updated
   version of the app can be found.
 
+## Epoch Length
+
+A GET request to `/v0/epochLength` returns epoch length in milliseconds.
+Example where the epoch length is 3600 seconds (1 hour):
+```json
+{
+  "epochLength":3600000
+}
+```
 # Deployment
 
 The wallet proxy must have access to
