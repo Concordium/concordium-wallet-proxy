@@ -111,27 +111,6 @@ data GTUDropData = GTUDropData {
   dropKeys :: [(CredentialIndex, [(KeyIndex, KeyPair)])]
   }
 
-instance Yesod Proxy where
-  -- Disable session handling entirely. We do not use sessions for anything at the moment.
-  makeSessionBackend _ = return Nothing
-  errorHandler e = do
-    case e of
-      Yesod.InternalError emsg -> $(logError) emsg
-      _ -> return ()
-    i <- internationalize
-    return $ toTypedContent $ object [
-        "errorMessage" .= i18n i (EMErrorResponse e),
-        "error" .= fromEnum code
-      ]
-    where
-      code = case e of
-        NotFound -> RequestInvalid
-        Yesod.InternalError{} -> InternalError
-        InvalidArgs{} -> RequestInvalid
-        NotAuthenticated -> RequestInvalid
-        PermissionDenied{} -> RequestInvalid
-        BadMethod{} -> RequestInvalid
-
 -- Database table for GTU drop
 share [mkPersist sqlSettings, mkMigrate "migrateGTURecipient"] [persistLowerCase|
     GTURecipient
@@ -170,6 +149,29 @@ mkYesod "Proxy" [parseRoutes|
 /v0/passiveDelegation PassiveDelegationR GET
 /v0/appSettings AppSettings GET
 |]
+
+instance Yesod Proxy where
+  -- Disable session handling entirely. We do not use sessions for anything at the moment.
+  makeSessionBackend _ = return Nothing
+  errorHandler e = do
+    case e of
+      Yesod.InternalError emsg -> $(logError) emsg
+      _ -> return ()
+    i <- internationalize
+    return $
+      toTypedContent $
+        object
+          [ "errorMessage" .= i18n i (EMErrorResponse e),
+            "error" .= fromEnum code
+          ]
+    where
+      code = case e of
+        NotFound -> RequestInvalid
+        Yesod.InternalError {} -> InternalError
+        InvalidArgs {} -> RequestInvalid
+        NotAuthenticated -> RequestInvalid
+        PermissionDenied {} -> RequestInvalid
+        BadMethod {} -> RequestInvalid
 
 -- |Terminate execution and respond with 400 status code with the given error
 -- description.
@@ -479,11 +481,9 @@ putCredentialR =
 -- |Use the serialize instance of a type to deserialize
 decodeBase16 :: (MonadFail m) => Text.Text -> m BS.ByteString
 decodeBase16 t =
-    if BS.null rest then return bs
-    else fail $ "Could not decode as base-16: " ++ show t
-    where
-        (bs, rest) = BS16.decode (Text.encodeUtf8 t)
-
+    case BS16.decode (Text.encodeUtf8 t) of
+      Right bs -> return bs
+      Left _ -> fail $ "Could not decode as base-16: " ++ show t
 
 putTransferR :: Handler TypedContent
 putTransferR =
