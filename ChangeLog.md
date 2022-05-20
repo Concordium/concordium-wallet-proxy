@@ -2,6 +2,9 @@
 
 ## Unreleased changes
 
+## 0.15.0
+ - add `GET /v0/epochLength` endpoint
+
 ## 0.14.0
  - add `GET /v0/appSettings` endpoint
 
