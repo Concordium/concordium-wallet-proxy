@@ -141,7 +141,10 @@ The `AccountBalance` value is always an object with the following four fields
     * `"change"` (required): indicating the kind of change which value is either `"reduceStake"` indicating that the
       baker's stake is reduced at the end of the cooldown period, or `"removeStake"` indicating that the baker is being
       removed at the end of the cooldown period.
-    * `"effectiveTime"` (required): the time at which the cooldown ends and the change takes effect, e.g. `"2022-03-30T16:43:53.5Z"`.
+    * `"effectiveTime"` (required): the time at which the cooldown ends, e.g. `"2022-03-30T16:43:53.5Z"`.
+    * `"estimatedChangeTime"` (optional, present if protocol version 4 or
+      later): an estimate of when the change actually takes effect, which is the
+      first payday after the cooldown ends, e.g. `"2022-03-30T16:43:53.5Z"`.
     * `"newStake"` (optional): This field is present if the value of the field `"change"` is `"reduceStake"`,
         and the value is the new stake after the cooldown.
 * `"accountDelegation"` (optional) if present indicates that this account is
@@ -157,7 +160,10 @@ The `AccountBalance` value is always an object with the following four fields
     * `"change"` (required): indicating the kind of change which value is either `"reduceStake"` indicating that the
       delegators's stake is reduced at the end of the cooldown period, or `"removeStake"` indicating that the delegator is being
       removed at the end of the cooldown period.
-    * `"effectiveTime"` (required): the time at which the cooldown ends and the change takes effect, e.g. `"2022-03-30T16:43:53.5Z"`.
+    * `"effectiveTime"` (required): the time at which the cooldown ends, e.g. `"2022-03-30T16:43:53.5Z"`.
+    * `"estimatedChangeTime"` (optional, present if protocol version 4 or
+      later): an estimate of when the change actually takes effect, which is the
+      first payday after the cooldown ends, e.g. `"2022-03-30T16:43:53.5Z"`.
     * `"newStake"` (optional): This field is present if the value of the field `"change"` is `"reduceStake"`,
         and the value is the new stake after the cooldown.
 
@@ -739,6 +745,7 @@ in the case that the baker is NOT in a cooldown period, or
     "bakerEquityCapital": "1000000000",
     "pendingChangeType": "ReduceBakerCapital",
     "effectiveTime": "2022-03-30T16:43:53.5Z"
+    "estimatedChangeTime": "2022-03-30T17:00:00.0Z"
 }
 ```
 in case that the baker's stake is reduced, or
@@ -746,6 +753,7 @@ in case that the baker's stake is reduced, or
 {
     "pendingChangeType": "RemovePool",
     "effectiveTime": "2022-03-31T23:54:48.25Z"
+    "estimatedChangeTime": "2022-04-01T06:00:00.0Z"
 }
 ```
 in case that the baker pool is removed.
