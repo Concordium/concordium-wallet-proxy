@@ -33,7 +33,7 @@ import Network.HTTP.Types(badRequest400, notFound404, badGateway502)
 import Yesod hiding (InternalError)
 import qualified Yesod
 import Database.Persist.Sql
-import Data.Maybe(catMaybes, fromMaybe, isJust)
+import Data.Maybe(catMaybes, fromMaybe, isJust, maybeToList)
 import Data.Either (fromRight)
 import Data.Time.Clock.POSIX
 import qualified Database.Esqueleto as E
@@ -52,6 +52,7 @@ import Data.Time.Clock as Clock
 
 import Paths_wallet_proxy (version)
 import Concordium.Types
+import Concordium.Types.Parameters (TimeParameters(..))
 import Concordium.Types.Queries
 import Concordium.Types.Accounts
 import Concordium.Types.HashableTo
@@ -215,18 +216,50 @@ runGRPC c k = do
         ]
     Right (Right a) -> k a
 
-pendingChangeToJSON :: AE.KeyValue kv => StakePendingChange' UTCTime -> [kv]
-pendingChangeToJSON NoChange = []
-pendingChangeToJSON (ReduceStake amt eff) =
+firstPaydayAfter ::
+  UTCTime -- ^Time of the next payday.
+  -> Duration -- ^Duration of an epoch
+  -> RewardPeriodLength -- ^Length of a payday.
+  -> UTCTime -- ^Time at which the cooldown expires.
+  -> UTCTime
+firstPaydayAfter nextPayday epochDuration (RewardPeriodLength ep) cooldownEnd =
+  if cooldownEnd <= nextPayday
+  then nextPayday
+  else let timeDiff = Clock.diffUTCTime cooldownEnd nextPayday
+           paydayLength = durationToNominalDiffTime (fromIntegral ep * epochDuration)
+           mult :: Word = ceiling (timeDiff / paydayLength)
+       in Clock.addUTCTime (fromIntegral mult * paydayLength) nextPayday
+
+pendingChangeToJSON :: AE.KeyValue kv => UTCTime -> Duration -> Maybe RewardPeriodLength -> StakePendingChange' UTCTime -> [kv]
+pendingChangeToJSON _ _ _ NoChange = []
+pendingChangeToJSON nextPaydayTime epochDuration mrewardEpochs (ReduceStake amt eff) =
     [ "pendingChange"
         .= object
-            ["change" .= String "ReduceStake", "newStake" .= amt, "effectiveTime" .= eff]
+            (["change" .= String "ReduceStake",
+              "newStake" .= amt,
+              "effectiveTime" .= eff
+             ] <> map (\rewardEpochs -> "estimatedChangeTime" .= firstPaydayAfter nextPaydayTime epochDuration rewardEpochs eff) (maybeToList mrewardEpochs))
     ]
-pendingChangeToJSON (RemoveStake eff) =
+pendingChangeToJSON nextPaydayTime epochDuration mrewardEpochs (RemoveStake eff) =
     [ "pendingChange"
         .= object
-            ["change" .= String "RemoveStake", "effectiveTime" .= eff]
+            (["change" .= String "RemoveStake",
+              "effectiveTime" .= eff
+             ] <> map (\rewardEpochs -> "estimatedChangeTime" .= firstPaydayAfter nextPaydayTime epochDuration rewardEpochs eff) (maybeToList mrewardEpochs))
     ]
+
+getRewardPeriodLength :: (MonadFail m, MonadIO m) => Text -> ClientMonad m (Either String (Maybe RewardPeriodLength))
+getRewardPeriodLength lfb = do
+     let timeParametersParser = AE.withObject "Block summary" $ \obj -> do
+           updates <- obj AE..: "updates"
+           pv <- obj AE..: "protocolVersion"
+           chainParameters <- updates AE..: "chainParameters"
+           if pv >= P4 then
+             Just <$> (chainParameters AE..: "timeParameters")
+           else return Nothing
+     summary <- either fail return =<< getBlockSummary lfb
+     timeParams <- liftResult (parse timeParametersParser summary)
+     return (Right (_tpRewardPeriodLength <$> timeParams))
 
 -- |Get the balance of an account.  If successful, the result is a JSON
 -- object consisting of the following optional fields:
@@ -239,66 +272,77 @@ pendingChangeToJSON (RemoveStake eff) =
 -- also be present, since accounts cannot be deleted from the chain.
 getAccountBalanceR :: Text -> Handler TypedContent
 getAccountBalanceR addrText =
-    runGRPC doGetBal $ \(lastFinInfo, bestInfo) -> do
+    runGRPC doGetBal $ \(lastFinInfo, bestInfo, nextPayday, epochDuration, lastFinBlock) -> do
       let
-          getBal :: Value -> Maybe Value
+          getBal :: Value -> Either (Maybe Value) (Maybe RewardPeriodLength -> Value)
           -- We're doing it in this low-level way to avoid parsing anything that
           -- is not needed, especially the encrypted amounts, since those are
           -- fairly expensive to parse.
-          -- getBal (Object obj) = do
           getBal v =
             case AE.fromJSON v of
-                AE.Error _ -> Nothing
-                AE.Success Nothing -> Nothing
-                AE.Success (Just AccountInfo{..}) ->
-                  let staked =
-                        case aiStakingInfo of
-                          AccountStakingNone -> []
-                          AccountStakingBaker{..} ->
-                            let bi = object $
-                                  [
-                                    "stakedAmount" .= asiStakedAmount,
-                                    "restakeEarnings" .= asiStakeEarnings,
-                                    "bakerId" .= _bakerIdentity asiBakerInfo,
-                                    "bakerElectionVerifyKey" .= _bakerElectionVerifyKey asiBakerInfo,
-                                    "bakerSignatureVerifyKey" .= _bakerSignatureVerifyKey asiBakerInfo,
-                                    "bakerAggregationVerifyKey" .= _bakerAggregationVerifyKey asiBakerInfo
-                                  ]
-                                  <> pendingChangeToJSON asiPendingChange
-                                  <> maybe [] (\bpi -> ["bakerPoolInfo" .= bpi]) asiPoolInfo
-                            in ["accountBaker" .= bi]
-                          AccountStakingDelegated{..} ->
-                            let di = object $
-                                  [
-                                    "stakedAmount" .= asiStakedAmount,
-                                    "restakeEarnings" .= asiStakeEarnings,
-                                    "delegationTarget" .= asiDelegationTarget
-                                  ]
-                                  <> pendingChangeToJSON asiDelegationPendingChange
-                            in ["accountDelegation" .= di]
-                  in Just $ object $ staked ++ ["accountAmount" .= aiAccountAmount,
-                                               "accountEncryptedAmount" .= aiAccountEncryptedAmount,
-                                               "accountNonce" .= aiAccountNonce,
-                                               "accountReleaseSchedule" .= aiAccountReleaseSchedule,
-                                               "accountIndex" .= aiAccountIndex]
-
-          lastFinBal = getBal lastFinInfo
-          bestBal = getBal bestInfo
-      $(logInfo) $ "Retrieved account balance for " <> addrText
-                  <> ": finalizedBalance=" <> (Text.pack $ show lastFinBal)
-                  <> ", currentBalance=" <> (Text.pack $ show bestBal)
-      sendResponse $ object $ (maybe [] (\b -> ["finalizedBalance" .= b]) lastFinBal) <>
-                        (maybe [] (\b -> ["currentBalance" .= b]) bestBal)
+                AE.Error _ -> Left Nothing
+                AE.Success Nothing -> Left Nothing
+                AE.Success (Just AccountInfo{..}) -> do
+                  let balanceInfo = ["accountAmount" .= aiAccountAmount,
+                                     "accountEncryptedAmount" .= aiAccountEncryptedAmount,
+                                     "accountNonce" .= aiAccountNonce,
+                                     "accountReleaseSchedule" .= aiAccountReleaseSchedule,
+                                     "accountIndex" .= aiAccountIndex]
+                  case aiStakingInfo of
+                        AccountStakingNone -> Left . Just $ object balanceInfo
+                        AccountStakingBaker{..} -> do
+                          let infoWithoutPending = 
+                                [
+                                  "stakedAmount" .= asiStakedAmount,
+                                  "restakeEarnings" .= asiStakeEarnings,
+                                  "bakerId" .= _bakerIdentity asiBakerInfo,
+                                  "bakerElectionVerifyKey" .= _bakerElectionVerifyKey asiBakerInfo,
+                                  "bakerSignatureVerifyKey" .= _bakerSignatureVerifyKey asiBakerInfo,
+                                  "bakerAggregationVerifyKey" .= _bakerAggregationVerifyKey asiBakerInfo
+                                ]
+                                <> maybe [] (\bpi -> ["bakerPoolInfo" .= bpi]) asiPoolInfo
+                          case asiPendingChange of
+                            NoChange -> Left . Just $ object $ balanceInfo <> ["accountBaker" .= infoWithoutPending]
+                            _ -> let bi rpl = object $ infoWithoutPending <> pendingChangeToJSON nextPayday epochDuration rpl asiPendingChange
+                                in Right $ \rpl -> object (balanceInfo <> ["accountBaker" .= bi rpl])
+                        AccountStakingDelegated{..} -> do
+                          let infoWithoutPending = [
+                                  "stakedAmount" .= asiStakedAmount,
+                                  "restakeEarnings" .= asiStakeEarnings,
+                                  "delegationTarget" .= asiDelegationTarget
+                                ]
+                          case asiDelegationPendingChange of
+                            NoChange -> Left . Just $ object $ balanceInfo <> ["accountDelegation" .= infoWithoutPending]
+                            _ -> let di rpl = object $ infoWithoutPending <> pendingChangeToJSON nextPayday epochDuration rpl asiDelegationPendingChange
+                                in Right $ \rpl -> object (balanceInfo ++ ["accountDelegation" .= di rpl])
+          lastFinBalComp = getBal lastFinInfo
+          bestBalComp = getBal bestInfo
+      let response lastFinBal bestBal = do
+            $(logInfo) $ "Retrieved account balance for " <> addrText
+                        <> ": finalizedBalance=" <> (Text.pack $ show lastFinBal)
+                        <> ", currentBalance=" <> (Text.pack $ show bestBal)
+            sendResponse $ object $ (maybe [] (\b -> ["finalizedBalance" .= b]) lastFinBal) <>
+                              (maybe [] (\b -> ["currentBalance" .= b]) bestBal)
+      case (lastFinBalComp, bestBalComp) of
+        (Left lastFinBal, Left bestBal) -> response lastFinBal bestBal
+        (Left lastFinBal, Right bestBalF) -> runGRPC (getRewardPeriodLength lastFinBlock) $ \rpl -> response lastFinBal (Just (bestBalF rpl))
+        (Right lastFinBalF, Left bestBal) -> runGRPC (getRewardPeriodLength lastFinBlock) $ \rpl -> response (Just (lastFinBalF rpl)) bestBal
+        (Right lastFinBalF, Right bestBalF) -> runGRPC (getRewardPeriodLength lastFinBlock) $ \rpl -> response (Just (lastFinBalF rpl)) (Just (bestBalF rpl))
   where
     doGetBal = do
       status <- either fail return =<< getConsensusStatus
       lastFinBlock <- liftResult $ parse readLastFinalBlock status
       bestBlock <- liftResult $ parse readBestBlock status
+      epochDuration <- liftResult $ parse (withObject "Consensus status" (.: "epochDuration")) status
+      rewardStatus <- either fail return =<< withLastFinalBlockHash (Just lastFinBlock) getRewardStatus
+      nextPayday <- liftResult $ parse (withObject "Next payday" (.: "nextPaydayTime")) rewardStatus
       lastFinInfo <- either fail return =<< getAccountInfo addrText lastFinBlock
       bestInfo <- either fail return =<< getAccountInfo addrText bestBlock
-      return $ Right (lastFinInfo, bestInfo)
-    liftResult (Success s) = return s
-    liftResult (Error err) = fail err
+      return $ Right (lastFinInfo, bestInfo, nextPayday, epochDuration, lastFinBlock)
+
+liftResult :: MonadFail m => Result a -> m a
+liftResult (Success s) = return s
+liftResult (Error err) = fail err
 
 getAccountNonceR :: Text -> Handler TypedContent
 getAccountNonceR addrText =
