@@ -2,6 +2,9 @@
 
 ## Unreleased changes
 
+## 0.15.1
+ - add an estimate cooldown end to the `accBalance` query.
+
 ## 0.15.0
  - add `GET /v0/epochLength` endpoint
 
