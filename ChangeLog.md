@@ -2,6 +2,9 @@
 
 ## Unreleased changes
 
+## 0.15.2
+ - fix regression in account balance format introduced in 0.15.1
+
 ## 0.15.1
  - add an estimate cooldown end to the `accBalance` query.
 

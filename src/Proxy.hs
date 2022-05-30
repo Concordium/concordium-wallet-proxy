@@ -301,7 +301,7 @@ getAccountBalanceR addrText =
                                 ]
                                 <> maybe [] (\bpi -> ["bakerPoolInfo" .= bpi]) asiPoolInfo
                           case asiPendingChange of
-                            NoChange -> Left . Just $ object $ balanceInfo <> ["accountBaker" .= infoWithoutPending]
+                            NoChange -> Left . Just $ object $ balanceInfo <> ["accountBaker" .= object infoWithoutPending]
                             _ -> let bi rpl = object $ infoWithoutPending <> pendingChangeToJSON nextPayday epochDuration rpl asiPendingChange
                                 in Right $ \rpl -> object (balanceInfo <> ["accountBaker" .= bi rpl])
                         AccountStakingDelegated{..} -> do
@@ -311,7 +311,7 @@ getAccountBalanceR addrText =
                                   "delegationTarget" .= asiDelegationTarget
                                 ]
                           case asiDelegationPendingChange of
-                            NoChange -> Left . Just $ object $ balanceInfo <> ["accountDelegation" .= infoWithoutPending]
+                            NoChange -> Left . Just $ object $ balanceInfo <> ["accountDelegation" .= object infoWithoutPending]
                             _ -> let di rpl = object $ infoWithoutPending <> pendingChangeToJSON nextPayday epochDuration rpl asiDelegationPendingChange
                                 in Right $ \rpl -> object (balanceInfo ++ ["accountDelegation" .= di rpl])
           lastFinBalComp = getBal lastFinInfo
