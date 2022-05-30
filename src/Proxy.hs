@@ -52,7 +52,6 @@ import Data.Time.Clock as Clock
 
 import Paths_wallet_proxy (version)
 import Concordium.Types
-import Concordium.Types.Parameters (TimeParameters(..))
 import Concordium.Types.Queries
 import Concordium.Types.Accounts
 import Concordium.Types.HashableTo
@@ -255,11 +254,11 @@ getRewardPeriodLength lfb = do
            pv <- obj AE..: "protocolVersion"
            chainParameters <- updates AE..: "chainParameters"
            if pv >= P4 then
-             Just <$> (chainParameters AE..: "timeParameters")
+             Just <$> (chainParameters AE..: "rewardPeriodLength")
            else return Nothing
      summary <- either fail return =<< getBlockSummary lfb
-     timeParams <- liftResult (parse timeParametersParser summary)
-     return (Right (_tpRewardPeriodLength <$> timeParams))
+     rpLength <- liftResult (parse timeParametersParser summary)
+     return (Right rpLength)
 
 -- |Get the balance of an account.  If successful, the result is a JSON
 -- object consisting of the following optional fields:
