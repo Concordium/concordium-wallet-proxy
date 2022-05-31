@@ -2,6 +2,9 @@
 
 ## Unreleased changes
 
+## 0.15.3
+ - add estimated cooldown also to the `bakerPool` query.
+
 ## 0.15.2
  - fix regression in account balance format introduced in 0.15.1
 

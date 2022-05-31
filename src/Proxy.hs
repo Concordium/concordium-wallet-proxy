@@ -16,6 +16,7 @@ import qualified Data.ByteString as BS
 import Data.Version (showVersion)
 import qualified Data.Ratio as Rational
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Aeson.KeyMap as KM
 import qualified Data.Map.Strict as Map
 import Text.Read hiding (String)
 import Control.Arrow (left)
@@ -36,7 +37,7 @@ import Database.Persist.Sql
 import Data.Maybe(catMaybes, fromMaybe, isJust, maybeToList)
 import Data.Either (fromRight)
 import Data.Time.Clock.POSIX
-import qualified Database.Esqueleto as E
+import qualified Database.Esqueleto.Legacy as E
 import qualified Database.Esqueleto.PostgreSQL.JSON as EJ
 import qualified Database.Esqueleto.Internal.Internal as EInternal
 import System.Random
@@ -1357,14 +1358,73 @@ getHealthR =
 getIpsR :: Handler TypedContent
 getIpsR = toTypedContent . ipInfo <$> getYesod
 
-
 getBakerPoolR :: Word64 -> Handler TypedContent
 getBakerPoolR bid =
-    runGRPC doGetBaker $ \v -> do
-      $(logInfo) "Successfully got baker pool status."
-      sendResponse v
+    runGRPC doGetBaker $ \case
+      (_, AE.Null) -> respond404Error $ EMErrorResponse NotFound
+      (lf, psV) -> do
+        $(logInfo) "Successfully got baker pool status."
+        case AE.fromJSON psV of
+          AE.Success bps@BakerPoolStatus{..} ->
+            case psBakerStakePendingChange of
+              PPCNoChange -> sendResponse psV
+              PPCReduceBakerCapital{..} -> runGRPC (getRewardPeriodLength lf) $ \case
+                Nothing -> sendResponse psV
+                -- if there is a pending change we add the estimated change time to the response object.
+                -- The way this is done is to patch the returned JSON Value. This is not ideal, but it seems preferrable
+                -- to introducing a new type just for this.
+                Just rewardEpochs -> runGRPC (getParameters lf) $ \(nextPaydayTime, epochDuration) -> do
+                  let r = object [
+                        "pendingChangeType" .= String "ReduceBakerCapital",
+                        "pendingChangeDetails" .= object [
+                          "bakerEquityCapital" .= ppcBakerEquityCapital,
+                          "effectiveTime" .= ppcEffectiveTime,
+                          "estimatedChangeTime" .= firstPaydayAfter nextPaydayTime epochDuration rewardEpochs ppcEffectiveTime
+                          ]
+                        ]
+                  case AE.toJSON bps of
+                    AE.Object o -> sendResponse (AE.toJSON (KM.insert "bakerStakePendingChange" r o))
+                    _ -> sendResponse psV
+              PPCRemovePool{..} -> runGRPC (getRewardPeriodLength lf) $ \case
+                Nothing -> sendResponse psV
+                Just rewardEpochs -> runGRPC (getParameters lf) $ \(nextPaydayTime, epochDuration) -> do
+                  let r = object [
+                        "pendingChangeType" .= String "RemovePool",
+                        "pendingChangeDetails" .= object [
+                          "effectiveTime" .= ppcEffectiveTime,
+                          "estimatedChangeTime" .= firstPaydayAfter nextPaydayTime epochDuration rewardEpochs ppcEffectiveTime
+                          ]
+                        ]
+                  case AE.toJSON bps of
+                    AE.Object o -> sendResponse (AE.toJSON (KM.insert "bakerStakePendingChange" r o))
+                    _ -> sendResponse psV
+          AE.Success PassiveDelegationStatus{} -> sendResponse psV
+          AE.Error err -> do
+            $(logError) $ "Could not parse pool status response: " <> Text.pack err
+            i <- internationalize
+            sendResponseStatus badGateway502 $ object [
+              "errorMessage" .= i18n i EMGRPCError,
+              "error" .= fromEnum InternalError
+              ]
   where
-    doGetBaker = withLastFinalBlockHash Nothing (getPoolStatus (BakerId $ AccountIndex bid) False)
+    doGetBaker = withLastFinalBlockHash Nothing (\lf -> fmap (lf,) <$> getPoolStatus (BakerId $ AccountIndex bid) False lf)
+    doGetNextPayday lastFinal = do
+      rewardStatus <- getRewardStatus lastFinal
+      return $ parseEither (withObject "Best finalized block" $ \v -> do
+            v AE..: "nextPaydayTime"
+        ) =<< rewardStatus
+    doGetEpochLength = do
+      consensusStatus <- getConsensusStatus
+      return $ parseEither (withObject "Consensus status" $ \v -> do
+            v AE..: "epochDuration"
+        ) =<< consensusStatus
+    getParameters lastFinal = do
+      nextPayday <- doGetNextPayday lastFinal
+      epochDuration <- doGetEpochLength
+      return $ do
+        l <- nextPayday
+        r <- epochDuration
+        return (l, r)
 
 getChainParametersR :: Handler TypedContent
 getChainParametersR =
