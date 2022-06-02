@@ -1376,11 +1376,9 @@ getBakerPoolR bid =
                 Just rewardEpochs -> runGRPC (getParameters lf) $ \(nextPaydayTime, epochDuration) -> do
                   let r = object [
                         "pendingChangeType" .= String "ReduceBakerCapital",
-                        "pendingChangeDetails" .= object [
-                          "bakerEquityCapital" .= ppcBakerEquityCapital,
-                          "effectiveTime" .= ppcEffectiveTime,
-                          "estimatedChangeTime" .= firstPaydayAfter nextPaydayTime epochDuration rewardEpochs ppcEffectiveTime
-                          ]
+                        "bakerEquityCapital" .= ppcBakerEquityCapital,
+                        "effectiveTime" .= ppcEffectiveTime,
+                        "estimatedChangeTime" .= firstPaydayAfter nextPaydayTime epochDuration rewardEpochs ppcEffectiveTime
                         ]
                   case AE.toJSON bps of
                     AE.Object o -> sendResponse (AE.toJSON (KM.insert "bakerStakePendingChange" r o))
@@ -1390,10 +1388,8 @@ getBakerPoolR bid =
                 Just rewardEpochs -> runGRPC (getParameters lf) $ \(nextPaydayTime, epochDuration) -> do
                   let r = object [
                         "pendingChangeType" .= String "RemovePool",
-                        "pendingChangeDetails" .= object [
-                          "effectiveTime" .= ppcEffectiveTime,
-                          "estimatedChangeTime" .= firstPaydayAfter nextPaydayTime epochDuration rewardEpochs ppcEffectiveTime
-                          ]
+                        "effectiveTime" .= ppcEffectiveTime,
+                        "estimatedChangeTime" .= firstPaydayAfter nextPaydayTime epochDuration rewardEpochs ppcEffectiveTime
                         ]
                   case AE.toJSON bps of
                     AE.Object o -> sendResponse (AE.toJSON (KM.insert "bakerStakePendingChange" r o))

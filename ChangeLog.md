@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.15.4
+ - make the format of baker pool pending changes consistent with account pending
+   changes
+
 ## 0.15.3
  - add estimated cooldown also to the `bakerPool` query.
 
