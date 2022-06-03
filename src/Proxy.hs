@@ -232,22 +232,22 @@ firstPaydayAfter nextPayday epochDuration (RewardPeriodLength ep) cooldownEnd =
            mult :: Word = ceiling (timeDiff / paydayLength)
        in Clock.addUTCTime (fromIntegral mult * paydayLength) nextPayday
 
-pendingChangeToJSON :: AE.KeyValue kv => UTCTime -> Duration -> Maybe RewardPeriodLength -> StakePendingChange' UTCTime -> [kv]
+pendingChangeToJSON :: AE.KeyValue kv => Maybe UTCTime -> Duration -> Maybe RewardPeriodLength -> StakePendingChange' UTCTime -> [kv]
 pendingChangeToJSON _ _ _ NoChange = []
-pendingChangeToJSON nextPaydayTime epochDuration mrewardEpochs (ReduceStake amt eff) =
+pendingChangeToJSON mnextPaydayTime epochDuration mrewardEpochs (ReduceStake amt eff) =
     [ "pendingChange"
         .= object
             (["change" .= String "ReduceStake",
               "newStake" .= amt,
               "effectiveTime" .= eff
-             ] <> map (\rewardEpochs -> "estimatedChangeTime" .= firstPaydayAfter nextPaydayTime epochDuration rewardEpochs eff) (maybeToList mrewardEpochs))
+             ] <> maybeToList ((\rewardEpochs nextPaydayTime -> "estimatedChangeTime" .= firstPaydayAfter nextPaydayTime epochDuration rewardEpochs eff) <$> mrewardEpochs <*> mnextPaydayTime))
     ]
-pendingChangeToJSON nextPaydayTime epochDuration mrewardEpochs (RemoveStake eff) =
+pendingChangeToJSON mnextPaydayTime epochDuration mrewardEpochs (RemoveStake eff) =
     [ "pendingChange"
         .= object
             (["change" .= String "RemoveStake",
               "effectiveTime" .= eff
-             ] <> map (\rewardEpochs -> "estimatedChangeTime" .= firstPaydayAfter nextPaydayTime epochDuration rewardEpochs eff) (maybeToList mrewardEpochs))
+             ] <> maybeToList ((\rewardEpochs nextPaydayTime -> "estimatedChangeTime" .= firstPaydayAfter nextPaydayTime epochDuration rewardEpochs eff) <$> mrewardEpochs <*> mnextPaydayTime))
     ]
 
 getRewardPeriodLength :: (MonadFail m, MonadIO m) => Text -> ClientMonad m (Either String (Maybe RewardPeriodLength))
@@ -335,12 +335,18 @@ getAccountBalanceR addrText =
       status <- either fail return =<< getConsensusStatus
       lastFinBlock <- liftResult $ parse readLastFinalBlock status
       bestBlock <- liftResult $ parse readBestBlock status
-      epochDuration <- liftResult $ parse (withObject "Consensus status" (.: "epochDuration")) status
-      rewardStatus <- either fail return =<< withLastFinalBlockHash (Just lastFinBlock) getRewardStatus
-      nextPayday <- liftResult $ parse (withObject "Next payday" (.: "nextPaydayTime")) rewardStatus
       lastFinInfo <- either fail return =<< getAccountInfo addrText lastFinBlock
       bestInfo <- either fail return =<< getAccountInfo addrText bestBlock
-      return $ Right (lastFinInfo, bestInfo, nextPayday, epochDuration, lastFinBlock)
+      (pv, epochDuration) <- liftResult $ parse (flip (withObject "Consensus status") status) $ \obj ->  do
+                                                   epochDuration <- obj .: "epochDuration"
+                                                   pv <- obj .: "protocolVersion"
+                                                   return (pv, epochDuration)
+      if pv >= P4 then do
+        rewardStatus <- either fail return =<< withLastFinalBlockHash (Just lastFinBlock) getRewardStatus
+        nextPayday <- liftResult $ parse (withObject "Next payday" (.: "nextPaydayTime")) rewardStatus
+        return $ Right (lastFinInfo, bestInfo, Just nextPayday, epochDuration, lastFinBlock)
+      else
+        return $ Right (lastFinInfo, bestInfo, Nothing, epochDuration, lastFinBlock)
 
 liftResult :: MonadFail m => Result a -> m a
 liftResult (Success s) = return s
