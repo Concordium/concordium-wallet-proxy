@@ -10,9 +10,15 @@
 {-# LANGUAGE UndecidableInstances, StandaloneDeriving, DerivingStrategies #-}
 module Proxy where
 
+import Database.Persist.Postgresql
+-- Import PersistField instance for aeson value.
+import Database.Persist.Postgresql.JSON()
+import Database.Persist.TH
+
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString as BS
 
+import qualified Data.Proxy as Proxy
 import Data.Version (showVersion)
 import qualified Data.Ratio as Rational
 import qualified Data.HashMap.Strict as HM
@@ -33,7 +39,6 @@ import Data.Conduit.Attoparsec  (sinkParserEither)
 import Network.HTTP.Types(badRequest400, notFound404, badGateway502)
 import Yesod hiding (InternalError)
 import qualified Yesod
-import Database.Persist.Sql
 import Data.Maybe(catMaybes, fromMaybe, isJust, maybeToList)
 import Data.Either (fromRight)
 import Data.Time.Clock.POSIX
@@ -55,6 +60,7 @@ import Paths_wallet_proxy (version)
 import Concordium.Types
 import Concordium.Types.Queries
 import Concordium.Types.Accounts
+import Concordium.Types.Block
 import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
@@ -74,10 +80,45 @@ import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
 import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex, CredentialIndex)
 import Concordium.Crypto.SignatureScheme (KeyPair)
 import Concordium.Common.Version
-import Concordium.SQL.AccountTransactionIndex
-import Concordium.SQL.Helpers
 
 import Internationalization
+
+-- |Wraps a type for persistent storage via a serialization to a 'ByteString'.
+newtype ByteStringSerialized a = ByteStringSerialized { unBSS :: a }
+    deriving newtype (S.Serialize, Eq, Ord, Show)
+
+instance S.Serialize a => PersistField (ByteStringSerialized a) where
+  toPersistValue = toPersistValue . S.encode
+  fromPersistValue =
+    fromPersistValue >=> left (Text.pack) . S.decode
+
+instance S.Serialize a => PersistFieldSql (ByteStringSerialized a) where
+  sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy BS.ByteString)
+
+-- |Create the database schema and types. This creates a type called @Summary@
+-- with fields @summaryBlock@, @summaryTimestamp@, etc., with stated types.
+-- Analogously for @Entry@ and @ContractEntry@.
+-- It also generates functionality for retrieving these records from SQL rows.
+-- This is used below when querying the database (e.g., Entity Summary).
+share [mkPersist sqlSettings] [persistLowerCase|
+  Summary sql=summaries
+    block (ByteStringSerialized BlockHash)
+    timestamp Timestamp
+    height AbsoluteBlockHeight
+    summary AE.Value
+    deriving Eq Show
+
+  Entry sql=ati
+    account (ByteStringSerialized AccountAddress)
+    summary SummaryId
+    deriving Eq Show
+
+  ContractEntry sql=cti
+    index ContractIndex
+    subindex ContractSubindex
+    summary SummaryId
+    deriving Eq Show
+  |]
 
 data ErrorCode = InternalError | RequestInvalid | DataNotFound
     deriving(Eq, Show, Enum)
