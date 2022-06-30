@@ -1005,7 +1005,7 @@ NB: It is OK to have the same identity provider listed multiple times in this fi
 ## Database setup
 
 The wallet-proxy needs access to the transaction logging database in the form of a PostgreSQL database.
-It assumes the layout and semantics is as described in the [transaction logging notes](https://github.com/Concordium/concordium-node/blob/main/docs/transaction-logging.md).
+It assumes the layout and semantics is as described in the [transaction logging notes](https://github.com/Concordium/concordium-transaction-logger#database-format).
 The wallet-proxy queries the database in specific patterns. Every query filters by a single account/contract and narrows down by id.
 Some queries additionally filter out per transaction type or by time.
 To support efficient retrieval in the common cases it is necessary that the `ati` and `cti` tables have a primary key index on the joint `(account, id)` columns (and analogous columns `(index, subindex, id)` for the `cti` table).
