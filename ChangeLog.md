@@ -2,6 +2,9 @@
 
 ## Unreleased changes
 
+## 0.15.6
+ - more informative error responses when the node rejects the GRPC call
+
 ## 0.15.4
  - make the format of baker pool pending changes consistent with account pending
    changes

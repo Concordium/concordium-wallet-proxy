@@ -17,6 +17,9 @@ import Concordium.Types.Updates (UpdateType)
 data ErrorMessage
     = EMErrorResponse ErrorResponse
     | EMGRPCError
+    -- ^The wallet proxy could not communicate with the node.
+    | EMGRPCErrorResponse String
+    -- ^The node rejected the call. We report the reason back to the caller.
     | EMParseError String
     | EMCredentialRejected
     | EMTransactionRejected
