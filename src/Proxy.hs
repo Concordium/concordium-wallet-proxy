@@ -254,8 +254,8 @@ runGRPC c k = do
       $(logError) $ "GRPC call failed: " <> Text.pack err
       i <- internationalize
       sendResponseStatus badGateway502 $ object [
-        "errorMessage" .= i18n i EMGRPCError,
-        "error" .= fromEnum InternalError
+        "errorMessage" .= i18n i (EMGRPCErrorResponse err),
+        "error" .= fromEnum RequestInvalid
         ]
     Right (Right a) -> k a
 
