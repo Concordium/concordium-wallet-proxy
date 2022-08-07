@@ -24,8 +24,8 @@ on:
   workflow_dispatch: # allow manual trigger
 
 env:
-  RUST: 1.53
-  GHC: 8.10.4
+  RUST: 1.62
+  GHC: 9.0.2
 
 jobs:
   concordium-client-build-and-test:
