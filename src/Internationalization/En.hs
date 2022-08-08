@@ -45,7 +45,6 @@ translation = I18n {..}
         i18nRejectReason OutOfEnergy = "Insufficient energy"
         i18nRejectReason RejectedInit{..} = "Failed contract initialization due to contract logic with error code " <> Text.pack (show rejectReason)
         i18nRejectReason RejectedReceive{..} = "Failed contract receive invocation due to contract logic with reason " <> Text.pack (show rejectReason)
-        i18nRejectReason (NonExistentRewardAccount addr) = "The designated reward account (" <> descrAccount addr <> ") does not exist"
         i18nRejectReason InvalidProof = "Invalid proof"
         i18nRejectReason (InvalidInitMethod mref initName) = "Init method " <> descrInitName initName <> " does not exist in module " <> descrModule mref <> "."
         i18nRejectReason (InvalidReceiveMethod mref receiveName) = "Receive method " <> descrReceiveName receiveName <> " does not exist for module " <> descrModule mref <> "."
