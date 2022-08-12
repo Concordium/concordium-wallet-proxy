@@ -33,7 +33,8 @@ data ProxyConfig = ProxyConfig {
   pcGTUAccountFile :: Maybe FilePath,
   pcForcedUpdateConfigFile :: Maybe FilePath,
   pcHealthTolerance :: Maybe Int,
-  pcIpInfo :: FilePath
+  pcIpInfo :: FilePath,
+  pcIpInfoV1 :: FilePath
 }
 
 parser :: ParserInfo ProxyConfig
@@ -47,6 +48,7 @@ parser = info (helper <*> parseProxyConfig)
       <*> optional (strOption (long "forced-update-config" <> metavar "FILE" <> help "file with the version configuration for forced app updates."))
       <*> optional (option auto (long "health-tolerance" <> metavar "SECONDS" <> help "the maximum tolerated age of the last final block in seconds before the health query returns false."))
       <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and private information on the identity providers, together with metadata.")
+      <*> strOption (long "ip-data-v1" <> metavar "FILE" <> help "File with public and private information on the identity providers, together with metadata.")
     mkProxyConfig backend = ProxyConfig $ GrpcConfig
                               (CMDS.grpcHost backend)
                               (CMDS.grpcPort backend)
@@ -124,6 +126,7 @@ main = do
         Left err -> die $ "Cannot parse forced update config: " ++ show err
         Right cfg -> return cfg
   Right ipInfo <- AE.eitherDecode' <$> LBS.readFile pcIpInfo
+  Right ipInfoV1 <- AE.eitherDecode' <$> LBS.readFile pcIpInfoV1
   runStderrLoggingT $ do
     $logDebug ("Using iOS update config: " <> fromString (show forcedUpdateConfigIOS))
     $logDebug ("Using Android update config: " <> fromString (show forcedUpdateConfigAndroid))
