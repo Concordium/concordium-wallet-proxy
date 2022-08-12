@@ -935,6 +935,7 @@ wallet-proxy --grpc-ip 127.0.0.1\
              --grpc-port 10000\
              --db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=postgres"\
              --ip-data identity-providers-with-metadata.json\
+             --ip-data-v1 identity-providers-with-metadata-v1.json\
              --drop-account gtu-drop-account-0.json\
              --forced-update-config forced-update-config.json\
              --health-tolerance 30
@@ -944,7 +945,8 @@ where
 - `--grpc-ip 127.0.0.1` specifies the IP of the node
 - `--grpc-port 10000` specifies the GRPC port the node is listening on
 - `--db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=postgres"` is the transaction outcome database connection string
-- `--ip-data identity-providers-with-metadata.json` JSON file with identity providers and anonymity revokers
+- `--ip-data identity-providers-with-metadata.json` JSON file with identity providers, anonymity revokers and metadata needed for the version 0 identity flow
+- `--ip-data-v1 identity-providers-with-metadata.json` JSON file with identity providers and anonymity revokers and metadata needed for the version 1 identity flow
 - `--drop-account gtu-drop-account-0.json` keys of the gtu drop account
 - `--forced-update-config forced-update-config.json` f ile with app update configuration
 - `--health-tolerance 30` tolerated age of last final block in seconds before the health query returns false

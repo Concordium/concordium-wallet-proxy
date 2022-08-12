@@ -1,6 +1,8 @@
 # Changelog for wallet-proxy
 
 ## Unreleased changes
+
+## 0.15.7
 - add `GET /v1/ip_info` endpoint.
 - add `--ip-data-v1` option for the JSON file that should be displayed at the above endpoint.
 
