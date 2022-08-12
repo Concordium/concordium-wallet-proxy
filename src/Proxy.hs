@@ -142,7 +142,8 @@ data Proxy = Proxy {
   forcedUpdateConfigAndroid :: Maybe ForcedUpdateConfig,
   healthTolerance :: Int,
   globalInfo :: Value,
-  ipInfo :: Value
+  ipInfo :: Value,
+  ipInfoV1 :: Value
 }
 
 -- | Data needed for GTU drops.
@@ -184,6 +185,7 @@ mkYesod "Proxy" [parseRoutes|
 /v0/global GlobalFileR GET
 /v0/health HealthR GET
 /v0/ip_info IpsR GET
+/v1/ip_info IpsV1R GET
 /v1/accTransactions/#Text AccountTransactionsV1R GET
 /v0/bakerPool/#Word64 BakerPoolR GET
 /v0/chainParameters ChainParametersR GET
@@ -1404,6 +1406,9 @@ getHealthR =
 
 getIpsR :: Handler TypedContent
 getIpsR = toTypedContent . ipInfo <$> getYesod
+
+getIpsV1R :: Handler TypedContent
+getIpsV1R = toTypedContent . ipInfoV1 <$> getYesod
 
 getBakerPoolR :: Word64 -> Handler TypedContent
 getBakerPoolR bid =
