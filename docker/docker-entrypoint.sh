@@ -11,7 +11,8 @@ db_user="${DB_USER}"
 db_name="${DB_NAME}"
 db_password="${DB_PASSWORD}"
 drop_account_file="${DROP_ACCOUNT_FILE-}"
-forced_update_config_file="${FORCED_UPDATE_CONFIG_FILE-}"
+forced_update_config_file_v0="${FORCED_UPDATE_CONFIG_FILE_V0-}"
+forced_update_config_file_v1="${FORCED_UPDATE_CONFIG_FILE_V1-}"
 
 args=(
 	--grpc-ip "${grpc_host}"
@@ -22,8 +23,11 @@ args=(
 if [ -n "${drop_account_file}" ]; then
 	args+=( --drop-account "${drop_account_file}" )
 fi
-if [ -n "${forced_update_config_file}" ]; then
-	args+=( --forced-update-config "${forced_update_config_file}" )
+if [ -n "${forced_update_config_file_v0}" ]; then
+	args+=( --forced-update-config-v0 "${forced_update_config_file_v0}" )
+fi
+if [ -n "${forced_update_config_file_v1}" ]; then
+	args+=( --forced-update-config-v1 "${forced_update_config_file_v1}" )
 fi
 
 # Inherits env vars and args.

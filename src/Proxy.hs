@@ -138,8 +138,10 @@ data Proxy = Proxy {
   grpcEnvData :: !EnvData,
   dbConnectionPool :: ConnectionPool,
   gtuDropData :: Maybe GTUDropData,
-  forcedUpdateConfigIOS :: Maybe ForcedUpdateConfig,
-  forcedUpdateConfigAndroid :: Maybe ForcedUpdateConfig,
+  forcedUpdateConfigIOSV0 :: Maybe ForcedUpdateConfig,
+  forcedUpdateConfigAndroidV0 :: Maybe ForcedUpdateConfig,
+  forcedUpdateConfigIOSV1 :: Maybe ForcedUpdateConfig,
+  forcedUpdateConfigAndroidV1 :: Maybe ForcedUpdateConfig,
   healthTolerance :: Int,
   globalInfo :: Value,
   ipInfo :: Value,
@@ -191,7 +193,8 @@ mkYesod "Proxy" [parseRoutes|
 /v0/chainParameters ChainParametersR GET
 /v0/nextPayday NextPaydayR GET
 /v0/passiveDelegation PassiveDelegationR GET
-/v0/appSettings AppSettings GET
+/v0/appSettings AppSettingsV0 GET
+/v1/appSettings AppSettingsV1 GET
 /v0/epochLength EpochLengthR GET
 |]
 
@@ -1521,17 +1524,31 @@ matchesVersion queryVersion (Just ForcedUpdateConfig{..})
       ]
   | otherwise = AE.object ["status" AE..= String "ok"]
 
-getAppSettings :: Handler TypedContent
-getAppSettings = do
+getAppSettingsV0 :: Handler TypedContent
+getAppSettingsV0 = do
   Proxy{..} <- getYesod
+  getAppSettingsWorker forcedUpdateConfigAndroidV0 forcedUpdateConfigIOSV0
+
+getAppSettingsV1 :: Handler TypedContent
+getAppSettingsV1 = do
+  Proxy{..} <- getYesod
+  getAppSettingsWorker forcedUpdateConfigAndroidV1 forcedUpdateConfigIOSV1
+
+getAppSettingsWorker ::
+  -- |Forced update configuration for the Android variant of the app.
+  Maybe ForcedUpdateConfig ->
+  -- |Forced update configuration for the IOS variant of the app.
+  Maybe ForcedUpdateConfig ->
+  Handler TypedContent
+getAppSettingsWorker fucAndroid fucIOS = do
   mPlatform <- lookupGetParam "platform"
   mVersion <- lookupGetParam "appVersion"
   case (mPlatform, readMaybe . Text.unpack =<< mVersion) of
     (Just platform, Just queryVersion) -> do
       if platform == "android" then
-        sendResponse (matchesVersion queryVersion forcedUpdateConfigAndroid)
+        sendResponse (matchesVersion queryVersion fucAndroid)
       else if platform == "ios" then
-        sendResponse (matchesVersion queryVersion forcedUpdateConfigIOS)
+        sendResponse (matchesVersion queryVersion fucIOS)
       else
         respond400Error (EMParseError "'param' should either be 'android' or 'ios'") RequestInvalid
     (Just _, Nothing) -> respond400Error (EMParseError "'version' parameter is not present or readable. It must be a non-negative integer.") RequestInvalid

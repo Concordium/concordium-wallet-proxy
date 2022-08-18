@@ -31,7 +31,8 @@ data ProxyConfig = ProxyConfig {
   pcDBConnString :: ByteString,
   -- | Account file used for GTU drop. Only used on stagenet and testnet.
   pcGTUAccountFile :: Maybe FilePath,
-  pcForcedUpdateConfigFile :: Maybe FilePath,
+  pcForcedUpdateConfigFileV0 :: Maybe FilePath,
+  pcForcedUpdateConfigFileV1 :: Maybe FilePath,
   pcHealthTolerance :: Maybe Int,
   pcIpInfo :: FilePath,
   pcIpInfoV1 :: FilePath
@@ -45,7 +46,8 @@ parser = info (helper <*> parseProxyConfig)
       <$> backendParser
       <*> strOption (long "db" <> metavar "STR" <> help "database connection string")
       <*> optional (strOption (long "drop-account" <> metavar "FILE" <> help "file with CCD drop account credentials (only used for stagenet and testnet)."))
-      <*> optional (strOption (long "forced-update-config" <> metavar "FILE" <> help "file with the version configuration for forced app updates."))
+      <*> optional (strOption (long "forced-update-config-v0" <> metavar "FILE" <> help "file with the version configuration for forced app updates for the old mobile wallet."))
+      <*> optional (strOption (long "forced-update-config-v1" <> metavar "FILE" <> help "file with the version configuration for forced app updates for the new mobile wallet."))
       <*> optional (option auto (long "health-tolerance" <> metavar "SECONDS" <> help "the maximum tolerated age of the last final block in seconds before the health query returns false."))
       <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and private information on the identity providers, together with metadata.")
       <*> strOption (long "ip-data-v1" <> metavar "FILE" <> help "File with public and private information on the identity providers, together with metadata.")
@@ -117,19 +119,29 @@ main = do
       case getKeys of
         Left err -> die $ "Cannot parse account keys: " ++ show err
         Right (dropAccount, dropKeys) -> return . Just $ GTUDropData {..}
-  (forcedUpdateConfigIOS, forcedUpdateConfigAndroid) <- case pcForcedUpdateConfigFile of
+  (forcedUpdateConfigIOSV0, forcedUpdateConfigAndroidV0) <- case pcForcedUpdateConfigFileV0 of
     Nothing -> return (Nothing, Nothing)
     Just fuFileName -> do
       fuFile <- LBS.readFile fuFileName
       let getUpdateConfig = AE.eitherDecode' fuFile >>= AE.parseEither forcedUpdateParser
       case getUpdateConfig of
-        Left err -> die $ "Cannot parse forced update config: " ++ show err
+        Left err -> die $ "Cannot parse forced update config V0: " ++ show err
+        Right cfg -> return cfg
+  (forcedUpdateConfigIOSV1, forcedUpdateConfigAndroidV1) <- case pcForcedUpdateConfigFileV1 of
+    Nothing -> return (Nothing, Nothing)
+    Just fuFileName -> do
+      fuFile <- LBS.readFile fuFileName
+      let getUpdateConfig = AE.eitherDecode' fuFile >>= AE.parseEither forcedUpdateParser
+      case getUpdateConfig of
+        Left err -> die $ "Cannot parse forced update config V1: " ++ show err
         Right cfg -> return cfg
   Right ipInfo <- AE.eitherDecode' <$> LBS.readFile pcIpInfo
   Right ipInfoV1 <- AE.eitherDecode' <$> LBS.readFile pcIpInfoV1
   runStderrLoggingT $ do
-    $logDebug ("Using iOS update config: " <> fromString (show forcedUpdateConfigIOS))
-    $logDebug ("Using Android update config: " <> fromString (show forcedUpdateConfigAndroid))
+    $logDebug ("Using iOS V0 update config: " <> fromString (show forcedUpdateConfigIOSV0))
+    $logDebug ("Using Android V0 update config: " <> fromString (show forcedUpdateConfigAndroidV0))
+    $logDebug ("Using iOS V1 update config: " <> fromString (show forcedUpdateConfigIOSV1))
+    $logDebug ("Using Android V1 update config: " <> fromString (show forcedUpdateConfigAndroidV1))
   runStderrLoggingT $ withPostgresqlPool pcDBConnString 10 $ \dbConnectionPool -> liftIO $ do
     -- do not care about the gtu receipients database if gtu drop is not enabled
     when (isJust gtuDropData) $ runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
