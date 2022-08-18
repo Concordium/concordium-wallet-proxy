@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.16.0
+
+- add `v1/appSettings` endpoint.
+
 ## 0.15.7
 - add `GET /v1/ip_info` endpoint.
 - add `--ip-data-v1` option for the JSON file that should be displayed at the above endpoint.

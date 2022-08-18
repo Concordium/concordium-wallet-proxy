@@ -26,7 +26,8 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/chainParameters`: get the chain parameters.
 * `GET /v0/nextPayday`: get the next payday.
 * `GET /v0/passiveDelegation`: get the status of passive delegation.
-* `GET /v0/appSettings`: get the up-to-date status of the app.
+* `GET /v0/appSettings`: get the up-to-date status of the old mobile wallet app.
+* `GET /v1/appSettings`: get the up-to-date status of the new mobile wallet app.
 * `GET /v0/epochLength`: get the epoch length in milliseconds.
 
 ### Errors
@@ -890,7 +891,7 @@ On success, the response is of the following form:
 
 ## Up-to-date status of the mobile apps
 
-A GET request to `v0/appSettings` is intended to convey the information about
+A GET request to `v0/appSettings` or `v1/appSettings` is intended to convey the information about
 the current version of the app, and whether the version that requests the
 information is up to date.
 
@@ -937,7 +938,8 @@ wallet-proxy --grpc-ip 127.0.0.1\
              --ip-data identity-providers-with-metadata.json\
              --ip-data-v1 identity-providers-with-metadata-v1.json\
              --drop-account gtu-drop-account-0.json\
-             --forced-update-config forced-update-config.json\
+             --forced-update-config-v0 forced-update-config-v0.json\
+             --forced-update-config-v1 forced-update-config-v1.json\
              --health-tolerance 30
 ```
 
@@ -948,7 +950,8 @@ where
 - `--ip-data identity-providers-with-metadata.json` JSON file with identity providers, anonymity revokers and metadata needed for the version 0 identity flow
 - `--ip-data-v1 identity-providers-with-metadata.json` JSON file with identity providers and anonymity revokers and metadata needed for the version 1 identity flow
 - `--drop-account gtu-drop-account-0.json` keys of the gtu drop account
-- `--forced-update-config forced-update-config.json` f ile with app update configuration
+- `--forced-update-config-v0 forced-update-config-v0.json` file with app update configuration for the old mobile wallet
+- `--forced-update-config-v1 forced-update-config-v1.json` file with app update configuration for the new mobile wallet
 - `--health-tolerance 30` tolerated age of last final block in seconds before the health query returns false
 
 ## Identity providers metadata files
@@ -1068,7 +1071,7 @@ The order of columns matters, since PostgreSQL will make best use of these indic
 
 ## Forced update configuration file
 
-If the update configuration file is not present then the `/v0/appSettings`
+If the update configuration file for version `i` is not present then the `/v{i}/appSettings`
 endpoint will always return `ok`. If the file is present it must be a valid JSON
 file in the following format
 
@@ -1101,4 +1104,3 @@ towards the `needsUpdate` outcome.
 The range format is fairly standard, e.g., `5,8,10-17` denotes app versions `5`,
 `8`, and `10` to `17`, inclusive. Infinite ranges are also supported, e.g.,
 `-64` denotes the range of versions `<= 64`.
- 
