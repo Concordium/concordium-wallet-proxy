@@ -50,7 +50,7 @@ parser = info (helper <*> parseProxyConfig)
       <*> optional (strOption (long "forced-update-config-v1" <> metavar "FILE" <> help "file with the version configuration for forced app updates for the new mobile wallet."))
       <*> optional (option auto (long "health-tolerance" <> metavar "SECONDS" <> help "the maximum tolerated age of the last final block in seconds before the health query returns false."))
       <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and private information on the identity providers, together with metadata.")
-      <*> strOption (long "ip-data-v1" <> metavar "FILE" <> help "File with public and private information on the identity providers, together with metadata.")
+      <*> strOption (long "ip-data-v1" <> metavar "FILE" <> help "File with public and private information on the identity providers for the flow without initial accounts, together with metadata.")
     mkProxyConfig backend = ProxyConfig $ GrpcConfig
                               (CMDS.grpcHost backend)
                               (CMDS.grpcPort backend)

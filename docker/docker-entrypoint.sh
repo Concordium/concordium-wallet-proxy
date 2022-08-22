@@ -5,6 +5,7 @@ set -euxo pipefail
 grpc_host="${GRPC_HOST}"
 grpc_port="${GRPC_PORT}"
 ip_data_file="${IP_DATA_FILE}"
+ip_data_file_v1="${IP_DATA_FILE_V1}"
 db_host="${DB_HOST}"
 db_port="${DB_PORT}"
 db_user="${DB_USER}"
@@ -18,6 +19,7 @@ args=(
 	--grpc-ip "${grpc_host}"
 	--grpc-port "${grpc_port}"
 	--ip-data "${ip_data_file}"
+    --ip-data-v1 "${ip_data_file_v1}"
 	--db "host=${db_host} port=${db_port} user=${db_user} dbname=${db_name} password=${db_password}"
 )
 if [ -n "${drop_account_file}" ]; then
