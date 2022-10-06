@@ -323,8 +323,8 @@ This field is present if the `status` field is `committed` or `finalized`, the `
 The value is the account address of the recipient of the transfer.
 
 #### `amount` (optional)
-This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is a simple transfer.
-The value is a number representing the amount transferred from the sender to the recipient.
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is a simple transfer or a `InitContract`.
+In case of a simple transfer, the value is a number representing the amount transferred from the sender to the recipient. In the case of a `InitContract`, the value is a number representing the amount the contract is initialized with.
 (The value is an integer in the smallest denomination of CCD.)
 
 #### `blockHashes`
@@ -345,7 +345,44 @@ input encrypted amount that was removed from the sender's account.
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is either `EncryptedAmountTransfer` or `TransferToPublic`. The value is the index up to which the self encrypted amounts have been combined during the operation that was performed.
 
 #### `amountAdded`/`amountSubtracted` (optional)
-This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`. For a `TransferToPublic`, the field will be named `amountAdded` and it represents the plaintext amount that is added to the public balance of the sender. For a `TransferToEncrypted`, the field will be named `amountSubtracted` and it represents the plaintext amount that is subtracted from the public balance of the sender.
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is either `TransferToPublic` or `TransferToEncrypted`. For a `TransferToPublic`, the field will be named `amountAdded` and it represents the plaintext amount that is added to the public balance of the sender. For a `TransferToEncrypted`, the field will be named `amountSubtracted` and it represents the plaintext amount that is subtracted from the public balance of the sender.
+
+#### `moduleRef` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is either `DeployModule` or `InitContract`. The value is either the module reference of the deployed module or the module reference from which a contract was initializad.
+
+#### `address` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is `InitContract`. The value is the contract address of the initialized contract.
+
+#### `initName` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is `InitContract`. The value is the name of the contract init function being called.
+
+#### `contractVersion` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is `InitContract`. The value is the version of the contract that was initialized.
+
+#### `events` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is `InitContract`. The value is a list of contract events, given as hex strings.
+
+#### `trace` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is `Update`. The value is a list of elements with the following fields:
+- `"type"` - the event type. The possible values are `"updated"`, `"transferred"`, `"interrupted"` and `"resumed"`
+- if the value of the `"type"` field is `"updated"`, the following additional fields are present:
+  - `"address"` - the address of the contract that was updated,
+  - `"instigator"` - the address of the instigator of the update, i.e. source of the message, an account or contract,
+  - `"amount"` - the amount that was transferred to the contract.
+  - `"message"` - the message that was sent to the contract given as a hex string,
+  - `"receiveName"` - the name of the contract receive function that was called,
+  - `"contractVersion"` - version of the contract that was updated,
+  - `"events"` - a list of contract events, given as hex strings.
+- if the value of the `"type"` field is `"transferred"`, the following additional fields are present:
+  - `"from"` - the contract address of the contract that the amount was sent from,
+  - `"amount"` - the amount,
+  - `"to"` - the account address that the amount was sent to.
+- if the value of the `"type"` field is `"interrupted"`, the following additional fields are present:
+  - `"address"` - the contract address of the contract that was interrupted,
+  - `"events"` - a list of contract events, given as hex strings.
+- if the value of the `"type"` field is `"resumed"`, the following additional fields are present:
+  - `"address"` - the contract address of the contract that was resumed,
+  - `"success"` - a bool indicating whether the operation that was invoked succeeded.
 
 ## Credential deployment/account creation
 

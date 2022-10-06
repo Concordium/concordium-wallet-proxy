@@ -699,6 +699,35 @@ getSimpleTransactionStatus i trHash = do
             case tsResult of
                 TxSuccess _ -> return ["outcome" .= String "success"]
                 TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
+        TSTAccountTransaction (Just TTDeployModule) ->
+            case tsResult of
+                TxSuccess [ModuleDeployed mref] ->
+                    return ["outcome" .= String "success",
+                            "moduleRef" .= mref]
+                TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
+                es ->
+                  Left $ "Unexpected outcome of deploying module: " ++ show es
+        TSTAccountTransaction (Just TTInitContract) ->
+            case tsResult of
+                TxSuccess [ContractInitialized{..}] ->
+                    return ["outcome" .= String "success",
+                            "moduleRef" .= ecRef,
+                            "address" .= ecAddress,
+                            "amount" .= ecAmount,
+                            "initName" .= ecInitName,
+                            "contractVersion" .= ecContractVersion,
+                            "events" .= ecEvents]
+                TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
+                es ->
+                  Left $ "Unexpected outcome of initialized module: " ++ show es
+        TSTAccountTransaction (Just TTUpdate) ->
+            case tsResult of
+                TxSuccess events ->
+                    case eventsToMaybeValues events of
+                      Just vals -> return ["outcome" .= String "success",
+                                           "trace" .= vals]
+                      Nothing -> Left $ "Unexpected outcome of updating module: " ++ show tsResult
+                TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
         _ -> case tsResult of
               TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
               _ -> Left "Unsupported transaction type for simple statuses."
@@ -711,6 +740,28 @@ getSimpleTransactionStatus i trHash = do
         (h:r)
           | all (h==) r -> return h
           | otherwise -> return ["outcome" .= String "ambiguous"]
+    updateEventToMaybeValue :: Event -> Maybe Value
+    updateEventToMaybeValue Updated{..} = Just $ object ["type" .= String "updated",
+                                                 "address" .= euAddress,
+                                                 "instigator" .= euInstigator,
+                                                 "amount" .= euAmount,
+                                                 "message" .= euMessage,
+                                                 "receiveName" .= euReceiveName,
+                                                 "contractVersion" .= euContractVersion,
+                                                 "events" .= euEvents]
+    updateEventToMaybeValue Transferred{etFrom = AddressContract addrFrom, etTo = AddressAccount addrTo, ..} = Just $ object ["type" .= String "transferred",
+                                                            "from" .= addrFrom,
+                                                            "amount" .= etAmount,
+                                                            "to" .= addrTo]
+    updateEventToMaybeValue Interrupted{..} = Just $ object ["type" .= String "interrupted",
+                                                            "address" .= iAddress,
+                                                            "events" .= iEvents]
+    updateEventToMaybeValue Resumed{..} = Just $ object ["type" .= String "resumed",
+                                                        "address" .= rAddress,
+                                                        "success" .= rSuccess]
+    updateEventToMaybeValue _ = Nothing
+    eventsToMaybeValues :: [Event] -> Maybe [Value]
+    eventsToMaybeValues events = sequence $ updateEventToMaybeValue <$> events
 
 -- helper functions to be used in view patterns to match both transfers and
 -- transfers with memo.

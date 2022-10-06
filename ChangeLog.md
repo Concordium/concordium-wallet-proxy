@@ -2,6 +2,9 @@
 
 ## Unreleased changes
 
+
+## 0.16.1
+- cover smart contract transactions in the `v0/submissionStatus` endpoint.
 ## 0.16.0
 
 - add `v1/appSettings` endpoint.
