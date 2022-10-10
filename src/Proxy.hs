@@ -740,6 +740,9 @@ getSimpleTransactionStatus i trHash = do
         (h:r)
           | all (h==) r -> return h
           | otherwise -> return ["outcome" .= String "ambiguous"]
+    -- This function returns the JSON representing an event that can occur due to a smart contract update transaction.
+    -- It returns @Nothing@ if used on an event different from the four smart contract update events `Updated`, `Transferred`,
+    -- `Interrupted`, `Resumed`.
     updateEventToMaybeValue :: Event -> Maybe Value
     updateEventToMaybeValue Updated{..} = Just $ object ["type" .= String "updated",
                                                  "address" .= euAddress,
@@ -760,6 +763,10 @@ getSimpleTransactionStatus i trHash = do
                                                         "address" .= rAddress,
                                                         "success" .= rSuccess]
     updateEventToMaybeValue _ = Nothing
+    -- This function maps the list of events to a (maybe) list of JSON values representing these events.
+    -- It returns @Just@ if all the events are among the events `Updated`, `Transferred`,
+    -- `Interrupted`, `Resumed`. Otherwise @Nothing@.
+    -- It is only supposed to be called on a list of the above events.
     eventsToMaybeValues :: [Event] -> Maybe [Value]
     eventsToMaybeValues events = sequence $ updateEventToMaybeValue <$> events
 
