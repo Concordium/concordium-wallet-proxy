@@ -3,7 +3,7 @@
 ## Unreleased changes
 
 
-## 0.16.1
+## 0.17.0
 - cover smart contract transactions in the `v0/submissionStatus` endpoint.
 ## 0.16.0
 

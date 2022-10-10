@@ -324,7 +324,7 @@ The value is the account address of the recipient of the transfer.
 
 #### `amount` (optional)
 This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is a simple transfer or a `InitContract`.
-In case of a simple transfer, the value is a number representing the amount transferred from the sender to the recipient. In the case of a `InitContract`, the value is a number representing the amount the contract is initialized with.
+In case of a simple transfer, the value is a number representing the amount transferred from the sender to the recipient. In the case of a `InitContract`, the value is a number representing the amount the contract is initialized with. This is the amount that is transferred from the sender account to the contract.
 (The value is an integer in the smallest denomination of CCD.)
 
 #### `blockHashes`
@@ -367,8 +367,8 @@ This field is present if the `status` field is `committed` or `finalized`, and t
 - `"type"` - the event type. The possible values are `"updated"`, `"transferred"`, `"interrupted"` and `"resumed"`
 - if the value of the `"type"` field is `"updated"`, the following additional fields are present:
   - `"address"` - the address of the contract that was updated,
-  - `"instigator"` - the address of the instigator of the update, i.e. source of the message, an account or contract,
-  - `"amount"` - the amount that was transferred to the contract.
+  - `"instigator"` - the address of the instigator of the update, i.e. source of the message, an account or contract (this will differ from the sender of the transaction in nested transactons),
+  - `"amount"` - the amount that was transferred to the contract and subtracted from the instigator,
   - `"message"` - the message that was sent to the contract given as a hex string,
   - `"receiveName"` - the name of the contract receive function that was called,
   - `"contractVersion"` - version of the contract that was updated,
