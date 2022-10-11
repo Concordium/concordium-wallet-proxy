@@ -17,6 +17,8 @@ import Database.Persist.TH
 
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString.Short as BSS
 
 import qualified Data.Proxy as Proxy
 import Data.Version (showVersion)
@@ -64,6 +66,8 @@ import Concordium.Types.Block
 import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
 import Concordium.Types.Execution
+import qualified Concordium.Types.InvokeContract as InvokeContract
+import qualified Concordium.Wasm                 as Wasm
 
 import Concordium.Client.GRPC
 import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
@@ -75,6 +79,7 @@ import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
                                            accountEncryptEnergyCost,
                                            accountEncryptPayloadSize,
                                            accountDecryptEnergyCost,
+                                           minimumCost,
                                            accountDecryptPayloadSize, delegationConfigureEnergyCost, registerDelegationPayloadSize, updateDelegationPayloadSize, removeDelegationPayloadSize, bakerConfigurePayloadSize, bakerConfigureEnergyCostWithKeys, bakerConfigureEnergyCostWithoutKeys
                                            )
 import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex, CredentialIndex)
@@ -507,6 +512,76 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                 isFComUpdated <- isJust <$> lookupGetParam "finalizationRewardCommission"
                 let pSize = bakerConfigurePayloadSize False False isOpenStatusUpdated False metasize isTComUpdated isBComUpdated isFComUpdated
                 costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
+              "update" -> do
+                invoker <- lookupGetParam "invoker" >>= \case
+                      Nothing -> respond400Error (EMParseError "Missing `invoker` value.") RequestInvalid
+                      Just val -> case addressFromText val of
+                        Left s -> respond400Error (EMParseError $ "Could not parse `invoker` value: " ++ s) RequestInvalid
+                        Right addr -> return $ Just $ AddressAccount addr
+
+                contractIndex <- lookupGetParam "contractIndex" >>= \case
+                      Nothing -> respond400Error (EMParseError "Missing `contractIndex` value.") RequestInvalid
+                      Just val -> case readMaybe $ Text.unpack val of
+                        Nothing -> respond400Error (EMParseError "Could not parse `contractIndex` value.") RequestInvalid
+                        Just index -> return $ ContractIndex index
+
+                contractSubindex <- lookupGetParam "contractSubindex" >>= \case
+                      Nothing -> respond400Error (EMParseError "Missing `contractSubindex` value.") RequestInvalid
+                      Just val -> case readMaybe $ Text.unpack val of
+                        Nothing -> respond400Error (EMParseError "Could not parse `contractSubindex` value.") RequestInvalid
+                        Just index -> return $ ContractSubindex index
+
+                let contract = ContractAddress{..}
+
+                amount <- lookupGetParam "amount" >>= \case
+                      Nothing -> respond400Error (EMParseError "Missing `amount` value.") RequestInvalid
+                      Just val -> case readMaybe $ Text.unpack val of
+                        Nothing -> respond400Error (EMParseError "Could not parse `amount` value.") RequestInvalid
+                        Just a -> return a
+                wasmReceiveName <- lookupGetParam "receiveName" >>= \case
+                      Nothing -> respond400Error (EMParseError "Missing `receiveName` value.") RequestInvalid
+                      Just receiveName -> if Wasm.isValidReceiveName receiveName
+                        then return $ Wasm.ReceiveName receiveName
+                        else respond400Error (EMParseError "Invalid receive name.") RequestInvalid
+                wasmParameter <- lookupGetParam "parameter" >>= \case
+                      Nothing -> respond400Error (EMParseError "Missing `parameter` value.") RequestInvalid
+                      Just parameterText -> case BS16.decode . Text.encodeUtf8 $ parameterText of
+                        Left s -> respond400Error (EMParseError $ "Could not parse `parameter` value: " ++ s) RequestInvalid
+                        Right parameter -> return $ Wasm.Parameter $ BSS.toShort parameter
+
+                let nrg = Energy 30000000 -- 30 million
+
+                let pSize = 1 -- 1 byte for the payload tag
+                          + 8 -- 8 bytes for the amount
+                          + 16 -- 16 bytes for the contract address
+                          + 2 -- 2 bytes for the length of receive name
+                          + Text.length (Wasm.receiveName wasmReceiveName) -- the number of bytes inside the receive name
+                          + 2 -- 2 bytes for the length of the parameter
+                          + BSS.length (Wasm.parameter wasmParameter) -- the number of bytes inside the parameter
+                let minCost = minimumCost (fromIntegral pSize) numSignatures
+                let invokeContext = InvokeContract.ContractContext
+                                    { ccInvoker = invoker
+                                    , ccContract = contract
+                                    , ccAmount = amount
+                                    , ccMethod = wasmReceiveName
+                                    , ccParameter = wasmParameter
+                                    , ccEnergy = nrg
+                                    }
+                invokeContextArg <- case Text.decodeUtf8' . BSL.toStrict . AE.encode $ invokeContext of
+                      Left _ -> respond400Error (EMParseError "Could not invoke contract due to internal error: decoding UTF-8 failed") RequestInvalid -- Should never happen.
+                      Right text -> return text
+
+                let getInvokeCost = withBestBlockHash Nothing $ \bb -> do
+                      res <- invokeContract invokeContextArg bb
+                      -- this is the C_t for the smart contract update transaction
+                      return $ case res of
+                            Left err -> Left $ "Invocation failed with error: " ++ show err
+                            Right jsonValue -> case AE.fromJSON jsonValue of
+                              AE.Error jsonErr -> Left $ "Invocation failed with error: " ++ show jsonErr
+                              AE.Success InvokeContract.Failure{..} -> Right rcrUsedEnergy
+                              AE.Success InvokeContract.Success{..} -> Right rcrUsedEnergy
+                let cost invokeCost = minCost + invokeCost
+                runGRPC getInvokeCost $ costResponse . cost
               "updateBakerKeys" -> do
                 let pSize = bakerConfigurePayloadSize False False False True Nothing False False False
                 costResponse $ bakerConfigureEnergyCostWithKeys pSize numSignatures
