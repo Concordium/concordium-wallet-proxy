@@ -5,6 +5,7 @@
 
 ## 0.17.0
 - cover smart contract transactions in the `v0/submissionStatus` endpoint.
+- cover smart contract update transactions in the `v0/transactionCost` endpoint
 ## 0.16.0
 
 - add `v1/appSettings` endpoint.
