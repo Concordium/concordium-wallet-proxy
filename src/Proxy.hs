@@ -127,11 +127,14 @@ data ErrorCode = InternalError | RequestInvalid | DataNotFound
 -- out of date or not.
 data ForcedUpdateConfig = ForcedUpdateConfig {
   -- |Versions which are forced to update.
-  fucForceUpdate :: [Range Word],
+  fucForceUpdate :: ![Range Word],
   -- |Versions which are going to be suggested to update.
-  fucSuggestUpdate :: [Range Word],
+  fucSuggestUpdate :: ![Range Word],
   -- |URL to update to if the version matches any of the above.
-  fucURL :: String
+  fucURL :: !String,
+  -- |URL to update to if the version matches the suggest update but not the
+  -- forced update.
+  fucSuggestURL :: !String
   } deriving (Show)
 
 data Proxy = Proxy {
@@ -1578,7 +1581,7 @@ matchesVersion queryVersion (Just ForcedUpdateConfig{..})
     ]
   | inRanges fucSuggestUpdate queryVersion = AE.object [
       "status" AE..= String "warning",
-      "url" AE..= fucURL
+      "url" AE..= fucSuggestURL
       ]
   | otherwise = AE.object ["status" AE..= String "ok"]
 

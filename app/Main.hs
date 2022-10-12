@@ -85,13 +85,14 @@ forcedUpdateConfigParser = AE.withObject "Forced update config" $ \v -> do
   forceString <- v AE..:? "forceUpdateVersions" AE..!= ""
   suggestString <- v AE..:? "suggestUpdateVersions" AE..!= ""
   mfucURL <- v AE..:? "url"
+  mfucSuggestURL <- v AE..:? "suggestUrl"
   case parseRanges forceString of
     Left err -> fail $ "Invalid forced update range: " ++ show err
     Right fucForceUpdate -> case parseRanges suggestString of
       Left err -> fail $ "Invalid suggest update range: " ++ show err
       Right fucSuggestUpdate ->
         case mfucURL of
-          Just fucURL -> return $ Just ForcedUpdateConfig{..}
+          Just fucURL -> return $ Just ForcedUpdateConfig{fucSuggestURL = fromMaybe fucURL mfucSuggestURL,..}
           Nothing | null fucForceUpdate && null fucSuggestUpdate -> return Nothing
                   | otherwise -> fail "If non-empty ranges are given then the URL must be present."
 
