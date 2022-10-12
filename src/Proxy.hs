@@ -513,10 +513,10 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                 let pSize = bakerConfigurePayloadSize False False isOpenStatusUpdated False metasize isTComUpdated isBComUpdated isFComUpdated
                 costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
               "update" -> do
-                invoker <- lookupGetParam "invoker" >>= \case
-                      Nothing -> respond400Error (EMParseError "Missing `invoker` value.") RequestInvalid
+                invoker <- lookupGetParam "sender" >>= \case
+                      Nothing -> respond400Error (EMParseError "Missing `sender` value.") RequestInvalid
                       Just val -> case addressFromText val of
-                        Left s -> respond400Error (EMParseError $ "Could not parse `invoker` value: " ++ s) RequestInvalid
+                        Left s -> respond400Error (EMParseError $ "Could not parse `sender` value: " ++ s) RequestInvalid
                         Right addr -> return $ Just $ AddressAccount addr
 
                 contractIndex <- lookupGetParam "contractIndex" >>= \case
@@ -549,7 +549,7 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                         Left s -> respond400Error (EMParseError $ "Could not parse `parameter` value: " ++ s) RequestInvalid
                         Right parameter -> return $ Wasm.Parameter $ BSS.toShort parameter
 
-                let nrg = Energy 30000000 -- 30 million
+                let nrg = Energy 500000 -- 500 thousands
 
                 let pSize = 1 -- 1 byte for the payload tag
                           + 8 -- 8 bytes for the amount

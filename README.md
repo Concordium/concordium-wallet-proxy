@@ -243,11 +243,11 @@ The following query parameters are supported
 - `transactionCommission`, whether the transaction fee commission of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
 - `bakerRewardCommission`, whether the baker reward commission of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
 - `finalizationRewardCommission`, whether the finalization reward of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
-- `invoker`, only applies when `type` is `update` and is mandatory in this case. Specifies the sender account address of the transaction.
-- `contractIndex`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract index of the contract being updated.
-- `contractSubindex`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract subindex of the contract being updated.
+- `sender`, only applies when `type` is `update` and is mandatory in this case. Specifies the sender account address of the transaction.
+- `contractIndex`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract index of the contract being updated. Given as an integer.
+- `contractSubindex`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract subindex of the contract being updated. Given as an integer.
 - `receiveName`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract receive name of the smart contract receive function being called.
-- `parameter`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract parameter passed to the receive function.
+- `parameter`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract parameter passed to the receive function. Given as a hex string.
 
 Notice that when `type` is `configureBaker`, the cost of all possible "configure baker" transactions can be calculated. This means for instance that `/v0/transactionCost?type=updateBakerKeys` and `/v0/transactionCost?type=configureBaker&keys` would yield the same JSON output.
 
@@ -261,8 +261,16 @@ In case of invalid parameters the response will be as described in the [errors s
   - the transaction type parameter is missing
   - numSignatures is present but it cannot be parsed as an integer
   - memoSize is present but it cannot be parsed as an integer
+  - `type` is `update` and at least one of `amount`, `sender`, `contractIndex`, `contractSubindex`, `receiveName`, `parameter` are missing or cannot be parsed.
 - `404` if `memoSize` is present, but the node that backs the wallet-proxy is still running protocol version 1.
 - `502` if the wallet-proxy cannot access the node.
+
+### Example
+An example for getting the cost of updating a smart contract:
+```console
+curl -XGET "http://localhost:3000/v0/transactionCost?type=update&contractIndex=1370&contractSubindex=0&amount=0&receiveName=CIS1-NFT.mint&parameter=00780d6c0578c685f54cca7c6713fcd290e6d5828bdc660bcc647750122e76ffd8010101&sender=3PWV7p3CVBNv1jBXCWMofUVkzX1zcJB6XyhVWFi1PdpoQUvsXu"
+{"cost":"4329292","energy":2599}
+```
 
 ## Submission Status
 
