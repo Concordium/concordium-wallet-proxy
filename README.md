@@ -228,12 +228,13 @@ The following query parameters are supported
   - `registerBaker`,
   - `updateBakerStake`,
   - `updateBakerPool`,
+  - `update`,
   - `updateBakerKeys`,
   - `removeBaker`, or
   - `configureBaker`.
 - `numSignatures`, the number of signatures on the transaction, defaults to 1 if not present.
 - `memoSize`, the size of the transfer memo. Optionaly, and only supported if the node is running protocol version 2 or higher, and only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
-- `amount`, whether the staked amount is updated. Optionally, and only applies when `type` is either `updateDelegation`, `updateBakerStake` and `configureBaker`.
+- `amount`, optionally when `type` is either `updateDelegation`, `updateBakerStake` and `configureBaker`, in which it specifies whether the staked amount is updated. When `type` is `update` it is mandatory and specifies the amount that is sent to the smart contract.
 - `restake`, whether it is updated to restake earnings. Optionally, and only applies when `type` is either `updateDelegation`, `updateBakerStake` and `configureBaker`.
 - `passive`, whether the delegation target is set to passive delegation. Optionally, and only applies when `type` is either `registerDelegation` or `updateDelegation`.
 - `target`, whether the delegation target is updated. Optionally, and only applies when `type` is `updateDelegation`.
@@ -242,6 +243,12 @@ The following query parameters are supported
 - `transactionCommission`, whether the transaction fee commission of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
 - `bakerRewardCommission`, whether the baker reward commission of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
 - `finalizationRewardCommission`, whether the finalization reward of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
+- `sender`, only applies when `type` is `update` and is mandatory in this case. Specifies the sender account address of the transaction.
+- `contractIndex`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract index of the contract being updated. Given as an integer.
+- `contractSubindex`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract subindex of the contract being updated. Given as an integer.
+- `receiveName`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract receive name of the smart contract receive function being called.
+- `parameter`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract parameter passed to the receive function. Given as a hex string.
+- `executionNRGBuffer`, optionally and only applies when `type` is `update`. Specifies a buffer in percentage of how much of the energy for invoking the contract should be added to the returned cost. Given as an   integer. If not provided, a default of 20% is used.
 
 Notice that when `type` is `configureBaker`, the cost of all possible "configure baker" transactions can be calculated. This means for instance that `/v0/transactionCost?type=updateBakerKeys` and `/v0/transactionCost?type=configureBaker&keys` would yield the same JSON output.
 
@@ -255,8 +262,17 @@ In case of invalid parameters the response will be as described in the [errors s
   - the transaction type parameter is missing
   - numSignatures is present but it cannot be parsed as an integer
   - memoSize is present but it cannot be parsed as an integer
+  - `type` is `update` and at least one of `amount`, `sender`, `contractIndex`, `contractSubindex`, `receiveName`, `parameter` are missing or cannot be parsed.
 - `404` if `memoSize` is present, but the node that backs the wallet-proxy is still running protocol version 1.
 - `502` if the wallet-proxy cannot access the node.
+
+### Example
+An example for getting the cost of updating a smart contract:
+```console
+curl -XGET "http://localhost:3000/v0/transactionCost?type=update&contractIndex=1370&contractSubindex=0&amount=0&receiveName=CIS1-NFT.mint&parameter=00780d6c0578c685f54cca7c6713fcd290e6d5828bdc660bcc647750122e76ffd8010103&sender=3PWV7p3CVBNv1jBXCWMofUVkzX1zcJB6XyhVWFi1PdpoQUvsXu&executionNRGBuffer=10"
+{"cost":"4778591","energy":2872}
+```
+In this example a buffer of 10% was used.
 
 ## Submission Status
 

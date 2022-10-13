@@ -2,9 +2,15 @@
 
 ## Unreleased changes
 
+## 0.17.1
+
+- cover smart contract update transactions in the `v0/transactionCost` endpoint
+
 
 ## 0.17.0
+- Support `suggestUrl` in the `appSettings` configuration.
 - cover smart contract transactions in the `v0/submissionStatus` endpoint.
+
 ## 0.16.0
 
 - add `v1/appSettings` endpoint.
