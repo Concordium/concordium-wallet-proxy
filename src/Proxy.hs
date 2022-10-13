@@ -549,6 +549,12 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                         Left s -> respond400Error (EMParseError $ "Could not parse `parameter` value: " ++ s) RequestInvalid
                         Right parameter -> return $ Wasm.Parameter $ BSS.toShort parameter
 
+                (energyBufferPercentage :: Int) <- lookupGetParam "executionNRGBuffer" >>= \case
+                      Nothing -> return 20
+                      Just bufferText -> case readMaybe $ Text.unpack bufferText of
+                        Nothing -> respond400Error (EMParseError "Could not parse `executionNRGBuffer` value.") RequestInvalid
+                        Just n -> return n
+
                 let nrg = Energy 500000 -- 500 thousands
 
                 let pSize = 1 -- 1 byte for the payload tag
@@ -580,7 +586,7 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                               AE.Error jsonErr -> Left $ "Invocation failed with error: " ++ show jsonErr
                               AE.Success InvokeContract.Failure{..} -> Right rcrUsedEnergy
                               AE.Success InvokeContract.Success{..} -> Right rcrUsedEnergy
-                let cost invokeCost = minCost + invokeCost
+                let cost invokeCost = minCost + (invokeCost + (invokeCost * fromIntegral energyBufferPercentage) `div` 100)
                 runGRPC getInvokeCost $ costResponse . cost
               "updateBakerKeys" -> do
                 let pSize = bakerConfigurePayloadSize False False False True Nothing False False False
