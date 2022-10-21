@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
@@ -7,14 +8,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE UndecidableInstances, StandaloneDeriving, DerivingStrategies #-}
+{-# LANGUAGE UndecidableInstances, StandaloneDeriving #-}
 module Proxy where
 
 import Database.Persist.Postgresql
--- Import PersistField instance for aeson value.
 import Database.Persist.Postgresql.JSON()
 import Database.Persist.TH
 
+import Data.Ratio
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
@@ -84,6 +85,7 @@ import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
                                            )
 import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex, CredentialIndex)
 import Concordium.Crypto.SignatureScheme (KeyPair)
+import Concordium.Crypto.ByteStringHelpers (ByteStringHex(..))
 import Concordium.Common.Version
 
 import Internationalization
@@ -99,6 +101,18 @@ instance S.Serialize a => PersistField (ByteStringSerialized a) where
 
 instance S.Serialize a => PersistFieldSql (ByteStringSerialized a) where
   sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy BS.ByteString)
+
+newtype TokenId = TokenId {unTokenId :: BSS.ShortByteString}
+    deriving(Eq, Show)
+    deriving (AE.ToJSON, AE.FromJSON) via ByteStringHex
+
+instance PersistField TokenId where
+  toPersistValue = toPersistValue . BSS.fromShort . unTokenId
+  fromPersistValue = fmap (TokenId . BSS.toShort) . fromPersistValue
+
+instance PersistFieldSql TokenId where
+  sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy BS.ByteString)
+
 
 -- |Create the database schema and types. This creates a type called @Summary@
 -- with fields @summaryBlock@, @summaryTimestamp@, etc., with stated types.
@@ -123,7 +137,14 @@ share [mkPersist sqlSettings] [persistLowerCase|
     subindex ContractSubindex
     summary SummaryId
     deriving Eq Show
+
+  CIS2Entry sql=cis2_tokens
+    index ContractIndex
+    subindex ContractSubindex
+    token_id TokenId
+    total_supply (Ratio Integer)
   |]
+
 
 data ErrorCode = InternalError | RequestInvalid | DataNotFound
     deriving(Eq, Show, Enum)
@@ -204,6 +225,7 @@ mkYesod "Proxy" [parseRoutes|
 /v0/appSettings AppSettingsV0 GET
 /v1/appSettings AppSettingsV1 GET
 /v0/epochLength EpochLengthR GET
+/v0/CIS2Tokens/#Word64/#Word64 CIS2Tokens GET
 |]
 
 instance Yesod Proxy where
@@ -900,6 +922,37 @@ getAccountTransactionsV0R = getAccountTransactionsWorker ExcludeMemo
 
 getAccountTransactionsV1R :: Text -> Handler TypedContent
 getAccountTransactionsV1R = getAccountTransactionsWorker IncludeMemo
+
+getCIS2Tokens :: Word64 -> Word64 -> Handler TypedContent
+getCIS2Tokens index subindex = do
+  limit <- maybe 20 (max 0 . min 1000) . (>>= readMaybe . Text.unpack) <$> lookupGetParam "limit"
+  mfrom :: Maybe CIS2EntryId <- (>>= fromPathPiece) <$> lookupGetParam "from"
+  entries :: [Entity CIS2Entry] <- runDB $ do
+    E.select $ E.from $ \e -> do
+      -- Filter by address
+      E.where_ (e E.^. CIS2EntryIndex E.==. E.val (ContractIndex index))
+      E.where_ (e E.^. CIS2EntrySubindex E.==. E.val (ContractSubindex subindex))
+      -- sort ascending
+      E.orderBy [E.asc (e E.^. CIS2EntryId)]
+      case mfrom of
+        Just from -> E.where_ (e E.^. CIS2EntryId E.>. E.val from)
+        Nothing -> return ()
+      -- Limit the number of returned rows for DOS protection
+      E.limit limit
+      return e
+  let makeJsonEntries = map (\(Entity key CIS2Entry{..}) ->
+                               object ["token" .= cIS2EntryToken_id
+                                      -- amounts are always integers, so we just take the numerator
+                                      -- since the integers can be very large we make them into a string
+                                      ,"totalSupply" .= show (numerator cIS2EntryTotal_supply)
+                                      ,"id" .= key
+                                      ]
+                              )
+  sendResponse $ object $ [
+    "limit" .= limit,
+    "count" .= length entries,
+    "tokens" .= makeJsonEntries entries
+    ] <> maybeToList (("from" .=) <$> mfrom)
 
 -- |List transactions for the account.
 getAccountTransactionsWorker :: IncludeMemos -> Text -> Handler TypedContent
