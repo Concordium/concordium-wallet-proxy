@@ -29,6 +29,7 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/appSettings`: get the up-to-date status of the old mobile wallet app.
 * `GET /v1/appSettings`: get the up-to-date status of the new mobile wallet app.
 * `GET /v0/epochLength`: get the epoch length in milliseconds.
+* `GET /v0/CIS2Tokens`: get the list of tokens on a given contract address.
 
 ### Errors
 
@@ -703,6 +704,30 @@ If the queries succeeded but the last final block is too old it will return:
 }
 ```
 If one of the queries fail, it could return `healthy=false` with a reason, or an error.
+
+
+## Get transactions
+
+The endpoint `v0/CIS2Tokens/index/subindex` retrieves a partial list of tokens
+that are part of the contract on the address (index, subindex).
+
+The following parameters are supported
+- `from`: an id. Only tokens with an id (strictly) higher than the given are returned.
+- `limit`: the maximum number of tokens to return; defaults to 20; values above 1000 are treated as 1000.
+
+The return value is an object with fields
+- `count` (required) ... the number of items that are returned
+- `from` (optional) ... the `from` parameter if supplied
+- `limit` (required) ... the limit that was used in the query
+- `tokens` (required) ... the list of tokens. Each token is an object with
+  fields (all required)
+  - `id` ... an id that may be used for pagination. This has no other meaning
+    than to enable pagination. It should not be used by the client for anything
+    other than this, and it is not guarantee to be stable over time.
+  - `token` ... a hex rendering of a token id as registered by the smart
+    contract.
+  - `totalSupply` ... a non-negative integer (encoded in a string) that records the total
+    supply of the token as computed by using `Mint` and `Burn` events.
 
 ## Notes on account balances.
 
