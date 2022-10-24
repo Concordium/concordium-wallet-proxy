@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.18
+
+- add `GET /v0/CIS2Tokens` endpoint.
+
 ## 0.17.1
 
 - cover smart contract update transactions in the `v0/transactionCost` endpoint
