@@ -706,7 +706,7 @@ If the queries succeeded but the last final block is too old it will return:
 If one of the queries fail, it could return `healthy=false` with a reason, or an error.
 
 
-## Get transactions
+## Get CIS-2 tokens
 
 The endpoint `v0/CIS2Tokens/index/subindex` retrieves a partial list of tokens
 that are part of the contract on the address (index, subindex).
