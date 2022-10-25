@@ -23,6 +23,7 @@ import Control.Monad.Logger
 
 import Concordium.Client.GRPC
 import Concordium.Client.Commands as CMDS
+import Concordium.Client.Types.GRPC
 import Options.Applicative
 import Data.Range.Parser
 
@@ -154,4 +155,4 @@ main = do
         runClient cfg (withLastFinalBlockHash Nothing getCryptographicParameters) >>= \case
           Left err -> die $ "Cannot obtain cryptographic parameters due to network error: " ++ show err
           Right (Left err) -> die $ "Cannot obtain cryptographic parameters due to unexpected response: " ++ err
-          Right (Right globalInfo) -> runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg, ..}
+          Right (Right (GRPCResponse _ globalInfo)) -> runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg, ..}

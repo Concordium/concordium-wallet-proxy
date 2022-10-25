@@ -23,7 +23,9 @@ description:         Please see the README on GitHub at <https://github.com/Conc
 dependencies:
 - base >=4.7 && < 5
 - bytestring >= 0.10
+- case-insensitive >= 1.2.1.0
 - concordium-base
+- cookie >= 0.4.5
 - cereal >= 0.5.7
 - unordered-containers >= 0.2.9
 - containers >= 0.6
