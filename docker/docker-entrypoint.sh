@@ -14,6 +14,7 @@ db_password="${DB_PASSWORD}"
 drop_account_file="${DROP_ACCOUNT_FILE-}"
 forced_update_config_file_v0="${FORCED_UPDATE_CONFIG_FILE_V0-}"
 forced_update_config_file_v1="${FORCED_UPDATE_CONFIG_FILE_V1-}"
+use_tls="${USE_TLS}"
 
 args=(
 	--grpc-ip "${grpc_host}"
@@ -30,6 +31,9 @@ if [ -n "${forced_update_config_file_v0}" ]; then
 fi
 if [ -n "${forced_update_config_file_v1}" ]; then
 	args+=( --forced-update-config-v1 "${forced_update_config_file_v1}" )
+fi
+if [ -n "${use_tls}" ]; then
+	args+=( --secure )
 fi
 
 # Inherits env vars and args.

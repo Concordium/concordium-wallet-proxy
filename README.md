@@ -1032,6 +1032,9 @@ where
 - `--forced-update-config-v1 forced-update-config-v1.json` file with app update configuration for the new mobile wallet
 - `--health-tolerance 30` tolerated age of last final block in seconds before the health query returns false
 
+If the node only supports TLS connections then the wallet-proxy must be started
+with the `--secure` flag to enable its use.
+
 ## Identity providers metadata files
 
 ### For the version 0 identity issuance flow

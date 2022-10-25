@@ -59,6 +59,7 @@ parser = info (helper <*> parseProxyConfig)
                               (CMDS.grpcTarget backend)
                               (CMDS.grpcRetryNum backend)
                               (Just 30)
+                              (CMDS.grpcUseTls backend)
 
 runSite :: YesodDispatch site => Int -> Network.Wai.Handler.Warp.HostPreference -> site -> IO ()
 runSite port host site = do
