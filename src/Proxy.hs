@@ -286,10 +286,12 @@ runGRPC hds c k = do
   cookies <- case hds of
     Nothing -> fmap (\(k',v') -> (Text.encodeUtf8 k', Text.encodeUtf8 v')) . reqCookies <$> getRequest -- yesod request cookies
     Just hs -> return $ foldMap (parseCookies . snd) $ getHeadersByKey "cookie" hs -- cookies passed in hds
-  let headers = map toGRPCCookieHeader cookies
-  -- create cookieheader and pass to runClientWith...
-  $(logInfo) $ "runGRPC received the following cookie-headers from client: " <> Text.pack (show headers)
-  liftIO ((left show <$> runClientWithExtraHeaders headers cfg c) `catch` exHandler) >>= \case
+  let cookieHeaders = map toGRPCCookieHeader cookies
+  yesodCookies <- reqCookies <$> getRequest
+  $(logOther "Trace") $ "Got yesod cookies: " <> Text.pack (show yesodCookies)
+  $(logOther "Trace") $ "runGRPC was invoked with headers: " <> Text.pack (show hds)
+  $(logOther "Trace") $ "Invoking runClientWithExtraHeaders with headers: " <> Text.pack (show cookieHeaders)
+  liftIO ((left show <$> runClientWithExtraHeaders cookieHeaders cfg c) `catch` exHandler) >>= \case
     Left err -> do
       $(logError) $ "Internal error accessing GRPC endpoint: " <> Text.pack err
       i <- internationalize
@@ -305,6 +307,7 @@ runGRPC hds c k = do
         "error" .= fromEnum RequestInvalid
         ]
     Right (Right (GRPCResponse hds' a)) -> do
+      $(logOther "Trace") $ "Got these response headers from runClientWithExtraHeaders: " <> Text.pack (show hds')
       -- update cookies
       let setCookieHds = getHeadersByKey "set-cookie" hds'
       let newCookies = foldMap (parseCookies . snd) setCookieHds
@@ -317,12 +320,13 @@ runGRPC hds c k = do
     getHeadersByKey k' = filter $ (CI.mk k' ==) . fst
     toGRPCCookieHeader :: (BS.ByteString, BS.ByteString) -> (CI.CI BS.ByteString, BS.ByteString)
     toGRPCCookieHeader ck = (CI.mk "cookie", fst ck <> "=" <> snd ck)
-    -- TODO: Should we consider what happens when the cookie string passed to parseSetCookie is malformed?
     setCookies :: GRPCHeaderList -> Handler ()
     setCookies hds' = do
+      -- TODO: Remove cookie headers and set them again? Currently it seems there
+      --       may be several set-cookie headers for the same cookie key...
       let setCookieHds = getHeadersByKey "set-cookie" hds'
-      $(logInfo) $ "runGRPC received the following set-cookies headers in response: " <> Text.pack (show setCookieHds)
-      mapM_ (\(k',v') -> addHeader (Text.decodeUtf8 $ CI.original k') (Text.decodeUtf8 v')) setCookieHds
+      $(logOther "Trace") $ "Set-cookies headers to be included in yesod response to client: " <> Text.pack (show setCookieHds)
+      mapM_ (\(k', v') -> addHeader (Text.decodeUtf8 $ CI.original k') (Text.decodeUtf8 v')) setCookieHds
 
 firstPaydayAfter ::
   UTCTime -- ^Time of the next payday.
