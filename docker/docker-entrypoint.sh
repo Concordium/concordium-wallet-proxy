@@ -15,12 +15,16 @@ drop_account_file="${DROP_ACCOUNT_FILE-}"
 forced_update_config_file_v0="${FORCED_UPDATE_CONFIG_FILE_V0-}"
 forced_update_config_file_v1="${FORCED_UPDATE_CONFIG_FILE_V1-}"
 use_tls="${USE_TLS}"
+log_level="${LOG_LEVEL:-debug}" # default log level is debug
+grpc_timeout="${GRPC_TIMEOUT:-15}"
 
 args=(
 	--grpc-ip "${grpc_host}"
 	--grpc-port "${grpc_port}"
 	--ip-data "${ip_data_file}"
     --ip-data-v1 "${ip_data_file_v1}"
+    --log-level "${log_level}"
+    --grpc-timeout "${grpc_timeout}"
 	--db "host=${db_host} port=${db_port} user=${db_user} dbname=${db_name} password=${db_password}"
 )
 if [ -n "${drop_account_file}" ]; then

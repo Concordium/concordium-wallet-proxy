@@ -2,6 +2,14 @@
 
 ## Unreleased changes
 
+## 0.19
+
+- add cookie forwarding
+- introduce new configuration options
+  - `--log-level` for controlling log output
+  - `grpc-timeout` for controlling the timeout of requests to the node
+  - `--secure` which enables TLS support
+
 ## 0.18
 
 - add `GET /v0/CIS2Tokens` endpoint.

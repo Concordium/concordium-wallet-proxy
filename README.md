@@ -1019,6 +1019,8 @@ wallet-proxy --grpc-ip 127.0.0.1\
              --forced-update-config-v0 forced-update-config-v0.json\
              --forced-update-config-v1 forced-update-config-v1.json\
              --health-tolerance 30
+             --log-level debug
+             --grpc-timeout 15
 ```
 
 where
@@ -1031,6 +1033,10 @@ where
 - `--forced-update-config-v0 forced-update-config-v0.json` file with app update configuration for the old mobile wallet
 - `--forced-update-config-v1 forced-update-config-v1.json` file with app update configuration for the new mobile wallet
 - `--health-tolerance 30` tolerated age of last final block in seconds before the health query returns false
+- `--log-level debug` means all logs above debug will be printed. Options are
+  `off`, `warning`, `error`, `info`, `debug`, `trace`.
+- `--grpc-timeout 15` means that all requests to the node must terminate in at
+  most 15s, otherwise they will be cancelled.
 
 If the node only supports TLS connections then the wallet-proxy must be started
 with the `--secure` flag to enable its use.

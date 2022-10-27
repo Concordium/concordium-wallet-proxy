@@ -90,6 +90,7 @@ import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex, Credentia
 import Concordium.Crypto.SignatureScheme (KeyPair)
 import Concordium.Crypto.ByteStringHelpers (ByteStringHex(..))
 import Concordium.Common.Version
+import qualified Logging
 
 import Internationalization
 
@@ -177,7 +178,8 @@ data Proxy = Proxy {
   healthTolerance :: Int,
   globalInfo :: Value,
   ipInfo :: Value,
-  ipInfoV1 :: Value
+  ipInfoV1 :: Value,
+  logLevel :: Logging.LogLevel
 }
 
 -- | Data needed for GTU drops.
@@ -253,6 +255,8 @@ instance Yesod Proxy where
         NotAuthenticated -> RequestInvalid
         PermissionDenied {} -> RequestInvalid
         BadMethod {} -> RequestInvalid
+
+  shouldLogIO Proxy{..} _source level = return $ Logging.convertLogLevel level <= logLevel
 
 -- |Terminate execution and respond with 400 status code with the given error
 -- description.

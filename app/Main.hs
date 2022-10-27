@@ -4,7 +4,7 @@
 module Main where
 
 import Proxy
-import qualified Logging as L
+import qualified Logging
 import Yesod
 import Database.Persist.Postgresql
 import qualified Network.Wai.Handler.Warp
@@ -38,7 +38,7 @@ data ProxyConfig = ProxyConfig {
   pcHealthTolerance :: Maybe Int,
   pcIpInfo :: FilePath,
   pcIpInfoV1 :: FilePath,
-  logLevel :: L.LogLevel
+  logLevel :: Logging.LogLevel
 }
 
 parser :: ParserInfo ProxyConfig
@@ -47,6 +47,7 @@ parser = info (helper <*> parseProxyConfig)
   where
     parseProxyConfig = mkProxyConfig
       <$> backendParser
+      <*> optional (option auto (long "grpc-timeout" <> value 15 <> showDefault <> metavar "TIMEOUT" <> help "Timeout of grpc requests."))
       <*> strOption (long "db" <> metavar "STR" <> help "database connection string")
       <*> optional (strOption (long "drop-account" <> metavar "FILE" <> help "file with CCD drop account credentials (only used for stagenet and testnet)."))
       <*> optional (strOption (long "forced-update-config-v0" <> metavar "FILE" <> help "file with the version configuration for forced app updates for the old mobile wallet."))
@@ -54,15 +55,17 @@ parser = info (helper <*> parseProxyConfig)
       <*> optional (option auto (long "health-tolerance" <> metavar "SECONDS" <> help "the maximum tolerated age of the last final block in seconds before the health query returns false."))
       <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and private information on the identity providers, together with metadata.")
       <*> strOption (long "ip-data-v1" <> metavar "FILE" <> help "File with public and private information on the identity providers for the flow without initial accounts, together with metadata.")
-      <*> strOption (long "log-level" <> metavar "LOGLEVEL" <> value "OFF" <> showDefault <> help "Log level. Can be one of either OFF, ERROR, WARNING, INFO, DEBUG or TRACE.")
-    mkProxyConfig backend = ProxyConfig $ GrpcConfig
-                              (CMDS.grpcHost backend)
-                              (CMDS.grpcPort backend)
-                              (CMDS.grpcAuthenticationToken backend)
-                              (CMDS.grpcTarget backend)
-                              (CMDS.grpcRetryNum backend)
-                              (Just 30)
-                              (CMDS.grpcUseTls backend)
+      <*> option (eitherReader Logging.logLevelFromString) (long "log-level" <> metavar "LOGLEVEL" <> value Logging.LLOff <> showDefault <> help "Log level. Can be one of either 'off', 'error', 'warning', 'info', 'debug' or 'trace'.")
+
+    mkProxyConfig backend timeout =
+      ProxyConfig $ GrpcConfig
+        (CMDS.grpcHost backend)
+        (CMDS.grpcPort backend)
+        (CMDS.grpcAuthenticationToken backend)
+        (CMDS.grpcTarget backend)
+        (CMDS.grpcRetryNum backend)
+        (Just (fromMaybe 15 timeout))
+        (CMDS.grpcUseTls backend)
 
 runSite :: YesodDispatch site => Int -> Network.Wai.Handler.Warp.HostPreference -> site -> IO ()
 runSite port host site = do
@@ -115,7 +118,7 @@ forcedUpdateParser = AE.withObject "Forced update configs" $ \v -> do
 main :: IO ()
 main = do
   ProxyConfig{..} <- execParser parser
-  let filterL = L.filterL logLevel
+  let filterL = Logging.filterL logLevel
   let logm s = runStderrLoggingT $ filterL ( $logDebug ("[GRPC]: " <> s))
   let healthTolerance = fromMaybe 300 pcHealthTolerance -- use 5 minutes as default health tolerance
   gtuDropData <- case pcGTUAccountFile of
@@ -161,4 +164,4 @@ main = do
         runClient cfg (withLastFinalBlockHash Nothing getCryptographicParameters) >>= \case
           Left err -> die $ "Cannot obtain cryptographic parameters due to network error: " ++ show err
           Right (Left err) -> die $ "Cannot obtain cryptographic parameters due to unexpected response: " ++ err
-          Right (Right (GRPCResponse _ globalInfo)) -> runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg, ..}
+          Right (Right (GRPCResponse _ globalInfo)) -> runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg,..}

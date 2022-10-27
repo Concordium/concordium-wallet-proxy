@@ -1,16 +1,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Logging(
-      Logging.LogLevel(..)
-    , filterL
-) where
+module Logging where
 
-import           Control.Monad.Logger
-import           Data.Char
-import           Data.Text                  hiding (map)
-import           Data.String
+import qualified Control.Monad.Logger as Logger
+import qualified Data.Text as Text
 
--- basically lifted from Concordium.Logger
+-- |The level of a log entry.
 data LogLevel
   = LLOff
   | LLError
@@ -20,35 +15,34 @@ data LogLevel
   | LLTrace
   deriving (Eq, Ord)
 
-instance Show Logging.LogLevel where
-  show LLOff = "OFF"
-  show LLError = "ERROR"
-  show LLWarning = "WARNING"
-  show LLInfo = "INFO"
-  show LLDebug = "DEBUG"
-  show LLTrace = "TRACE"
+instance Show LogLevel where
+  show LLOff = "off"
+  show LLError = "error"
+  show LLWarning = "warning"
+  show LLInfo = "info"
+  show LLDebug = "debug"
+  show LLTrace = "trace"
 
-instance IsString Logging.LogLevel where
-  fromString s
-    | sU == show LLOff = LLOff
-    | sU == show LLError = LLError
-    | sU == show LLWarning = LLWarning
-    | sU == show LLInfo = LLInfo
-    | sU == show LLDebug = LLDebug
-    | sU == show LLTrace = LLTrace
-    | otherwise = LLOff
-    where sU = map Data.Char.toUpper s
+logLevelFromString :: String -> Either String LogLevel
+logLevelFromString s
+    | s == show LLOff = Right LLOff
+    | s == show LLError = Right LLError
+    | s == show LLWarning = Right LLWarning
+    | s == show LLInfo = Right LLInfo
+    | s == show LLDebug = Right LLDebug
+    | s == show LLTrace = Right LLTrace
+    | otherwise = Left $ "Unrecognized log level '" ++ show s ++ "'. Valid options are 'off', 'error', 'warning', 'info', 'debug' and 'trace'."
 
-convertLogLevel :: Control.Monad.Logger.LogLevel -> Logging.LogLevel 
+convertLogLevel :: Logger.LogLevel -> Logging.LogLevel 
 convertLogLevel ll = case ll of
-  LevelDebug -> LLDebug 
-  LevelInfo -> LLInfo
-  LevelWarn -> LLWarning
-  LevelError -> LLError
-  LevelOther s ->
-    if   Data.Text.toUpper s == Data.Text.pack "TRACE"
+  Logger.LevelDebug -> LLDebug 
+  Logger.LevelInfo -> LLInfo
+  Logger.LevelWarn -> LLWarning
+  Logger.LevelError -> LLError
+  Logger.LevelOther s ->
+    if Text.toUpper s == Text.pack "trace"
     then LLTrace
     else LLOff
 
-filterL :: Logging.LogLevel -> LoggingT m a -> LoggingT m a
-filterL ll = filterLogger (\_ l -> convertLogLevel l <= ll)
+filterL :: Logging.LogLevel -> Logger.LoggingT m a -> Logger.LoggingT m a
+filterL ll = Logger.filterLogger (\_ l -> convertLogLevel l <= ll)
