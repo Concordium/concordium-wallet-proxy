@@ -40,7 +40,7 @@ convertLogLevel ll = case ll of
   Logger.LevelWarn -> LLWarning
   Logger.LevelError -> LLError
   Logger.LevelOther s ->
-    if Text.toUpper s == Text.pack "trace"
+    if Text.toLower s == Text.pack "trace"
     then LLTrace
     else LLOff
 
