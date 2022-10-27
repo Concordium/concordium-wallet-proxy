@@ -4,6 +4,7 @@
 module Main where
 
 import Proxy
+import qualified Logging as L
 import Yesod
 import Database.Persist.Postgresql
 import qualified Network.Wai.Handler.Warp
@@ -36,7 +37,8 @@ data ProxyConfig = ProxyConfig {
   pcForcedUpdateConfigFileV1 :: Maybe FilePath,
   pcHealthTolerance :: Maybe Int,
   pcIpInfo :: FilePath,
-  pcIpInfoV1 :: FilePath
+  pcIpInfoV1 :: FilePath,
+  logLevel :: L.LogLevel
 }
 
 parser :: ParserInfo ProxyConfig
@@ -52,6 +54,7 @@ parser = info (helper <*> parseProxyConfig)
       <*> optional (option auto (long "health-tolerance" <> metavar "SECONDS" <> help "the maximum tolerated age of the last final block in seconds before the health query returns false."))
       <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and private information on the identity providers, together with metadata.")
       <*> strOption (long "ip-data-v1" <> metavar "FILE" <> help "File with public and private information on the identity providers for the flow without initial accounts, together with metadata.")
+      <*> strOption (long "log-level" <> metavar "LOGLEVEL" <> value "OFF" <> showDefault <> help "Log level. Can be one of either OFF, ERROR, WARNING, INFO, DEBUG or TRACE.")
     mkProxyConfig backend = ProxyConfig $ GrpcConfig
                               (CMDS.grpcHost backend)
                               (CMDS.grpcPort backend)
@@ -112,7 +115,8 @@ forcedUpdateParser = AE.withObject "Forced update configs" $ \v -> do
 main :: IO ()
 main = do
   ProxyConfig{..} <- execParser parser
-  let logm s = runStderrLoggingT ($logDebug ("[GRPC]: " <> s))
+  let filterL = L.filterL logLevel
+  let logm s = runStderrLoggingT $ filterL ( $logDebug ("[GRPC]: " <> s))
   let healthTolerance = fromMaybe 300 pcHealthTolerance -- use 5 minutes as default health tolerance
   gtuDropData <- case pcGTUAccountFile of
     Nothing -> return Nothing
@@ -140,12 +144,13 @@ main = do
         Right cfg -> return cfg
   Right ipInfo <- AE.eitherDecode' <$> LBS.readFile pcIpInfo
   Right ipInfoV1 <- AE.eitherDecode' <$> LBS.readFile pcIpInfoV1
-  runStderrLoggingT $ do
+  runStderrLoggingT . filterL $ do
     $logDebug ("Using iOS V0 update config: " <> fromString (show forcedUpdateConfigIOSV0))
     $logDebug ("Using Android V0 update config: " <> fromString (show forcedUpdateConfigAndroidV0))
     $logDebug ("Using iOS V1 update config: " <> fromString (show forcedUpdateConfigIOSV1))
     $logDebug ("Using Android V1 update config: " <> fromString (show forcedUpdateConfigAndroidV1))
-  runStderrLoggingT $ withPostgresqlPool pcDBConnString 10 $ \dbConnectionPool -> liftIO $ do
+    $logDebug ("Using logLevel: " <> fromString (show logLevel))
+  runStderrLoggingT  . filterL $ withPostgresqlPool pcDBConnString 10 $ \dbConnectionPool -> liftIO $ do
     -- do not care about the gtu receipients database if gtu drop is not enabled
     when (isJust gtuDropData) $ runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
     runExceptT (mkGrpcClient pcGRPC (Just logm)) >>= \case
