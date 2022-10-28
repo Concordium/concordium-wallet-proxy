@@ -73,7 +73,7 @@ import qualified Concordium.Types.InvokeContract as InvokeContract
 import qualified Concordium.Wasm                 as Wasm
 
 import Concordium.Client.GRPC
-import Concordium.Client.Types.GRPC
+import Concordium.Client.Runner.Helper
 import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
                                            transferWithSchedulePayloadSize,
                                            simpleTransferEnergyCost,
@@ -374,7 +374,7 @@ getRewardPeriodLength lfb = do
              Just <$> (chainParameters AE..: "rewardPeriodLength")
            else return Nothing
      summary <- either fail return =<< getBlockSummary lfb
-     rpLength <- liftResult (parse timeParametersParser $ grpcResponse summary)
+     rpLength <- liftResult (parse timeParametersParser $ grpcResponseVal summary)
      return $ Right (GRPCResponse [] rpLength)
 
 -- |Get the balance of an account.  If successful, the result is a JSON
@@ -447,17 +447,17 @@ getAccountBalanceR addrText =
   where
     doGetBal = do
       status <- either fail return =<< getConsensusStatus
-      lastFinBlock <- liftResult $ parse readLastFinalBlock $ grpcResponse status
-      bestBlock <- liftResult $ parse readBestBlock $ grpcResponse status
-      lastFinInfo <- either fail (return . grpcResponse) =<< getAccountInfo addrText lastFinBlock
-      bestInfo <- either fail (return . grpcResponse) =<< getAccountInfo addrText bestBlock
-      (pv, epochDuration) <- liftResult $ parse (flip (withObject "Consensus status") $ grpcResponse status) $ \obj ->  do
+      lastFinBlock <- liftResult $ parse readLastFinalBlock $ grpcResponseVal status
+      bestBlock <- liftResult $ parse readBestBlock $ grpcResponseVal status
+      lastFinInfo <- either fail (return . grpcResponseVal) =<< getAccountInfo addrText lastFinBlock
+      bestInfo <- either fail (return . grpcResponseVal) =<< getAccountInfo addrText bestBlock
+      (pv, epochDuration) <- liftResult $ parse (flip (withObject "Consensus status") $ grpcResponseVal status) $ \obj ->  do
                                                    epochDuration <- obj .: "epochDuration"
                                                    pv <- obj .: "protocolVersion"
                                                    return (pv, epochDuration)
       if pv >= P4 then do
         rewardStatus <- either fail return =<< withLastFinalBlockHash (Just lastFinBlock) getRewardStatus
-        nextPayday <- liftResult $ parse (withObject "Next payday" (.: "nextPaydayTime")) $ grpcResponse rewardStatus
+        nextPayday <- liftResult $ parse (withObject "Next payday" (.: "nextPaydayTime")) $ grpcResponseVal rewardStatus
         return $ Right $ GRPCResponse (grpcHeaders status) (lastFinInfo, bestInfo, Just nextPayday, epochDuration, lastFinBlock)
       else
         return $ Right $ GRPCResponse (grpcHeaders status) (lastFinInfo, bestInfo, Nothing, epochDuration, lastFinBlock)
@@ -645,7 +645,7 @@ getTransactionCostR = runGRPC Nothing fetchUpdates $ \hds (rate, pv) -> do
                       -- this is the C_t for the smart contract update transaction
                       return $ case res of
                             Left err -> Left $ "Invocation failed with error: " ++ show err
-                            Right jsonValue -> case AE.fromJSON $ grpcResponse jsonValue of
+                            Right jsonValue -> case AE.fromJSON $ grpcResponseVal jsonValue of
                               AE.Error jsonErr -> Left $ "Invocation failed with error: " ++ show jsonErr
                               AE.Success InvokeContract.Failure{..} -> Right $ GRPCResponse (grpcHeaders jsonValue) rcrUsedEnergy
                               AE.Success InvokeContract.Success{..} -> Right $ GRPCResponse (grpcHeaders jsonValue) rcrUsedEnergy
@@ -698,7 +698,7 @@ getTransactionCostR = runGRPC Nothing fetchUpdates $ \hds (rate, pv) -> do
                       microGTUPerEuro <- chainParameters AE..: "microGTUPerEuro"
                       return $ computeEnergyRate microGTUPerEuro euroPerEnergy
                 return $ do
-                      rate <- parseEither energyRateParser . grpcResponse =<< summary
+                      rate <- parseEither energyRateParser . grpcResponseVal =<< summary
                       -- the old node that supported only P1 version did not return the protocol version in consensus status.
                       pv <- parseEither (withObject "Protocol version" $ \v -> (v AE..:! "protocolVersion" AE..!= P1)) cs
                       return $ GRPCResponse hds (rate, pv)
@@ -1611,7 +1611,7 @@ putGTUDropR addrText = do
             parsed <- parseEither
               ( withObject "nonce" $ \v -> do
                   v AE..: "nonce"
-              ) $ grpcResponse response
+              ) $ grpcResponseVal response
             case parsed of
               Left err -> Left err
               Right nonce -> Right $ GRPCResponse (grpcHeaders response) nonce
@@ -1706,7 +1706,7 @@ getBakerPoolR bid =
   where
     doGetBaker :: ClientMonad IO (GRPCResult (Text, Value))
     doGetBaker = withLastFinalBlockHash Nothing (\lf ->
-      fmap (\x -> GRPCResponse (grpcHeaders x) $ (lf,) $ grpcResponse x)
+      fmap (\x -> GRPCResponse (grpcHeaders x) $ (lf,) $ grpcResponseVal x)
         <$> getPoolStatus (BakerId $ AccountIndex bid) False lf)
     doGetNextPayday :: Text -> ClientMonad IO (GRPCResult UTCTime)
     doGetNextPayday lastFinal = do
@@ -1716,7 +1716,7 @@ getBakerPoolR bid =
         parsed <- parseEither
                     ( withObject "Best finalized block" $ \v -> do
                         v AE..: "nextPaydayTime"
-                    ) $ grpcResponse response
+                    ) $ grpcResponseVal response
         case parsed of
           Left err -> Left err
           Right utc -> Right $ GRPCResponse (grpcHeaders response) utc
@@ -1728,7 +1728,7 @@ getBakerPoolR bid =
         parsed <- parseEither
                     ( withObject "Consensus status" $ \v -> do
                         v AE..: "epochDuration"
-                    ) $ grpcResponse response
+                    ) $ grpcResponseVal response
         case parsed of
           Left err -> Left err
           Right dur -> Right $ GRPCResponse (grpcHeaders response) dur
@@ -1755,7 +1755,7 @@ getChainParametersR =
                     ( withObject "Best finalized block" $ \v -> do
                         updates <- v AE..: "updates"
                         updates AE..: "chainParameters"
-                    ) . grpcResponse
+                    ) . grpcResponseVal
                     =<< summary
         case parsed of
           Left err -> Left err
@@ -1775,7 +1775,7 @@ getNextPaydayR =
         parsed <- parseEither
           ( withObject "Best finalized block" $ \v -> do
               v AE..: "nextPaydayTime"
-          ) $ grpcResponse response
+          ) $ grpcResponseVal response
         case parsed of
           Left err -> Left err
           Right utc -> Right $ GRPCResponse (grpcHeaders response) utc
@@ -1846,7 +1846,7 @@ getEpochLengthR =
         parsed <- parseEither
                     ( withObject "Consensus status" $ \v -> do
                         v AE..: "epochDuration"
-                    ) $ grpcResponse response
+                    ) $ grpcResponseVal response
         case parsed of
           Left err -> Left err
           Right dur -> Right $ GRPCResponse (grpcHeaders response) dur

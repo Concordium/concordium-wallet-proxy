@@ -24,7 +24,7 @@ import Control.Monad.Logger
 
 import Concordium.Client.GRPC
 import Concordium.Client.Commands as CMDS
-import Concordium.Client.Types.GRPC
+import Concordium.Client.Runner.Helper
 import Options.Applicative
 import Data.Range.Parser
 
