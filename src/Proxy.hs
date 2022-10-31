@@ -22,7 +22,7 @@ import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Short as BSS
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.Char as CH
-import qualified Data.CaseInsensitive as CI
+import Control.Applicative
 
 import qualified Data.Proxy as Proxy
 import Data.Version (showVersion)
@@ -283,7 +283,9 @@ respond404Error err = do
 
 -- |Parse a set-cookie header string.
 parseSetCookie' :: BS.ByteString -> SetCookie
-parseSetCookie' c = (parseSetCookie c) { setCookieExpires = lookup "expires" flags >>= parseSetCookieExpires' }
+parseSetCookie' c =
+      let sc = parseSetCookie c
+      in sc { setCookieExpires = setCookieExpires sc <|> (lookup "expires" flags >>= parseSetCookieExpires') }
   where
     breakDiscard :: Word8 -> BS.ByteString -> (BS.ByteString, BS.ByteString)
     breakDiscard w s =
@@ -308,51 +310,48 @@ runGRPC c k = do
   cfg <- grpcEnvData <$> getYesod
   cookies <- getCookies
   let
-    exHandler :: SomeException -> IO (Either String a)
-    exHandler = pure . Left . show
-    cookieHeaders = map toGRPCCookieHeader cookies
-  $(logOther "Trace") $ "Invoking runClientWithExtraHeaders with headers: " <> Text.pack (show cookieHeaders)
-  liftIO ((left show <$> runClientWithExtraHeaders cookieHeaders cfg c) `catch` exHandler) >>= \case
-    Left err -> do
+    exHandler :: SomeException -> IO (Either String a, Map.Map BS.ByteString BS.ByteString)
+    exHandler e = pure (Left $ show e, Map.empty)
+  $(logOther "Trace") $ "Invoking runClientWithExtraHeaders with headers: " <> Text.pack (show cookies)
+  liftIO (fmap (\(x, y) -> (left show x, y)) (runClientWithExtraHeaders cookies cfg c) `catch` exHandler) >>= \case
+    (Left err, _) -> do
       $(logError) $ "Internal error accessing GRPC endpoint: " <> Text.pack err
       i <- internationalize
       sendResponseStatus badGateway502 $ object [
         "errorMessage" .= i18n i EMGRPCError,
         "error" .= fromEnum InternalError
         ]
-    Right (Left err) -> do
+    (Right (Left err), _) -> do
       $(logError) $ "GRPC call failed: " <> Text.pack err
       i <- internationalize
       sendResponseStatus badGateway502 $ object [
         "errorMessage" .= i18n i (EMGRPCErrorResponse err),
         "error" .= fromEnum RequestInvalid
         ]
-    Right (Right (GRPCResponse hds a)) -> do
-      $(logOther "Trace") $ "Got these response headers from runClientWithExtraHeaders: " <> Text.pack (show hds)
+    (Right (Right (GRPCResponse hds a)), updatedCookies) -> do
+      $(logOther "Trace") $ "Got these response headers: " <> Text.pack (show hds)
       -- set cookies in response
-      let scs = parseSetCookie' . snd <$> (filter $ (CI.mk "set-cookie" ==) . fst) hds
+      let scs = parseSetCookie' . snd <$> (filter $ ("set-cookie" ==) . fst) hds
       mapM_ setCookie scs
       $(logOther "Trace") $ "Set-cookies headers to be included in yesod response to client: " <> Text.pack (show scs)
       -- update cookie map
-      cacheSet $ Map.union (Map.fromList $ fmap (\sc -> (setCookieName sc, setCookieValue sc)) scs) (Map.fromList cookies)
+      cacheSet $! Map.union updatedCookies cookies
       k a
   where
-    toGRPCCookieHeader :: (BS.ByteString, BS.ByteString) -> (CI.CI BS.ByteString, BS.ByteString)
-    toGRPCCookieHeader ck = (CI.mk "cookie", fst ck <> "=" <> snd ck)
     getYesodCookieMap :: Handler (Map.Map BS.ByteString BS.ByteString)
     getYesodCookieMap = Map.fromList
       . fmap (\(k',v') -> (Text.encodeUtf8 k', Text.encodeUtf8 v'))
       . reqCookies
       <$> getRequest
-    getCookies :: Handler [(BS.ByteString, BS.ByteString)]
+    getCookies :: Handler (Map.Map BS.ByteString BS.ByteString)
     getCookies = do
       -- map of cookies to be included in runClient
       sCookieMapM <- cacheGet
       -- yesod cookies in client request
       yCookieMap <- getYesodCookieMap
       case sCookieMapM of
-        Nothing -> return $ Map.toList yCookieMap
-        Just scm -> return $ Map.toList $ Map.union scm yCookieMap
+        Nothing -> return yCookieMap
+        Just scm -> return $ Map.union scm yCookieMap
 
 firstPaydayAfter ::
   UTCTime -- ^Time of the next payday.
@@ -478,7 +477,7 @@ getAccountBalanceR addrText =
                                                    pv <- obj .: "protocolVersion"
                                                    return (pv, epochDuration)
       if pv >= P4 then do
-        rewardStatus <- either fail return =<< withLastFinalBlockHash (Just lastFinBlock) getRewardStatus
+        rewardStatus <- either fail return =<< getRewardStatus lastFinBlock
         nextPayday <- liftResult $ parse (withObject "Next payday" (.: "nextPaydayTime")) $ grpcResponseVal rewardStatus
         return $ Right $ GRPCResponse (grpcHeaders status) (lastFinInfo, bestInfo, Just nextPayday, epochDuration, lastFinBlock)
       else
