@@ -312,8 +312,8 @@ runGRPC c k = do
   let
     exHandler :: SomeException -> IO (Either String a, Map.Map BS.ByteString BS.ByteString)
     exHandler e = pure (Left $ show e, Map.empty)
-  $(logOther "Trace") $ "Invoking runClientWithExtraHeaders with headers: " <> Text.pack (show cookies)
-  liftIO (fmap (\(x, y) -> (left show x, y)) (runClientWithExtraHeaders cookies cfg c) `catch` exHandler) >>= \case
+  $(logOther "Trace") $ "Invoking queries with headers: " <> Text.pack (show cookies)
+  liftIO (fmap (\(x, y) -> (left show x, y)) (runClientWithCookies cookies cfg c) `catch` exHandler) >>= \case
     (Left err, _) -> do
       $(logError) $ "Internal error accessing GRPC endpoint: " <> Text.pack err
       i <- internationalize
