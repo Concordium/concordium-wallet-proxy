@@ -154,6 +154,7 @@ translation = I18n {..}
         i18nEvent Interrupted{..} = "Execution of " <> descrInstance iAddress <> " triggered an operation."
         i18nEvent Resumed{..} | rSuccess = "Operation succeeded and execution of " <> descrInstance rAddress <> " resumed."
         i18nEvent Resumed{..} | otherwise = "Operation failed and execution of " <> descrInstance rAddress <> " resumed."
+        i18nEvent Upgraded{..} = "Smart contract instance at " <> descrInstance euAddress <> " was upgraded from " <> descrModule euFrom <> " to " <> descrModule euTo <> "."
 
         i18nEvent BakerSetOpenStatus{..} = "Open status of baker " <> descrBaker ebsosBakerId ebsosAccount <> " set to " <> descrOpenStatus ebsosOpenStatus
         i18nEvent BakerSetMetadataURL{..} = "Metadata URL of baker " <> descrBaker ebsmuBakerId ebsmuAccount <> " set to " <> descrMetadataURL ebsmuMetadataURL
