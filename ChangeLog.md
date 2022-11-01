@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.20
+
+Add support for protocol version 5.
+
 ## 0.19
 
 - add cookie forwarding
