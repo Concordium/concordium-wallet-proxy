@@ -1628,13 +1628,12 @@ putGTUDropR addrText = do
           nonceM <- getNextAccountNonce acc
           return $ do
             response <- nonceM
-            parsed <- parseEither
+            nonce <- parseEither
               ( withObject "nonce" $ \v -> do
                   v AE..: "nonce"
               ) $ grpcResponseVal response
-            case parsed of
-              Left err -> Left err
-              Right nonce -> Right $ GRPCResponse (grpcHeaders response) nonce
+
+            return $ GRPCResponse (grpcHeaders response) nonce
 
 getGlobalFileR :: Handler TypedContent
 getGlobalFileR = toTypedContent . globalInfo <$> getYesod
@@ -1733,25 +1732,21 @@ getBakerPoolR bid =
       rewardStatus <- getRewardStatus lastFinal
       return $ do 
         response <- rewardStatus
-        parsed <- parseEither
+        utc <- parseEither
                     ( withObject "Best finalized block" $ \v -> do
                         v AE..: "nextPaydayTime"
                     ) $ grpcResponseVal response
-        case parsed of
-          Left err -> Left err
-          Right utc -> Right $ GRPCResponse (grpcHeaders response) utc
+        return $ GRPCResponse (grpcHeaders response) utc
     doGetEpochLength :: ClientMonad IO (GRPCResult Duration)
     doGetEpochLength = do
       consensusStatus <- getConsensusStatus
       return $ do
         response <- consensusStatus
-        parsed <- parseEither
+        dur <- parseEither
                     ( withObject "Consensus status" $ \v -> do
                         v AE..: "epochDuration"
                     ) $ grpcResponseVal response
-        case parsed of
-          Left err -> Left err
-          Right dur -> Right $ GRPCResponse (grpcHeaders response) dur
+        Right $ GRPCResponse (grpcHeaders response) dur
     getParameters :: Text -> ClientMonad IO (GRPCResult (UTCTime, Duration))
     getParameters lastFinal = do
       nextPayday <- doGetNextPayday lastFinal
@@ -1771,15 +1766,14 @@ getChainParametersR =
       summary <- withLastFinalBlockHash Nothing getBlockSummary
       return $ do
         response <- summary
-        parsed <- parseEither
+        val <- parseEither
                     ( withObject "Best finalized block" $ \v -> do
                         updates <- v AE..: "updates"
                         updates AE..: "chainParameters"
                     ) . grpcResponseVal
                     =<< summary
-        case parsed of
-          Left err -> Left err
-          Right val -> Right $ GRPCResponse (grpcHeaders response) val
+
+        Right $ GRPCResponse (grpcHeaders response) val
 
 getNextPaydayR :: Handler TypedContent
 getNextPaydayR =
@@ -1792,13 +1786,11 @@ getNextPaydayR =
       rewardStatus <- withLastFinalBlockHash Nothing getRewardStatus
       return $ do
         response <- rewardStatus
-        parsed <- parseEither
+        utc <- parseEither
           ( withObject "Best finalized block" $ \v -> do
               v AE..: "nextPaydayTime"
           ) $ grpcResponseVal response
-        case parsed of
-          Left err -> Left err
-          Right utc -> Right $ GRPCResponse (grpcHeaders response) utc
+        Right $ GRPCResponse (grpcHeaders response) utc
 
 getPassiveDelegationR :: Handler TypedContent
 getPassiveDelegationR =
@@ -1863,10 +1855,8 @@ getEpochLengthR =
       consensusStatus <- getConsensusStatus
       return $ do
         response <- consensusStatus
-        parsed <- parseEither
+        dur <- parseEither
                     ( withObject "Consensus status" $ \v -> do
                         v AE..: "epochDuration"
                     ) $ grpcResponseVal response
-        case parsed of
-          Left err -> Left err
-          Right dur -> Right $ GRPCResponse (grpcHeaders response) dur
+        Right $ GRPCResponse (grpcHeaders response) dur
