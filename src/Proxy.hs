@@ -9,6 +9,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE UndecidableInstances, StandaloneDeriving #-}
+{-# LANGUAGE NumericUnderscores #-}
 module Proxy where
 
 import Database.Persist.Postgresql
@@ -16,6 +17,7 @@ import Database.Persist.Postgresql.JSON()
 import Database.Persist.TH
 
 import Data.Ratio
+import Data.Bits
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
@@ -71,6 +73,7 @@ import Concordium.Types.Accounts
 import Concordium.Types.Block
 import Concordium.Types.HashableTo
 import Concordium.Types.Transactions
+import Concordium.Utils.Serialization (getMaybe)
 import Concordium.Types.Execution
 import qualified Concordium.Types.InvokeContract as InvokeContract
 import qualified Concordium.Wasm                 as Wasm
@@ -91,6 +94,7 @@ import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
                                            )
 import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex, CredentialIndex)
 import Concordium.Crypto.SignatureScheme (KeyPair)
+import Concordium.Crypto.SHA256 (Hash)
 import Concordium.Crypto.ByteStringHelpers (ByteStringHex(..))
 import Concordium.Common.Version
 import qualified Logging
@@ -120,6 +124,11 @@ instance PersistField TokenId where
 instance PersistFieldSql TokenId where
   sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy BS.ByteString)
 
+instance S.Serialize TokenId where
+  put (TokenId tid) = S.putWord8 (fromIntegral (BSS.length tid)) <> S.putShortByteString tid
+  get = do
+    len <- S.getWord8
+    TokenId <$> S.getShortByteString (fromIntegral len)
 
 -- |Create the database schema and types. This creates a type called @Summary@
 -- with fields @summaryBlock@, @summaryTimestamp@, etc., with stated types.
@@ -234,6 +243,8 @@ mkYesod "Proxy" [parseRoutes|
 /v1/appSettings AppSettingsV1 GET
 /v0/epochLength EpochLengthR GET
 /v0/CIS2Tokens/#Word64/#Word64 CIS2Tokens GET
+/v0/CIS2TokenMetadata/#Word64/#Word64 CIS2TokenMetadata GET
+/v0/CIS2TokenBalance/#Word64/#Word64/#Text CIS2TokenBalance GET
 |]
 
 instance Yesod Proxy where
@@ -295,16 +306,16 @@ parseSetCookie' c =
     flags = map (first (BS8.map CH.toLower)) $ tail pairs
     parsePair = breakDiscard 61 -- equals sign
     dropSpace = BS.dropWhile (== 32) -- space
--- ^ we need this for addHeader since expiry fails to parse in 
+-- ^ we need this for addHeader since expiry fails to parse in
 -- parseSetCookie in Web.Cookie.
 
 -- |Parse a setcookie expires field.
 parseSetCookieExpires' :: BS.ByteString -> Maybe UTCTime
 parseSetCookieExpires' s = parseTimeM True defaultTimeLocale "%a, %d %b %Y %X GMT" $ BS8.unpack s
 
--- |Run a GRPC request. 
+-- |Run a GRPC request.
 runGRPC :: ClientMonad IO (GRPCResult a)
-        -> (a -> Handler TypedContent) 
+        -> (a -> Handler TypedContent)
         -> Handler TypedContent
 runGRPC c k = do
   cfg <- grpcEnvData <$> getYesod
@@ -428,7 +439,7 @@ getAccountBalanceR addrText =
                   case aiStakingInfo of
                         AccountStakingNone -> Left . Just $ object balanceInfo
                         AccountStakingBaker{..} -> do
-                          let infoWithoutPending = 
+                          let infoWithoutPending =
                                 [
                                   "stakedAmount" .= asiStakedAmount,
                                   "restakeEarnings" .= asiStakeEarnings,
@@ -552,7 +563,7 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                 costResponse $ simpleTransferEnergyCost (simpleTransferPayloadSize + memoPayloadSize) numSignatures
               "encryptedTransfer" ->
                 costResponse $ encryptedTransferEnergyCost (encryptedTransferPayloadSize + memoPayloadSize) numSignatures
-              "transferToSecret" -> 
+              "transferToSecret" ->
                 costResponse $ accountEncryptEnergyCost accountEncryptPayloadSize numSignatures
               "transferToPublic" ->
                 costResponse $ accountDecryptEnergyCost accountDecryptPayloadSize numSignatures
@@ -1013,6 +1024,185 @@ getCIS2Tokens index subindex = do
     "count" .= length entries,
     "tokens" .= makeJsonEntries entries
     ] <> maybeToList (("from" .=) <$> mfrom)
+
+getContractName :: Text -> ContractAddress -> ClientMonad IO (Either String Text)
+getContractName bh ca = do
+  ci <- getInstanceInfo (Text.decodeUtf8 . BSL.toStrict . AE.encode $ ca) bh
+  case ci of
+    Left err -> return (Left err)
+    Right v -> return (Wasm.initContractName <$> parseEither (AE.withObject "ContractInfo" (.: "name")) (grpcResponseVal v))
+
+getCIS2TokenMetadata :: Word64 -> Word64 -> Handler TypedContent
+getCIS2TokenMetadata index subindex = do
+    let nrg = Energy 500_000 -- ~500ms worth of
+    param <- fromMaybe "" <$> lookupGetParam "id"
+    case mapM (AE.fromJSON . AE.String) . Text.split (== ',') $ param of
+        AE.Error err -> respond400Error (EMParseError err) RequestInvalid
+        AE.Success ([] :: [TokenId]) -> undefined
+        AE.Success tids
+            | length tids > fromIntegral (maxBound :: Word16) ->
+                respond400Error (EMParseError "Too many token ids.") RequestInvalid
+            | otherwise -> do
+                let serializedParam = BSS.toShort . S.runPut $ do
+                        S.putWord16le (fromIntegral (length tids))
+                        mapM_ S.put tids
+                let contractAddr = ContractAddress (ContractIndex index) (ContractSubindex subindex)
+                let invokeContext contractName =
+                        InvokeContract.ContractContext
+                            { ccInvoker = Nothing
+                            , ccContract = contractAddr
+                            , ccAmount = 0
+                            , ccMethod = Wasm.ReceiveName (contractName <> ".tokenMetadata")
+                            , ccParameter = Wasm.Parameter serializedParam
+                            , ccEnergy = nrg
+                            }
+                let query = do
+                        withLastFinalBlockHash Nothing $ \bh -> do
+                            name <- getContractName bh contractAddr
+                            case name of
+                                Left err -> return (Left err)
+                                Right n -> do
+                                    let ctx = invokeContext n
+                                    let invokeContextArg = Text.decodeUtf8 . BSL.toStrict . AE.encode $ ctx
+                                    res <- invokeContract invokeContextArg bh
+                                    case res of
+                                        Left err -> return (Left err)
+                                        Right v -> case AE.fromJSON (grpcResponseVal v) of
+                                            AE.Error jsonErr -> return (Left jsonErr)
+                                            AE.Success ir -> return (Right (ir <$ v))
+                runGRPC query $ \case
+                    InvokeContract.Failure{..} -> do
+                        $logDebug $ "Invoke failed: " <> Text.pack (show rcrReason)
+                        respond400Error EMInvokeFailed RequestInvalid
+                    InvokeContract.Success{..} -> do
+                        case rcrReturnValue of
+                            Nothing -> respond400Error EMV0Contract RequestInvalid
+                            Just rv -> do
+                                let getURLs = do
+                                        len <- S.getWord16le
+                                        replicateM (fromIntegral len) getMetadataUrl
+                                case S.runGet getURLs rv of
+                                    Left err -> do
+                                        $logDebug $ "Invoke failed: " <> Text.pack err
+                                        respond400Error EMInvokeFailed RequestInvalid
+                                    Right urls ->
+                                        sendResponse $
+                                            AE.toJSON
+                                                ( zipWith
+                                                    ( \tid md ->
+                                                        object
+                                                            [ "tokenId" .= tid
+                                                            , "metadataURL" .= muURL md
+                                                            , "metadataChecksum" .= muChecksum md
+                                                            ]
+                                                    )
+                                                    tids
+                                                    urls
+                                                )
+
+getCIS2TokenBalance :: Word64 -> Word64 -> Text -> Handler TypedContent
+getCIS2TokenBalance index subindex addrText = do
+    let nrg = Energy 500_000 -- ~500ms worth of
+    case addressFromText addrText of
+        Left err -> respond400Error (EMParseError err) RequestInvalid
+        Right addr -> do
+            param <- fromMaybe "" <$> lookupGetParam "id"
+            case mapM (AE.fromJSON . AE.String) . Text.split (== ',') $ param of
+                AE.Error err -> respond400Error (EMParseError err) RequestInvalid
+                AE.Success ([] :: [TokenId]) -> undefined
+                AE.Success tids
+                    | length tids > fromIntegral (maxBound :: Word16) ->
+                        respond400Error (EMParseError "Too many token ids.") RequestInvalid
+                    | otherwise -> do
+                        let serializedParam = BSS.toShort . S.runPut $ do
+                                S.putWord16le (fromIntegral (length tids))
+                                mapM_ S.put (zip tids (repeat (AddressAccount addr)))
+                        let contractAddr = ContractAddress (ContractIndex index) (ContractSubindex subindex)
+                        let invokeContext contractName =
+                                InvokeContract.ContractContext
+                                    { ccInvoker = Nothing
+                                    , ccContract = contractAddr
+                                    , ccAmount = 0
+                                    , ccMethod = Wasm.ReceiveName (contractName <> ".balanceOf")
+                                    , ccParameter = Wasm.Parameter serializedParam
+                                    , ccEnergy = nrg
+                                    }
+                        let query = do
+                                withLastFinalBlockHash Nothing $ \bh -> do
+                                    name <- getContractName bh contractAddr
+                                    case name of
+                                        Left err -> return (Left err)
+                                        Right n -> do
+                                            let ctx = invokeContext n
+                                            let invokeContextArg = Text.decodeUtf8 . BSL.toStrict . AE.encode $ ctx
+                                            res <- invokeContract invokeContextArg bh
+                                            case res of
+                                                Left err -> return (Left err)
+                                                Right v -> case AE.fromJSON (grpcResponseVal v) of
+                                                    AE.Error jsonErr -> return (Left jsonErr)
+                                                    AE.Success ir -> return (Right (ir <$ v))
+                        runGRPC query $ \case
+                            InvokeContract.Failure{..} -> do
+                                $logDebug $ "Invoke failed: " <> Text.pack (show rcrReason)
+                                respond400Error EMInvokeFailed RequestInvalid
+                            InvokeContract.Success{..} -> do
+                                case rcrReturnValue of
+                                    Nothing -> respond400Error EMV0Contract RequestInvalid
+                                    Just rv -> do
+                                        let getURLs = do
+                                                len <- S.getWord16le
+                                                replicateM (fromIntegral len) getTokenBalance
+                                        case S.runGet getURLs rv of
+                                            Left err -> do
+                                                $logDebug $ "Invoke failed: " <> Text.pack err
+                                                respond400Error EMInvokeFailed RequestInvalid
+                                            Right urls ->
+                                                sendResponse $
+                                                    AE.toJSON
+                                                        ( zipWith
+                                                            ( \tid bal ->
+                                                                object
+                                                                    [ "tokenId" .= tid
+                                                                    , "balance" .= bal
+                                                                    ]
+                                                            )
+                                                            tids
+                                                            urls
+                                                        )
+
+newtype TokenBalance = TokenBalance Integer
+    deriving(Show)
+
+instance AE.ToJSON TokenBalance where
+  toJSON (TokenBalance i) = toJSON (show i)
+
+getTokenBalance :: S.Get TokenBalance
+getTokenBalance = TokenBalance <$> go 0 0
+  where go acc s = do
+          n <- S.getWord8
+          if testBit n 7 then
+            go (acc + (toInteger (clearBit n 7) `shiftL` s)) (s + 7)
+          else
+            return $! (acc + toInteger (n `shiftL` s))
+  
+
+newtype Checksum = Checksum Hash
+    deriving (Show, AE.ToJSON, AE.FromJSON, S.Serialize)
+
+data MetadataURL = MetadataURL {
+  muURL :: !Text,
+  muChecksum :: Maybe Hash
+  }
+
+getMetadataUrl :: S.Get MetadataURL
+getMetadataUrl = do
+  urlLen <- S.getWord16le
+  muURL' <- Text.decodeUtf8' <$> S.getByteString (fromIntegral urlLen)
+  case muURL' of
+    Left err -> fail (show err)
+    Right muURL -> do
+      muChecksum <- getMaybe S.get
+      return MetadataURL{..}
 
 -- |List transactions for the account.
 getAccountTransactionsWorker :: IncludeMemos -> Text -> Handler TypedContent
@@ -1730,7 +1920,7 @@ getBakerPoolR bid =
     doGetNextPayday :: Text -> ClientMonad IO (GRPCResult UTCTime)
     doGetNextPayday lastFinal = do
       rewardStatus <- getRewardStatus lastFinal
-      return $ do 
+      return $ do
         response <- rewardStatus
         utc <- parseEither
                     ( withObject "Best finalized block" $ \v -> do

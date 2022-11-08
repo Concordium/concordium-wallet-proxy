@@ -32,6 +32,10 @@ data ErrorMessage
     | EMMissingParameter
     -- |Action not supported due to the node protocol version not allowing it.
     | EMActionNotCurrentlySupported
+    -- |Invoke of a smart contract failed with the given reason.
+    | EMInvokeFailed
+    -- |Expected a V1 contract, but a V0 contract was given.
+    | EMV0Contract
 
 data I18n = I18n {
     i18nRejectReason :: RejectReason -> Text,
