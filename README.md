@@ -31,7 +31,7 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/epochLength`: get the epoch length in milliseconds.
 * `GET /v0/CIS2Tokens/{index}/{subindex}`: get the list of tokens on a given contract address.
 * `GET /v0/CIS2TokenMetadata/{index}/{subindex}`: get the metadata of tokens in on given contract address.
-* `GET /v0/CIS2TokenMetadata/{index}/{subindex}/{account address}`: get the metadata of tokens in on given contract address.
+* `GET /v0/CIS2TokenMetadata/{index}/{subindex}/{account address}`: get the balance of tokens on given contract address for a given account address.
 
 
 ### Errors
@@ -790,8 +790,10 @@ The return value is a JSON list of objects with fields
 
 - `balance` (required) ... a string that contains the balance as a decimal
   number. The balance is always non-negative, but can be very large, and will
-  not fit into a 64-bit integer in general, so unbounded integer types should be
-  used.
+  not fit into a 64-bit integer in general. The value should always fit into a
+  256-bit unsigned integer though. Generally unbounded integral type should be
+  used for parsing. The metadata contains information on how to display this
+  amount, i.e., with how many decimals.
 - `tokenId` (required) ... the token ID as in the query
 
 An example query is

@@ -1087,10 +1087,10 @@ getCIS2TokenBalance index subindex addrText = do
                     mapM_ S.put (zip tids (repeat (AddressAccount addr)))
             let contractAddr = ContractAddress (ContractIndex index) (ContractSubindex subindex)
             cis2InvokeHelper contractAddr (Wasm.EntrypointName "balanceOf") serializedParam nrg $ \rv -> do
-                let getURLs = do
+                let getBalances = do
                         len <- S.getWord16le
                         replicateM (fromIntegral len) getTokenBalance
-                case S.runGet getURLs rv of
+                case S.runGet getBalances rv of
                     Left err -> do
                         $logDebug $ "Failed to parse response from the balanceOf: " <> Text.pack err
                         respond400Error EMInvokeFailed RequestInvalid
