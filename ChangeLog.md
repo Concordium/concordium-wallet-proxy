@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.21
+
+Add support for CIS2TokenMetadata and CIS2TokenBalance queries.
+
 ## 0.20
 
 Add support for protocol version 5.
