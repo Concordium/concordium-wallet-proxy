@@ -15,9 +15,9 @@ The wallet proxy provides the following endpoints:
   of a transfer or credential deployment
 * `PUT /v0/submitCredential`: deploy a credential/create an account
 * `PUT /v0/submitTransfer`: perform a simple transfer
-* `GET /v0/accTransactions/{accountNumber}`: get the transactions affecting an account
-* `GET /v1/accTransactions/{accountNumber}`: get the transactions affecting an account, including memos
-* `PUT /v0/testnetGTUDrop/{accountNumber}`: request a CCD drop to the specified account
+* `GET /v0/accTransactions/{account address}`: get the transactions affecting an account
+* `GET /v1/accTransactions/{account address}`: get the transactions affecting an account, including memos
+* `PUT /v0/testnetGTUDrop/{account address}`: request a CCD drop to the specified account
 * `GET /v0/health`: get a response specifying if the wallet proxy is up to date
 * `GET /v0/global`: get the cryptographic parameters obtained from the node it is connected to
 * `GET /v0/ip_info`: get the identity providers information, including links for
@@ -29,7 +29,10 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/appSettings`: get the up-to-date status of the old mobile wallet app.
 * `GET /v1/appSettings`: get the up-to-date status of the new mobile wallet app.
 * `GET /v0/epochLength`: get the epoch length in milliseconds.
-* `GET /v0/CIS2Tokens`: get the list of tokens on a given contract address.
+* `GET /v0/CIS2Tokens/{index}/{subindex}`: get the list of tokens on a given contract address.
+* `GET /v0/CIS2TokenMetadata/{index}/{subindex}`: get the metadata of tokens in on given contract address.
+* `GET /v0/CIS2TokenMetadata/{index}/{subindex}/{account address}`: get the metadata of tokens in on given contract address.
+
 
 ### Errors
 
@@ -728,6 +731,92 @@ The return value is an object with fields
     contract.
   - `totalSupply` ... a non-negative integer (encoded in a string) that records the total
     supply of the token as computed by using `Mint` and `Burn` events.
+
+## Get metadata URL for a list of tokens
+
+The endpoint `v0/CIS2TokenMetadata/index/subindex` retrieves a list of token
+metadata URLs.
+
+The following parameters are supported and required
+- `tokenId`: a comma separated list of token IDs. Token IDs are hex encoded, in
+  the same format as that returned by `CIS2Tokens` endpoint. An empty string is interpreted
+  as a single token with an empty ID.
+
+The return value is a JSON list of objects with fields
+- `metadataURL` (required) ... a string value that contains a URL returned by
+  the contract. The client should do validation that this is a usable URL, since
+  it is purely up to the smart contract to return this value.
+- `tokenId` (required) ... the token ID as in the query
+- `metadataChecksum` (optional) ... if `null` then no checksum is included in
+  the contract. Otherwise it is a hex string that contains the SHA256 hash of the **data at the URL**.
+
+An example query is
+```
+v0/CIS2TokenMetadata/996/0?tokenId=0b5000b73a53f0916c93c68f4b9b6ba8af5a10978634ae4f2237e1f3fbe324fa,1209fe3bc3497e47376dfbd9df0600a17c63384c85f859671956d8289e5a0be8,1209fe3bc3497e47376dfbd9df0600a17c63384c85f859671956d8289e5a0be8
+```
+
+and an example response is
+```json
+[
+  {
+    "metadataChecksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "metadataURL": "https://some.example/token/0B5000B73A53F0916C93C68F4B9B6BA8AF5A10978634AE4F2237E1F3FBE324FA",
+    "tokenId": "0b5000b73a53f0916c93c68f4b9b6ba8af5a10978634ae4f2237e1f3fbe324fa"
+  },
+  {
+    "metadataChecksum": null,
+    "metadataURL": "https://some.example/token/1209FE3BC3497E47376DFBD9DF0600A17C63384C85F859671956D8289E5A0BE8",
+    "tokenId": "1209fe3bc3497e47376dfbd9df0600a17c63384c85f859671956d8289e5a0be8"
+  },
+  {
+    "metadataChecksum": null,
+    "metadataURL": "https://some.example/token/1209FE3BC3497E47376DFBD9DF0600A17C63384C85F859671956D8289E5A0BE8",
+    "tokenId": "1209fe3bc3497e47376dfbd9df0600a17c63384c85f859671956d8289e5a0be8"
+  }
+]
+```
+
+## Get token balance for an account address
+
+The endpoint `v0/CIS2TokenBalance/index/subindex/accountAddress` retrieves the
+balance of tokens for the given account address.
+
+The following parameters are supported and required
+- `tokenId`: a comma separated list of token IDs. Token IDs are hex encoded, in
+  the same format as that returned by `CIS2Tokens` endpoint. An empty string is interpreted
+  as a single token with an empty ID.
+
+The return value is a JSON list of objects with fields
+
+- `balance` (required) ... a string that contains the balance as a decimal
+  number. The balance is always non-negative, but can be very large, and will
+  not fit into a 64-bit integer in general, so unbounded integer types should be
+  used.
+- `tokenId` (required) ... the token ID as in the query
+
+An example query is
+```
+v0/CIS2TokenBalance/996/0/4tSmWDREJwsSzfgNkUeT7xrNdAPHEs8gQBBdiRsmcvnjFeogf6?tokenId=0b5000b73a53f0916c93c68f4b9b6ba8af5a10978634ae4f2237e1f3fbe324fa,1209fe3bc3497e47376dfbd9df0600a17c63384c85f859671956d8289e5a0be8,1209fe3bc3497e47376dfbd9df0600a17c63384c85f859671956d8289e5a0be8
+```
+
+and an example response is
+```json
+[
+  {
+    "balance": "188848148218418242823213123123123",
+    "tokenId": "0b5000b73a53f0916c93c68f4b9b6ba8af5a10978634ae4f2237e1f3fbe324fa"
+  },
+  {
+    "balance": "0",
+    "tokenId": "1209fe3bc3497e47376dfbd9df0600a17c63384c85f859671956d8289e5a0be8"
+  },
+  {
+    "balance": "1",
+    "tokenId": "1209fe3bc3497e47376dfbd9df0600a17c63384c85f859671956d8289e5a0be8"
+  }
+]
+```
+
 
 ## Notes on account balances.
 
