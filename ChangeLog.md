@@ -2,6 +2,11 @@
 
 ## Unreleased changes
 
+## 0.22
+
+Improve internal connection handling. The wallet-proxy should now more robustly
+detect termination of the connection to the node.
+
 ## 0.21
 
 Add support for CIS2TokenMetadata and CIS2TokenBalance queries.
