@@ -14,7 +14,7 @@ db_password="${DB_PASSWORD}"
 drop_account_file="${DROP_ACCOUNT_FILE-}"
 forced_update_config_file_v0="${FORCED_UPDATE_CONFIG_FILE_V0-}"
 forced_update_config_file_v1="${FORCED_UPDATE_CONFIG_FILE_V1-}"
-use_tls="${USE_TLS}"
+use_tls="${USE_TLS:-false}" # if the variable is not set default to not enabling TLS
 log_level="${LOG_LEVEL:-debug}" # default log level is debug
 grpc_timeout="${GRPC_TIMEOUT:-15}"
 
@@ -36,7 +36,7 @@ fi
 if [ -n "${forced_update_config_file_v1}" ]; then
 	args+=( --forced-update-config-v1 "${forced_update_config_file_v1}" )
 fi
-if [ -n "${use_tls}" ]; then
+if [ "${use_tls}" = "true" ]; then
 	args+=( --secure )
 fi
 
