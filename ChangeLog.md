@@ -2,6 +2,11 @@
 
 ## Unreleased changes
 
+
+## 0.22.1
+
+Display receive function parameters as hex strings in transactions.
+
 ## 0.22
 
 Improve internal connection handling. The wallet-proxy should now more robustly
