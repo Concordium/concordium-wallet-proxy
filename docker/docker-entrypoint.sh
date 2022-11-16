@@ -17,10 +17,12 @@ forced_update_config_file_v1="${FORCED_UPDATE_CONFIG_FILE_V1-}"
 use_tls="${USE_TLS:-false}" # if the variable is not set default to not enabling TLS
 log_level="${LOG_LEVEL:-debug}" # default log level is debug
 grpc_timeout="${GRPC_TIMEOUT:-15}"
+grpc_retry="${GRPC_RETRY:-0}" # number of times to retry a failed request
 
 args=(
 	--grpc-ip "${grpc_host}"
 	--grpc-port "${grpc_port}"
+    --grpc-retry "${grpc_retry}"
 	--ip-data "${ip_data_file}"
     --ip-data-v1 "${ip_data_file_v1}"
     --log-level "${log_level}"

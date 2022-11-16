@@ -5,7 +5,9 @@
 
 ## 0.22.1
 
-Display receive function parameters as hex strings in transactions.
+- Display receive function parameters as hex strings in transactions.
+- Fix reconnect handling when retryNum is set to 1. When handling the GOAWAY
+  message the reconnect is not successful.
 
 ## 0.22
 
