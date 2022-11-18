@@ -2,6 +2,11 @@
 
 ## Unreleased changes
 
+## 0.22.2
+
+- Make the closing of connection to the node more robust when reconnecting. In
+  particular exceptions raised during the closing of the connection no longer
+  lead to an irrecoverable state like they used to in certain scenarios.
 
 ## 0.22.1
 
