@@ -1052,7 +1052,7 @@ getCIS2TokenMetadata index subindex = do
     let serializedParam = Wasm.Parameter . BSS.toShort . S.runPut $ do
             S.putWord16le (fromIntegral (length tids))
             mapM_ S.put tids
-    cis2InvokeHelper contractAddr (Wasm.EntrypointName "tokenMetadata") serializedParam nrg $ \rv -> do
+    cis2InvokeHelper contractAddr (Wasm.EntrypointName "tokenMetadata") serializedParam nrg $ \name rv -> do
         let getURLs = do
                 len <- S.getWord16le
                 replicateM (fromIntegral len) getMetadataUrl
@@ -1062,7 +1062,9 @@ getCIS2TokenMetadata index subindex = do
                 respond400Error EMInvokeFailed RequestInvalid
             Right urls ->
                 sendResponse $
-                    AE.toJSON
+                    object [
+                        "contractName" .= name,
+                        "metadata" .= AE.toJSON
                         ( zipWith
                             ( \tid md ->
                                 object
@@ -1074,6 +1076,7 @@ getCIS2TokenMetadata index subindex = do
                             tids
                             urls
                         )
+                        ]
 
 getCIS2TokenBalance :: Word64 -> Word64 -> Text -> Handler TypedContent
 getCIS2TokenBalance index subindex addrText = do
@@ -1086,7 +1089,7 @@ getCIS2TokenBalance index subindex addrText = do
                     S.putWord16le (fromIntegral (length tids))
                     mapM_ S.put (zip tids (repeat (AddressAccount addr)))
             let contractAddr = ContractAddress (ContractIndex index) (ContractSubindex subindex)
-            cis2InvokeHelper contractAddr (Wasm.EntrypointName "balanceOf") serializedParam nrg $ \rv -> do
+            cis2InvokeHelper contractAddr (Wasm.EntrypointName "balanceOf") serializedParam nrg $ \_ rv -> do
                 let getBalances = do
                         len <- S.getWord16le
                         replicateM (fromIntegral len) getTokenBalance
@@ -1121,8 +1124,8 @@ cis2InvokeHelper ::
     Wasm.Parameter ->
     -- |Energy to allow for the invoke.
     Energy ->
-    -- |Continuation applied to a return value produced by a successful result.
-    (BS8.ByteString -> Handler TypedContent) ->
+    -- |Continuation applied to the name of the contract (without @_init@) and the return value produced by a successful result.
+    (Text -> BS8.ByteString -> Handler TypedContent) ->
     HandlerFor Proxy TypedContent
 cis2InvokeHelper contractAddr entrypoint serializedParam nrg k = do
     let invokeContext contractName =
@@ -1134,18 +1137,25 @@ cis2InvokeHelper contractAddr entrypoint serializedParam nrg k = do
                 , ccParameter = serializedParam
                 , ccEnergy = nrg
                 }
+    let parseInstance Null = return Nothing
+        parseInstance v = flip (AE.withObject "ContractInfo") v $ \obj -> do
+          n <- obj .: "name"
+          return (Just n)
     -- Query the name of a contract at the given block hash.
     let queryContractName block = do
           ci <- getInstanceInfo (Text.decodeUtf8 . BSL.toStrict . AE.encode $ contractAddr) block
           case ci of
             Left err -> return (Left err)
-            Right v -> return (parseEither (AE.withObject "ContractInfo" (.: "name")) (grpcResponseVal v))
+            Right v -> case parseEither parseInstance (grpcResponseVal v) of
+              Left err -> return (Left err)
+              Right mci -> return (Right (mci <$ v))
     let query = do
             withLastFinalBlockHash Nothing $ \bh -> do
                 name <- queryContractName bh
                 case name of
                     Left err -> return (Left err)
-                    Right n -> do
+                    Right v@GRPCResponse{grpcResponseVal = Nothing} -> return (Right (Nothing <$ v))
+                    Right (GRPCResponse{grpcResponseVal = Just n}) -> do
                         let ctx = invokeContext n
                         let invokeContextArg = Text.decodeUtf8 . BSL.toStrict . AE.encode $ ctx
                         res <- invokeContract invokeContextArg bh
@@ -1153,15 +1163,16 @@ cis2InvokeHelper contractAddr entrypoint serializedParam nrg k = do
                             Left err -> return (Left err)
                             Right v -> case AE.fromJSON (grpcResponseVal v) of
                                 AE.Error jsonErr -> return (Left jsonErr)
-                                AE.Success ir -> return (Right (ir <$ v))
+                                AE.Success ir -> return (Right (Just (Wasm.initContractName n, ir) <$ v))
     runGRPC query $ \case
-        InvokeContract.Failure{..} -> do
+        Nothing -> respond404Error $ EMErrorResponse NotFound
+        Just (_, InvokeContract.Failure{..}) -> do
             $logDebug $ "Invoke failed: " <> Text.pack (show rcrReason)
             respond400Error EMInvokeFailed RequestInvalid
-        InvokeContract.Success{..} -> do
+        Just (name, InvokeContract.Success{..}) -> do
             case rcrReturnValue of
                 Nothing -> respond400Error EMV0Contract RequestInvalid
-                Just rv -> k rv
+                Just rv -> k name rv
 
 -- |Balance of a CIS2 token. 
 newtype TokenBalance = TokenBalance Integer

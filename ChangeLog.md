@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.23.0
+
+- Expose "contract name" in the CIS2TokenMetadata response.
+
 ## 0.22.2
 
 - Make the closing of connection to the node more robust when reconnecting. In
