@@ -31,7 +31,7 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/epochLength`: get the epoch length in milliseconds.
 * `GET /v0/CIS2Tokens/{index}/{subindex}`: get the list of tokens on a given contract address.
 * `GET /v0/CIS2TokenMetadata/{index}/{subindex}`: get the metadata of tokens in on given contract address.
-* `GET /v0/CIS2TokenMetadata/{index}/{subindex}/{account address}`: get the balance of tokens on given contract address for a given account address.
+* `GET /v0/CIS2TokenBalance/{index}/{subindex}/{account address}`: get the balance of tokens on given contract address for a given account address.
 
 
 ### Errors
@@ -742,7 +742,8 @@ The following parameters are supported and required
   the same format as that returned by `CIS2Tokens` endpoint. An empty string is interpreted
   as a single token with an empty ID.
 
-The return value is a JSON list of objects with fields
+The return value is a JSON object with fields `contractName` which is a string
+(e.g., CIS2-Multi) and `metadata`, which is a list of objects with fields
 - `metadataURL` (required) ... a string value that contains a URL returned by
   the contract. The client should do validation that this is a usable URL, since
   it is purely up to the smart contract to return this value.
@@ -757,23 +758,26 @@ v0/CIS2TokenMetadata/996/0?tokenId=0b5000b73a53f0916c93c68f4b9b6ba8af5a10978634a
 
 and an example response is
 ```json
-[
-  {
-    "metadataChecksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "metadataURL": "https://some.example/token/0B5000B73A53F0916C93C68F4B9B6BA8AF5A10978634AE4F2237E1F3FBE324FA",
-    "tokenId": "0b5000b73a53f0916c93c68f4b9b6ba8af5a10978634ae4f2237e1f3fbe324fa"
-  },
-  {
-    "metadataChecksum": null,
-    "metadataURL": "https://some.example/token/1209FE3BC3497E47376DFBD9DF0600A17C63384C85F859671956D8289E5A0BE8",
-    "tokenId": "1209fe3bc3497e47376dfbd9df0600a17c63384c85f859671956d8289e5a0be8"
-  },
-  {
-    "metadataChecksum": null,
-    "metadataURL": "https://some.example/token/1209FE3BC3497E47376DFBD9DF0600A17C63384C85F859671956D8289E5A0BE8",
-    "tokenId": "1209fe3bc3497e47376dfbd9df0600a17c63384c85f859671956d8289e5a0be8"
-  }
-]
+{
+  "contractName": "CIS2-Multi",
+  "metadata": [
+    {
+      "metadataChecksum": null,
+      "metadataURL": "https://s3.eu-central-1.amazonaws.com/tokens.testnet.concordium.com/nft/00",
+      "tokenId": "00"
+    },
+    {
+      "metadataChecksum": null,
+      "metadataURL": "https://s3.eu-central-1.amazonaws.com/tokens.testnet.concordium.com/nft/01",
+      "tokenId": "01"
+    },
+    {
+      "metadataChecksum": null,
+      "metadataURL": "https://s3.eu-central-1.amazonaws.com/tokens.testnet.concordium.com/nft/02",
+      "tokenId": "02"
+    }
+  ]
+}
 ```
 
 ## Get token balance for an account address
