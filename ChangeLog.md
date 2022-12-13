@@ -2,6 +2,11 @@
 
 ## Unreleased changes
 
+## 0.24.0
+
+- Add `GET /v0/termsAndConditionsVersion` endpoint and the corresponding
+  configuration option `--tc-version`, which defaults to 1.0.0 if not set.
+
 ## 0.23.0
 
 - Expose "contract name" in the CIS2TokenMetadata response.

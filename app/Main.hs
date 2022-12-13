@@ -38,7 +38,8 @@ data ProxyConfig = ProxyConfig {
   pcHealthTolerance :: Maybe Int,
   pcIpInfo :: FilePath,
   pcIpInfoV1 :: FilePath,
-  logLevel :: Logging.LogLevel
+  logLevel :: Logging.LogLevel,
+  tcVersion :: String
 }
 
 parser :: ParserInfo ProxyConfig
@@ -56,6 +57,7 @@ parser = info (helper <*> parseProxyConfig)
       <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and private information on the identity providers, together with metadata.")
       <*> strOption (long "ip-data-v1" <> metavar "FILE" <> help "File with public and private information on the identity providers for the flow without initial accounts, together with metadata.")
       <*> option (eitherReader Logging.logLevelFromString) (long "log-level" <> metavar "LOGLEVEL" <> value Logging.LLOff <> showDefault <> help "Log level. Can be one of either 'off', 'error', 'warning', 'info', 'debug' or 'trace'.")
+      <*> strOption (long "tc-version" <> value "1.0.0" <> showDefault <> metavar "STRING" <> help "Version of terms and conditions in effect.")
 
     mkProxyConfig backend timeout =
       ProxyConfig $ GrpcConfig

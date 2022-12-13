@@ -192,7 +192,9 @@ data Proxy = Proxy {
   globalInfo :: Value,
   ipInfo :: Value,
   ipInfoV1 :: Value,
-  logLevel :: Logging.LogLevel
+  logLevel :: Logging.LogLevel,
+  -- |The version of terms and conditions currently in effect.
+  tcVersion :: String
 }
 
 -- | Data needed for GTU drops.
@@ -246,6 +248,7 @@ mkYesod "Proxy" [parseRoutes|
 /v0/CIS2Tokens/#Word64/#Word64 CIS2Tokens GET
 /v0/CIS2TokenMetadata/#Word64/#Word64 CIS2TokenMetadata GET
 /v0/CIS2TokenBalance/#Word64/#Word64/#Text CIS2TokenBalance GET
+/v0/termsAndConditionsVersion TermsAndConditionsVersion GET
 |]
 
 instance Yesod Proxy where
@@ -1878,6 +1881,11 @@ getIpsR = toTypedContent . ipInfo <$> getYesod
 
 getIpsV1R :: Handler TypedContent
 getIpsV1R = toTypedContent . ipInfoV1 <$> getYesod
+
+getTermsAndConditionsVersion :: Handler TypedContent
+getTermsAndConditionsVersion = do
+  tcV <- tcVersion <$> getYesod
+  sendResponse $ object ["version" .= tcV]
 
 getBakerPoolR :: Word64 -> Handler TypedContent
 getBakerPoolR bid =
