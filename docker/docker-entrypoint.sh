@@ -18,6 +18,7 @@ use_tls="${USE_TLS:-false}" # if the variable is not set default to not enabling
 log_level="${LOG_LEVEL:-debug}" # default log level is debug
 grpc_timeout="${GRPC_TIMEOUT:-15}"
 grpc_retry="${GRPC_RETRY:-0}" # number of times to retry a failed request
+tc_version="${TC_VERSION:-1.0.0}"
 
 args=(
 	--grpc-ip "${grpc_host}"
@@ -28,6 +29,7 @@ args=(
     --log-level "${log_level}"
     --grpc-timeout "${grpc_timeout}"
 	--db "host=${db_host} port=${db_port} user=${db_user} dbname=${db_name} password=${db_password}"
+    --tc-version "${tc_version}"
 )
 if [ -n "${drop_account_file}" ]; then
 	args+=( --drop-account "${drop_account_file}" )
