@@ -30,7 +30,6 @@ args=(
     --log-level "${log_level}"
     --grpc-timeout "${grpc_timeout}"
 	--db "host=${db_host} port=${db_port} user=${db_user} dbname=${db_name} password=${db_password}"
-    --tc-version "${tc_version}"
 )
 if [ -n "${tc_version}" ]; then
 	args+=( --tc-version "${tc_version}" )
