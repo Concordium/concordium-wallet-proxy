@@ -2,10 +2,13 @@
 
 ## Unreleased changes
 
-## 0.24.0
+## 0.25.0
 
 - Add `GET /v0/termsAndConditionsVersion` endpoint and the corresponding
-  configuration option `--tc-version`, which defaults to 1.0.0 if not set.
+  configuration options `--tc-version`, and `--tc-url` which default to 1.0.0
+  and
+  https://developer.concordium.software/en/mainnet/net/resources/terms-and-conditions-bw.html 
+  if not set.
 
 ## 0.23.0
 

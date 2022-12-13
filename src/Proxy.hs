@@ -194,7 +194,11 @@ data Proxy = Proxy {
   ipInfoV1 :: Value,
   logLevel :: Logging.LogLevel,
   -- |The version of terms and conditions currently in effect.
-  tcVersion :: String
+  -- If not set the endpoint termsAndConditionsVersion is disabled.
+  tcVersion :: Maybe String,
+  -- |URL to access terms and conditions.
+  -- If not set the endpoint termsAndConditionsVersion is disabled.
+  tcUrl :: Maybe String
 }
 
 -- | Data needed for GTU drops.
@@ -1884,8 +1888,11 @@ getIpsV1R = toTypedContent . ipInfoV1 <$> getYesod
 
 getTermsAndConditionsVersion :: Handler TypedContent
 getTermsAndConditionsVersion = do
-  tcV <- tcVersion <$> getYesod
-  sendResponse $ object ["version" .= tcV]
+  mtcV <- tcVersion <$> getYesod
+  mtcU <- tcUrl <$> getYesod
+  case (mtcV, mtcU) of
+    (Just tcV, Just tcU) -> sendResponse $ object ["version" .= tcV, "url" .= tcU]
+    _ -> respond404Error $ EMErrorResponse NotFound
 
 getBakerPoolR :: Word64 -> Handler TypedContent
 getBakerPoolR bid =
