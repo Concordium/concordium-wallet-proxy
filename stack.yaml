@@ -28,7 +28,6 @@ resolver: lts-20.4
 #   subdirs:
 #   - auto-update
 #   - wai
-
 packages:
 - .
 # Dependency packages to be pulled from upstream that are not in the resolver.
