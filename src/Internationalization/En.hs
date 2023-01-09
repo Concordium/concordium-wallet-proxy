@@ -12,7 +12,6 @@ import Concordium.Types.Updates
 import Internationalization.Base
 import Concordium.ID.Types
 import Concordium.Wasm (contractAndFunctionName, initContractName)
-import qualified Concordium.Wasm as Wasm
 
 translation :: I18n
 translation = I18n {..}
@@ -131,7 +130,7 @@ translation = I18n {..}
           ", contract= " <> cname <>
           ", function= " <> fname <>
           ", amount=" <> descrAmount euAmount <>
-          ", message=" <> Text.pack (show (Wasm.parameter euMessage))
+          ", message=" <> Text.pack (show euMessage)
         i18nEvent (Transferred sender amt recv) = "Transferred " <> descrAmount amt <> " from " <> descrAddress sender <> " to " <> descrAddress recv
         i18nEvent (AccountCreated addr) = "Created account with address " <> descrAccount addr
         i18nEvent (CredentialDeployed _ addr) = "Deployed a credential to account " <> descrAccount addr

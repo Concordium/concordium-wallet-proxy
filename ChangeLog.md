@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.25.1
+
+- Fix displaying `message` in contract updates. Use hex consistently.
+
 ## 0.25.0
 
 - Add `GET /v0/termsAndConditionsVersion` endpoint and the corresponding
