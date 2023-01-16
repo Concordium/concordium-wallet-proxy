@@ -69,7 +69,7 @@ import Data.Time.Clock as Clock
 
 import Paths_wallet_proxy (version)
 import Concordium.Types
-import Concordium.Types.Queries
+import Concordium.Types.Queries hiding (Summary)
 import Concordium.Types.Accounts
 import Concordium.Types.Block
 import Concordium.Types.HashableTo
