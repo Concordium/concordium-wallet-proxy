@@ -33,6 +33,10 @@ translation = I18n {..}
         i18nUpdateTransaction UpdateRootKeys = "Update root keys"
         i18nUpdateTransaction UpdateLevel1Keys = "Update level 1 keys"
         i18nUpdateTransaction UpdateLevel2Keys = "Update level 2 keys"
+        i18nUpdateTransaction UpdateTimeoutParameters = "Update timeout parameters"
+        i18nUpdateTransaction UpdateMinBlockTime = "Update minimum block time"
+        i18nUpdateTransaction UpdateBlockEnergyLimit = "Update block energy limit"
+        
 
         i18nRejectReason ModuleNotWF = "Typechecking of module failed"
         i18nRejectReason (ModuleHashAlreadyExists mref) = "A module with the hash " <> descrModule mref <> " already exists"
