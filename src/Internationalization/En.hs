@@ -36,6 +36,7 @@ translation = I18n {..}
         i18nUpdateTransaction UpdateTimeoutParameters = "Update timeout parameters"
         i18nUpdateTransaction UpdateMinBlockTime = "Update minimum block time"
         i18nUpdateTransaction UpdateBlockEnergyLimit = "Update block energy limit"
+        i18nUpdateTransaction UpdateFinalizationCommitteeParameters = "Update finalization committee parameters"
         
 
         i18nRejectReason ModuleNotWF = "Typechecking of module failed"
