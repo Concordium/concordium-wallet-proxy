@@ -43,6 +43,7 @@ dependencies:
 - persistent-template >= 2.7
 - persistent-postgresql >= 2.9
 - persistent >= 2.9.2
+- microlens-platform
 - monad-logger >= 0.3.30
 - resource-pool >= 0.2.3.2
 - conduit == 1.3.*

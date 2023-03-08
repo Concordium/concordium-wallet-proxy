@@ -27,6 +27,9 @@ import Concordium.Client.Commands as CMDS
 import Concordium.Client.Runner.Helper
 import Options.Applicative
 import Data.Range.Parser
+import Concordium.Client.GRPC2 (getCryptographicParametersV2)
+import Concordium.GRPC2 (BlockHashInput(LastFinal))
+import Data.Coerce (coerce)
 
 data ProxyConfig = ProxyConfig {
   pcGRPC :: GrpcConfig,
@@ -165,7 +168,11 @@ main = do
       Right cfg -> do
         -- The getCryptographicParameters returns a versioned cryptographic parameters object, which is what we need.
         -- Because these parameters do not change we only look them up on startup, and store them.
-        runClient cfg (withLastFinalBlockHash Nothing getCryptographicParameters) >>= \case
+        runClient cfg (getCryptographicParametersV2 LastFinal) >>= \case
           Left err -> die $ "Cannot obtain cryptographic parameters due to network error: " ++ show err
-          Right (Left err) -> die $ "Cannot obtain cryptographic parameters due to unexpected response: " ++ err
-          Right (Right (GRPCResponse _ globalInfo)) -> runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg,..}
+          Right res -> case getResponseValue res of
+            Right cParams -> do
+              -- VH/FIXME: What should "v" be? It was returned the old API.
+              let globalInfo = object [ "v" .= toJSON (0 :: Integer), "value" .= toJSON cParams ]
+              runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg,..}
+            Left (_, err) -> die $ "Cannot obtain cryptographic parameters due to unexpected response: " ++ err
