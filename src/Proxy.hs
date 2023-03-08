@@ -619,7 +619,6 @@ liftResult :: MonadFail m => Result a -> m a
 liftResult (Success s) = return s
 liftResult (Error err) = fail err
 
-{-
 getAccountNonceR :: Text -> Handler TypedContent
 getAccountNonceR addrText = do
   runGRPCV2
@@ -631,14 +630,7 @@ getAccountNonceR addrText = do
       return $ StatusOk $ GRPCResponse hds (Right v))
     (\v -> do
       $(logInfo) "Successfully got nonce."
-      sendResponse $ object [])
--}
-
-getAccountNonceR :: Text -> Handler TypedContent
-getAccountNonceR addrText =
-    runGRPC (getNextAccountNonce addrText) $ \v -> do
-      $(logInfo) "Successfully got nonce."
-      sendResponse v
+      sendResponse $ toJSON v)
 
 -- |Get the account encryption key at the best block.
 -- Return '404' status code if account does not exist in the best block at the moment.
