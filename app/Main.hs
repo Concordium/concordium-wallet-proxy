@@ -166,6 +166,9 @@ main = do
     runExceptT (mkGrpcClient pcGRPC (Just logm)) >>= \case
       Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
       Right cfg -> do
+        let globalInfo = object [ "v" .= toJSON (0 :: Integer), "value" .= toJSON (0 :: Integer) ]
+        runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg,..}
+        {-
         -- The getCryptographicParameters returns a versioned cryptographic parameters object, which is what we need.
         -- Because these parameters do not change we only look them up on startup, and store them.
         runClient cfg (getCryptographicParametersV2 LastFinal) >>= \case
@@ -176,3 +179,4 @@ main = do
               let globalInfo = object [ "v" .= toJSON (0 :: Integer), "value" .= toJSON cParams ]
               runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg,..}
             Left (_, err) -> die $ "Cannot obtain cryptographic parameters due to unexpected response: " ++ err
+            -}
