@@ -24,12 +24,8 @@ import Control.Monad.Logger
 
 import Concordium.Client.GRPC
 import Concordium.Client.Commands as CMDS
-import Concordium.Client.Runner.Helper
 import Options.Applicative
 import Data.Range.Parser
-import Concordium.Client.GRPC2 (getCryptographicParametersV2)
-import Concordium.GRPC2 (BlockHashInput(LastFinal))
-import Data.Coerce (coerce)
 
 data ProxyConfig = ProxyConfig {
   pcGRPC :: GrpcConfig,
