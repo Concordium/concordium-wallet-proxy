@@ -588,10 +588,6 @@ getAccountBalanceR addrText = do
         (Right lastFinBalF, Left bestBal) -> runGRPC (getRewardPeriodLengthV2 lastFinBlock) $ \rpl -> response (Just (lastFinBalF rpl)) bestBal
         (Right lastFinBalF, Right bestBalF) -> runGRPC (getRewardPeriodLengthV2 lastFinBlock) $ \rpl -> response (Just (lastFinBalF rpl)) (Just (bestBalF rpl))
   where
-    -- VH/FIXME: Should this not ideally be a chain of handlers in some CPS style? In this
-    --           case it seems better responses could be returned at each step like that,
-    --           since "fail" seems to return status code 500. It seems like this may be the case
-    --           in other places as well.
     doGetBal :: ClientMonad IO (GRPCResultV2 (FromProtoResult (AccountInfo, AccountInfo, Maybe UTCTime, Duration, BlockHash)))
     doGetBal = do
       accAddr <- parseAccountAddress addrText
