@@ -862,8 +862,10 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
               chainParamsRes <- getBlockChainParametersV2 Best
               case getResponseValueAndHeaders chainParamsRes of
                 Left err -> fail err
-                Right (EChainParametersAndKeys (ecpParams :: ChainParameters' cpv) _, hds) -> do
-                  return $ StatusOk $ GRPCResponse hds (Right (_erEnergyRate $ _cpExchangeRates ecpParams, csProtocolVersion cs))
+                Right (EChainParametersAndKeys ecpParams _, hds) -> do
+                  return $
+                    StatusOk $
+                      GRPCResponse hds (Right (_erEnergyRate $ _cpExchangeRates ecpParams, csProtocolVersion cs))
       withExchangeRate = runGRPCV2 fetchUpdates
 
 putCredentialR :: Handler TypedContent
