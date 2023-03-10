@@ -24,6 +24,7 @@ import Control.Monad.Logger
 
 import Concordium.Client.GRPC
 import Concordium.Client.Commands as CMDS
+import Concordium.Common.Version (Version(Version))
 import Options.Applicative
 import Data.Range.Parser
 
@@ -162,7 +163,7 @@ main = do
     runExceptT (mkGrpcClient pcGRPC (Just logm)) >>= \case
       Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
       Right cfg -> do
-        let globalInfo = object [ "v" .= toJSON (0 :: Integer), "value" .= toJSON (0 :: Integer) ]
+        let globalInfo = object [ "v" .= toJSON (Version 0), "value" .= toJSON (0 :: Integer) ]
         runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg,..}
         {-
         -- The getCryptographicParameters returns a versioned cryptographic parameters object, which is what we need.
@@ -171,8 +172,7 @@ main = do
           Left err -> die $ "Cannot obtain cryptographic parameters due to network error: " ++ show err
           Right res -> case getResponseValue res of
             Right cParams -> do
-              -- VH/FIXME: What should "v" be? It was returned the old API.
-              let globalInfo = object [ "v" .= toJSON (0 :: Integer), "value" .= toJSON cParams ]
+              let globalInfo = object [ "v" .= toJSON (Version 0), "value" .= toJSON cParams ]
               runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg,..}
             Left (_, err) -> die $ "Cannot obtain cryptographic parameters due to unexpected response: " ++ err
             -}
