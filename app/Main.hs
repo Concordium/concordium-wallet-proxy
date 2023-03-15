@@ -15,16 +15,18 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Aeson as AE
 import qualified Data.Aeson.Types as AE
 import qualified Data.Map.Strict as Map
-import Concordium.ID.Types (AccountAddress, KeyIndex, AccountThreshold, SignatureThreshold, CredentialIndex)
-import Concordium.Crypto.SignatureScheme (KeyPair)
 
 import System.Exit(die)
 import Control.Monad.Except
 import Control.Monad.Logger
 
-import Concordium.Client.GRPC
+import Concordium.Client.GRPC2
 import Concordium.Client.Commands as CMDS
-import Concordium.Common.Version (Version(Version))
+import Concordium.Client.Runner.Helper (getResponseValue)
+import Concordium.Common.Version (Version(Version), Versioned(Versioned))
+import Concordium.Crypto.SignatureScheme (KeyPair)
+import Concordium.ID.Types (AccountAddress, KeyIndex, AccountThreshold, SignatureThreshold, CredentialIndex)
+import Concordium.Types.Queries as Types
 import Options.Applicative
 import Data.Range.Parser
 
@@ -65,7 +67,6 @@ parser = info (helper <*> parseProxyConfig)
       ProxyConfig $ GrpcConfig
         (CMDS.grpcHost backend)
         (CMDS.grpcPort backend)
-        (CMDS.grpcAuthenticationToken backend)
         (CMDS.grpcTarget backend)
         (CMDS.grpcRetryNum backend)
         (Just (fromMaybe 15 timeout))
@@ -163,16 +164,12 @@ main = do
     runExceptT (mkGrpcClient pcGRPC (Just logm)) >>= \case
       Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err
       Right cfg -> do
-        let globalInfo = object [ "v" .= toJSON (Version 0), "value" .= toJSON (0 :: Integer) ]
-        runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg,..}
-        {-
         -- The getCryptographicParameters returns a versioned cryptographic parameters object, which is what we need.
         -- Because these parameters do not change we only look them up on startup, and store them.
-        runClient cfg (getCryptographicParametersV2 LastFinal) >>= \case
+        runClient cfg (getCryptographicParameters Types.LastFinal) >>= \case
           Left err -> die $ "Cannot obtain cryptographic parameters due to network error: " ++ show err
           Right res -> case getResponseValue res of
             Right cParams -> do
-              let globalInfo = object [ "v" .= toJSON (Version 0), "value" .= toJSON cParams ]
+              let globalInfo = toJSON $ Versioned (Version 0) cParams
               runSite 3000 "0.0.0.0" Proxy{grpcEnvData=cfg,..}
-            Left (_, err) -> die $ "Cannot obtain cryptographic parameters due to unexpected response: " ++ err
-            -}
+            Left (_, err) -> die $ "Cannot obtain cryptographic parameters due to error: " ++ err
