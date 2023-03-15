@@ -1764,7 +1764,6 @@ putGTUDropR addrText = do
                           $(logWarn) (Text.pack e)
                           respond400Error EMConfigurationError RequestInvalid
   where
-    accountToText = Text.decodeUtf8 . addressToBytes
     doGetAccInfo :: AccountAddress -> ClientMonad IO (GRPCResult (Either String (Nonce, Amount)))
     doGetAccInfo t = do
       aiRes <- getAccountInfo (AccAddress t) LastFinal
