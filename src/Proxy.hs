@@ -93,7 +93,7 @@ import Concordium.Client.Types.Transaction(transferWithScheduleEnergyCost,
                                            minimumCost,
                                            accountDecryptPayloadSize, delegationConfigureEnergyCost, registerDelegationPayloadSize, updateDelegationPayloadSize, removeDelegationPayloadSize, bakerConfigurePayloadSize, bakerConfigureEnergyCostWithKeys, bakerConfigureEnergyCostWithoutKeys
                                            )
-import Concordium.ID.Types (addressFromText, addressToBytes, KeyIndex, CredentialIndex)
+import Concordium.ID.Types (addressFromText, KeyIndex, CredentialIndex)
 import Concordium.Crypto.SignatureScheme (KeyPair)
 import Concordium.Crypto.SHA256 (Hash)
 import Concordium.Crypto.ByteStringHelpers (ByteStringHex(..))
