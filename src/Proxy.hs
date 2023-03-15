@@ -46,13 +46,12 @@ import qualified Data.Aeson as AE
 import Data.Conduit(connect)
 import qualified Data.Serialize as S
 import Data.Conduit.Attoparsec  (sinkParserEither)
-import Network.HTTP.Types(badRequest400, notFound404, badGateway502)
+import Network.HTTP.Types(badRequest400, notFound404, badGateway502, internalServerError500)
 import Network.GRPC.HTTP2.Types (GRPCStatusCode(..))
 import Yesod hiding (InternalError)
 import qualified Yesod
 import Web.Cookie
 import Data.Maybe(catMaybes, fromMaybe, isJust, maybeToList)
-import Data.Either (fromRight)
 import Data.Time.Clock.POSIX
 import Data.Time.Format
 import qualified Database.Esqueleto.Legacy as E
@@ -106,6 +105,8 @@ import Concordium.Common.Version
 import qualified Logging
 
 import Internationalization
+import GHC.IO.Exception (IOException(IOError))
+import Data.Coerce (coerce)
 
 -- |Wraps a type for persistent storage via a serialization to a 'ByteString'.
 newtype ByteStringSerialized a = ByteStringSerialized { unBSS :: a }
@@ -377,7 +378,7 @@ runGRPC c k = do
         Nothing -> return yCookieMap
         Just scm -> return $ Map.union scm yCookieMap
 
-runGRPCV2 :: ClientMonad IO (GRPCResultV2 (FromProtoResult a))
+runGRPCV2 :: ClientMonad IO (GRPCResultV2 (Either String a))
         -> (a -> Handler TypedContent)
         -> Handler TypedContent
 runGRPCV2 = runGRPCV2WithNotFoundError Nothing
@@ -385,7 +386,7 @@ runGRPCV2 = runGRPCV2WithNotFoundError Nothing
 -- |Run a GRPC request.
 runGRPCV2WithNotFoundError ::
            Maybe ErrorMessage -- ^ Error message to include in the response on GRPC status code NOT_FOUND.
-        -> ClientMonad IO (GRPCResultV2 (FromProtoResult a)) 
+        -> ClientMonad IO (GRPCResultV2 (Either String a)) 
         -> (a -> Handler TypedContent)
         -> Handler TypedContent
 runGRPCV2WithNotFoundError errM c k = do
@@ -408,13 +409,13 @@ runGRPCV2WithNotFoundError errM c k = do
     -- Otherwise the HTTP/2 request succeeded and there is a GRPC result.
     Right r -> do
       case r of
-        StatusOk (GRPCResponse hds convertedPayload) -> do
-          case convertedPayload of
+        StatusOk (GRPCResponse hds resultValue) -> do
+          case resultValue of
             Left err -> do
-              $(logError) $ "Could not convert GRPC response payload: " <> Text.pack err
+              $(logError) $ "No result value available: " <> Text.pack err
               i <- internationalize
-              sendResponseStatus badGateway502 $ object [
-                "errorMessage" .= i18n i (EMGRPCErrorResponse "Could not convert GRPC response payload."),
+              sendResponseStatus internalServerError500 $ object [
+                "errorMessage" .= i18n i (EMErrorResponse $ Yesod.InternalError "An error occurred."),
                 "error" .= fromEnum InternalError
                 ]
             Right val -> do
@@ -515,17 +516,20 @@ getRewardPeriodLength lfb = do
      rpLength <- liftResult (parse timeParametersParser $ grpcResponseVal summary)
      return $ Right (GRPCResponse [] rpLength)
 
-getRewardPeriodLengthV2 :: (MonadFail m, MonadIO m) => BlockHash -> ClientMonad m (GRPCResult (Maybe RewardPeriodLength))
+getRewardPeriodLengthV2 :: (MonadFail m, MonadIO m) => BlockHash -> ClientMonad m (GRPCResultV2 (Either String (Maybe RewardPeriodLength)))
 getRewardPeriodLengthV2 lfb = do
-  (EChainParametersAndKeys (ecpParams :: ChainParameters' cpv) _) <-
-    either (fail . snd) return
-      . getResponseValue
-        =<< getBlockChainParametersV2 (Given lfb)
-  let rpLength = case chainParametersVersion @cpv of
-        SChainParametersV0 -> Nothing
-        SChainParametersV1 -> Just $ ecpParams ^. cpTimeParameters . supportedOParam . tpRewardPeriodLength
-        SChainParametersV2 -> Just $ ecpParams ^. cpTimeParameters . supportedOParam . tpRewardPeriodLength
-  return $ Right (GRPCResponse [] rpLength)
+  bcpRes <- getBlockChainParametersV2 (Given lfb)
+  case getResponseValueAndHeaders' bcpRes of
+    Left errRes -> return errRes
+    Right (cpksRes, hds) -> do
+      case cpksRes of
+        Left err -> return $ StatusOk $ GRPCResponse hds $ Left err
+        Right (EChainParametersAndKeys (ecpParams :: ChainParameters' cpv) _) -> do
+          let rpLength = case chainParametersVersion @cpv of
+                SChainParametersV0 -> Nothing
+                SChainParametersV1 -> Just $ ecpParams ^. cpTimeParameters . supportedOParam . tpRewardPeriodLength
+                SChainParametersV2 -> Just $ ecpParams ^. cpTimeParameters . supportedOParam . tpRewardPeriodLength
+          return $ StatusOk $ GRPCResponse hds $ Right rpLength
 
 -- |Get the balance of an account.  If successful, the result is a JSON
 -- object consisting of the following optional fields:
@@ -588,38 +592,38 @@ getAccountBalanceR addrText = do
                               (maybe [] (\b -> ["currentBalance" .= b]) bestBal)
       case (lastFinBalComp, bestBalComp) of
         (Left lastFinBal, Left bestBal) -> response lastFinBal bestBal
-        (Left lastFinBal, Right bestBalF) -> runGRPC (getRewardPeriodLengthV2 lastFinBlock) $ \rpl -> response lastFinBal (Just (bestBalF rpl))
-        (Right lastFinBalF, Left bestBal) -> runGRPC (getRewardPeriodLengthV2 lastFinBlock) $ \rpl -> response (Just (lastFinBalF rpl)) bestBal
-        (Right lastFinBalF, Right bestBalF) -> runGRPC (getRewardPeriodLengthV2 lastFinBlock) $ \rpl -> response (Just (lastFinBalF rpl)) (Just (bestBalF rpl))
+        (Left lastFinBal, Right bestBalF) -> runGRPCV2 (getRewardPeriodLengthV2 lastFinBlock) $ \rpl -> response lastFinBal (Just (bestBalF rpl))
+        (Right lastFinBalF, Left bestBal) -> runGRPCV2 (getRewardPeriodLengthV2 lastFinBlock) $ \rpl -> response (Just (lastFinBalF rpl)) bestBal
+        (Right lastFinBalF, Right bestBalF) -> runGRPCV2 (getRewardPeriodLengthV2 lastFinBlock) $ \rpl -> response (Just (lastFinBalF rpl)) (Just (bestBalF rpl))
   where
-    doGetBal :: AccountAddress -> ClientMonad IO (GRPCResultV2 (FromProtoResult (AccountInfo, AccountInfo, Maybe UTCTime, Duration, BlockHash)))
+    doGetBal :: AccountAddress -> ClientMonad IO (GRPCResultV2 (Either String (AccountInfo, AccountInfo, Maybe UTCTime, Duration, BlockHash)))
     doGetBal accAddr = do
-      status <-
-        either (fail . snd) return
-          . getResponseValue
-            =<< getConsensusInfoV2
-      let lastFinBlock = csLastFinalizedBlock status
-      lastFinInfo <-
-        either (fail . snd) return
-          . getResponseValue
-            =<< getAccountInfoV2 (AccAddress accAddr) (Given lastFinBlock)
-      (bestInfo, biHds) <-
-        either fail return
-          . getResponseValueAndHeaders
-            =<< getAccountInfoV2 (AccAddress accAddr) Best
-      let pv = csProtocolVersion status
-      let epochDuration = csEpochDuration status
-      if pv >= P4 then do
-        rewardStatusRes <- getTokenomicsInfoV2 (Given lastFinBlock)
-        (rewardStatus, rsHds) <-
-          either fail return
-            $ getResponseValueAndHeaders rewardStatusRes 
-        nextPayday <- case rewardStatus of
-            RewardStatusV0{} -> fail "Invalid reward status."
-            RewardStatusV1{..} -> return rsNextPaydayTime
-        return $ StatusOk $ GRPCResponse rsHds $ Right (lastFinInfo, bestInfo, Just nextPayday, epochDuration, lastFinBlock)
-      else do
-        return $ StatusOk $ GRPCResponse biHds $ Right (lastFinInfo, bestInfo, Nothing, epochDuration, lastFinBlock)
+      cInfoRes <- getConsensusInfoV2
+      case getResponseValueAndHeaders' cInfoRes of
+        Left errRes -> return errRes
+        Right (Left err, hds) -> return $ StatusOk $ GRPCResponse hds $ Left err
+        Right (Right status, _) -> do
+          let lastFinBlock = csLastFinalizedBlock status
+          lastFinAccInfoRes <- getAccountInfoV2 (AccAddress accAddr) (Given lastFinBlock)
+          case getResponseValueAndHeaders' lastFinAccInfoRes of
+            Left errRes -> return errRes
+            Right (Left err, hds) -> return $ StatusOk $ GRPCResponse hds $ Left err
+            Right (Right lastFinInfo, _) -> do
+              bestAccInfoRes <- getAccountInfoV2 (AccAddress accAddr) Best
+              case getResponseValueAndHeaders' bestAccInfoRes of
+                Left errRes -> return errRes
+                Right (Left err, hds) -> return $ StatusOk $ GRPCResponse hds $ Left err
+                Right (Right bestInfo, biHds) -> do
+                  let epochDuration = csEpochDuration status
+                  rewardStatusRes <- getTokenomicsInfoV2 (Given lastFinBlock)
+                  case getResponseValueAndHeaders' rewardStatusRes of
+                    Left errRes -> return errRes
+                    Right (Left err, hds) -> return $ StatusOk $ GRPCResponse hds $ Left err
+                    Right (Right rewardStatus, rsHds) -> do
+                      case rewardStatus of
+                        RewardStatusV0{} -> return $ StatusOk $ GRPCResponse biHds $ Right (lastFinInfo, bestInfo, Nothing, epochDuration, lastFinBlock)
+                        RewardStatusV1{..} -> return $ StatusOk $ GRPCResponse rsHds $ Right (lastFinInfo, bestInfo, Just rsNextPaydayTime, epochDuration, lastFinBlock)
+                    
 
 -- VH/FIXME: Docs, and should the context be included or not be optional?
 doParseAccountAddress :: Maybe Text -> Text -> Handler AccountAddress
@@ -630,12 +634,7 @@ doParseAccountAddress ctx addrText =
           "Invalid account address '"
         <> addrText
         <> maybe "'."  (\r -> "' for '" <> r <> "' request.") ctx
-      i <- internationalize
-      sendResponseStatus badRequest400 $ object [
-        "errorMessage" .= i18n i EMMalformedAddress,
-        "error"
-         .= fromEnum RequestInvalid
-        ]
+      respond400Error EMMalformedAddress RequestInvalid
     Right addr -> return addr
 
 liftResult :: MonadFail m => Result a -> m a
@@ -848,22 +847,24 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
       fetchUpdates :: ClientMonad IO (GRPCResultV2 (Either String (EnergyRate, ProtocolVersion)))
       fetchUpdates = do
         consensusInfoRes <- getConsensusInfoV2
-        case getResponseValue consensusInfoRes of
-            Left (_, err) -> fail err
-            Right cs -> do
+        case getResponseValueAndHeaders' consensusInfoRes of
+            Left errRes -> return errRes
+            Right (csRes, _) -> do
               chainParamsRes <- getBlockChainParametersV2 Best
-              case getResponseValueAndHeaders chainParamsRes of
-                Left err -> fail err
-                Right (EChainParametersAndKeys ecpParams _, hds) -> do
-                  return $
-                    StatusOk $
-                      GRPCResponse hds (Right (_erEnergyRate $ _cpExchangeRates ecpParams, csProtocolVersion cs))
+              case getResponseValueAndHeaders' chainParamsRes of
+                Left errRes -> return errRes
+                Right (cpksRes, hds) -> do
+                  let v = do
+                        cs <- csRes
+                        (EChainParametersAndKeys ecpParams _) <- cpksRes
+                        return (_erEnergyRate $ _cpExchangeRates ecpParams, csProtocolVersion cs)
+                  return $ StatusOk $ GRPCResponse hds v
       withExchangeRate = runGRPCV2 fetchUpdates
 
 doSendBlockItem :: MonadIO m => BareBlockItem -> ClientMonad m (GRPCResultV2 (Either a Bool))
 doSendBlockItem item = do
   sbiRes <- sendBlockItemV2 item
-  case getResponseValueAndHeaders sbiRes of
+  case getResponseValueAndHeaders' sbiRes of
     Left _ -> return $ StatusOk $ GRPCResponse [] (Right False)
     Right (_, hds) -> return $ StatusOk $ GRPCResponse hds (Right True)
 
@@ -912,28 +913,33 @@ putTransferR =
                 Left err -> fail err
                 Right tx -> return tx
 
-getSimpleTransactionStatus :: MonadIO m => I18n -> TransactionHash -> ClientMonad m (GRPCResult Value)
+getSimpleTransactionStatus :: MonadIO m => I18n -> TransactionHash -> ClientMonad m (GRPCResultV2 (Either String Value))
 getSimpleTransactionStatus i trHash = do
-    eitherStatus <- getTransactionStatus (Text.pack $ show trHash)
-    return $
-      eitherStatus >>= \case
-        GRPCResponse hds Null -> return $ GRPCResponse hds $ object ["status" .= String "absent"]
-        GRPCResponse hds (Object o) -> do
-          parseEither (.: "status") o >>= \case
-            "received" -> return $ GRPCResponse hds $ object ["status" .= String "received"]
-            "finalized" -> HM.toList <$> parseEither (.: "outcomes") o >>= \case
-              [(bh,outcome)] -> do
-                fields <- outcomeToPairs outcome
-                return $ GRPCResponse hds $ object $ ["status" .= String "finalized", "blockHashes" .= [bh :: BlockHash]] <> fields
-              _ -> throwError "expected exactly one outcome for a finalized transaction"
-            "committed" -> do
-              outcomes <- HM.toList <$> parseEither (.: "outcomes") o
-              fields <- outcomesToPairs (snd <$> outcomes)
-              return $ GRPCResponse hds $ object $ ["status" .= String "committed", "blockHashes" .= (fst <$> outcomes :: [BlockHash])] <> fields
-            s -> throwError ("unexpected \"status\": " <> s)
-        _ -> throwError "expected null or object"
+  res <- getBlockItemStatusV2 trHash
+  return $ case res of
+    StatusOk (GRPCResponse hds val) -> case val of
+      Right Received ->
+        StatusOk $ GRPCResponse hds $ Right $ object ["status" .= String "received"]
+      Right (Committed outcomeMap) -> do
+        let outcomes = mapM (maybe Nothing return . snd) $ Map.toList outcomeMap
+        case outcomesToPairs <$> outcomes of
+            Nothing -> StatusOk $ GRPCResponse hds $ Left "Expected exactly one outcome for each committed transaction"
+            Just (Left err) -> StatusOk $ GRPCResponse hds $ Left err
+            Just (Right fields) -> StatusOk $ GRPCResponse hds $ Right $ object $ ["status" .= String "committed", "blockHashes" .= (fst <$> Map.toList outcomeMap)] <> fields
+      Right (Finalized bh outcomeM) ->
+        case outcomeM of
+          Nothing -> StatusOk $ GRPCResponse hds $ Left "Expected exactly one outcome for a finalized transaction"
+          Just outcome -> do
+            case outcomeToPairs outcome of
+              Left err -> StatusOk $ GRPCResponse hds $ Left err
+              Right fields -> StatusOk $ GRPCResponse hds $ Right $ object $ ["status" .= String "finalized", "blockHashes" .= [bh :: BlockHash]] <> fields
+      Left err -> StatusOk $ GRPCResponse hds $ Left err
+    StatusNotOk (NOT_FOUND, _) -> StatusOk $ GRPCResponse [] $ Right $ object ["status" .= String "absent"]
+    StatusNotOk e -> StatusNotOk e
+    StatusInvalid -> StatusInvalid
+    RequestFailed err -> RequestFailed err
   where
-    -- attach a memo to the pairs.
+    -- attach a memo to the pairs. d
     addMemo [TransferMemo memo] xs = ("memo" .= memo):xs
     addMemo _ xs = xs
 
@@ -1112,7 +1118,7 @@ getSubmissionStatusR submissionId =
     Nothing -> respond400Error EMMalformedTransaction RequestInvalid
     Just txHash -> do
       i <- internationalize
-      runGRPC (getSimpleTransactionStatus i txHash) (sendResponse . toJSON)
+      runGRPCV2 (getSimpleTransactionStatus i txHash) (sendResponse . toJSON)
 
 -- |Whether to include memos in formatted account transactions or not.
 -- If not, transfers with memos are mapped to a corresponding transfer without a memo.
@@ -1259,50 +1265,35 @@ cis2InvokeHelper ::
     HandlerFor Proxy TypedContent
 cis2InvokeHelper contractAddr entrypoint serializedParam nrg k = do
     let invokeContext contractName =
-            InvokeContract.ContractContext
-                { ccInvoker = Nothing
-                , ccContract = contractAddr
-                , ccAmount = 0
-                , ccMethod = Wasm.uncheckedMakeReceiveName contractName entrypoint
-                , ccParameter = serializedParam
-                , ccEnergy = nrg
-                }
-    let parseInstance Null = return Nothing
-        parseInstance v = flip (AE.withObject "ContractInfo") v $ \obj -> do
-          n <- obj .: "name"
-          return (Just n)
-    -- Query the name of a contract at the given block hash.
-    let queryContractName block = do
-          ci <- getInstanceInfo (Text.decodeUtf8 . BSL.toStrict . AE.encode $ contractAddr) block
-          case ci of
-            Left err -> return (Left err)
-            Right v -> case parseEither parseInstance (grpcResponseVal v) of
-              Left err -> return (Left err)
-              Right mci -> return (Right (mci <$ v))
+          InvokeContract.ContractContext
+            { ccInvoker = Nothing
+            , ccContract = contractAddr
+            , ccAmount = 0
+            , ccMethod = Wasm.uncheckedMakeReceiveName contractName entrypoint
+            , ccParameter = serializedParam
+            , ccEnergy = nrg
+            }
     let query = do
-            withLastFinalBlockHash Nothing $ \bh -> do
-                name <- queryContractName bh
-                case name of
-                    Left err -> return (Left err)
-                    Right v@GRPCResponse{grpcResponseVal = Nothing} -> return (Right (Nothing <$ v))
-                    Right (GRPCResponse{grpcResponseVal = Just n}) -> do
-                        let ctx = invokeContext n
-                        let invokeContextArg = Text.decodeUtf8 . BSL.toStrict . AE.encode $ ctx
-                        res <- invokeContract invokeContextArg bh
-                        case res of
-                            Left err -> return (Left err)
-                            Right v -> case AE.fromJSON (grpcResponseVal v) of
-                                AE.Error jsonErr -> return (Left jsonErr)
-                                AE.Success ir -> return (Right (Just (Wasm.initContractName n, ir) <$ v))
-    runGRPC query $ \case
-        Nothing -> respond404Error $ EMErrorResponse NotFound
-        Just (_, InvokeContract.Failure{..}) -> do
-            $logDebug $ "Invoke failed: " <> Text.pack (show rcrReason)
-            respond400Error EMInvokeFailed RequestInvalid
-        Just (name, InvokeContract.Success{..}) -> do
-            case rcrReturnValue of
-                Nothing -> respond400Error EMV0Contract RequestInvalid
-                Just rv -> k name rv
+          iInfoRes <- getInstanceInfoV2 contractAddr LastFinal
+          case getResponseValueAndHeaders' iInfoRes of
+            Left errRes -> return errRes
+            Right (Left err, hds) -> return $ StatusOk $ GRPCResponse hds $ Left err
+            Right (Right iInfo, hds) -> do
+              bh <- getBlockHashHeader hds
+              let cName = Wasm.iiName iInfo
+              let ctx = invokeContext cName
+              iInstanceRes <- invokeInstanceV2 (Given bh) ctx
+              case getResponseValueAndHeaders' iInstanceRes of
+                Left errRes -> return errRes
+                Right (v, hds') -> return $ StatusOk $ GRPCResponse hds' $ fmap (Wasm.initContractName cName,) v
+    runGRPCV2WithNotFoundError (Just $ EMErrorResponse NotFound) query $ \case
+        (_, InvokeContract.Failure{..}) -> do
+          $logDebug $ "Invoke failed: " <> Text.pack (show rcrReason)
+          respond400Error EMInvokeFailed RequestInvalid
+        (name, InvokeContract.Success{..}) -> do
+          case rcrReturnValue of
+            Nothing -> respond400Error EMV0Contract RequestInvalid
+            Just rv -> k name rv
 
 -- |Balance of a CIS2 token. 
 newtype TokenBalance = TokenBalance Integer
@@ -1352,19 +1343,20 @@ getAccountTransactionsWorker includeMemos addrText = do
   -- Get the canonical address of the account.
   -- This fails only if we cannot get an understandable response from the GRPC, i.e., if the node is not reachable,
   -- or if it returns invalid JSON.
-  let getAddress k =
-        case addressFromText addrText of
-          Left _ -> respond400Error EMMalformedAddress RequestInvalid
-          Right givenAddr -> do
-            let doGetAccAddress = do
-                  lastFinBlock <- getLastFinalBlockHash
-                  ai <- getAccountInfo addrText lastFinBlock
-                  case ai of
-                    Right (GRPCResponse hds Null) -> return $ Right $ GRPCResponse hds givenAddr -- the account does not exist on the node, assume the given address is the one we want.
-                    Right (GRPCResponse hds val) -> return $ Right $ GRPCResponse hds (fromRight givenAddr (parseEither (withObject "account info" (.: "accountAddress")) val))
-                    -- This should not happen, accountInfo always returns valid JSON
-                    Left err -> return $ Left err
-            runGRPC doGetAccAddress k
+  let getAddress k = do
+        givenAddr <- doParseAccountAddress (Just "getAccountTransactionsWorker") addrText
+        let doGetAccAddress = do
+              ai <- getAccountInfoV2 (AccAddress givenAddr) LastFinal
+              case ai of
+                -- FIXME: Headers should ideally be propagated here, even on a non-OK status.
+                StatusNotOk (NOT_FOUND, _) -> return $ Right $ GRPCResponse [] givenAddr -- the account does not exist on the node, assume the given address is the one we want.
+                StatusOk (GRPCResponse hds (Right accInfo)) -> return $ Right $ GRPCResponse hds (aiAccountAddress accInfo)
+                -- This should not happen, since getAccountInfo always returns a valid protocol buffer payload.
+                StatusOk (GRPCResponse _ (Left err))-> return $ Left err
+                StatusInvalid -> return $ Left "Invalid status in GRPC response."
+                StatusNotOk (_, err) -> return $ Left err
+                RequestFailed err -> return $ Left err
+        runGRPC doGetAccAddress k
   getAddress $ \addr -> do
       order <- lookupGetParam "order"
       let (ordering, ordType :: Text, ordRel) = case order of
@@ -1821,65 +1813,69 @@ instance FromJSON DropSchedule where
       return Normal
     else fail "Unsupported drop type."
 
--- | Handle a GTU drop request.
---     When 'gtuDropData' is provided: handle drop.
---     Otherwise: return 404.
+-- | Handle a GTU drop request when @gtuDropData@ is present in the environment settings.
+-- Sends a 404-response if @gtuDropData@ is absent.
 putGTUDropR :: Text -> Handler TypedContent
 putGTUDropR addrText = do
-    i <- internationalize
     Proxy{..} <- getYesod
     case gtuDropData of
+      -- VH/FIXME: Should this be 404?
       Nothing -> respond404Error $ EMErrorResponse NotFound
       Just gtuDropData' -> do
-        case addressFromText addrText of
-          Left _ -> respond400Error EMMalformedAddress RequestInvalid
-          Right addr -> runGRPC (doGetAccInfo addrText) $ \case
-              -- Account is not finalized
-              Nothing -> sendResponseStatus notFound404 $ object
-                          ["errorMessage" .= i18n i EMAccountNotFinal,
-                          "error" .= fromEnum RequestInvalid]
-              -- Account is finalized, so try the drop
-              Just _ -> do
-                connect rawRequestBody (sinkParserEither json') >>= \case
-                  Left _ -> tryDrop addr Normal gtuDropData' -- malformed or empty body, we assume normal drop.
-                  Right v -> case fromJSON v of
-                              AE.Success x -> tryDrop addr x gtuDropData'
-                              AE.Error e -> do
-                                $(logWarn) (Text.pack e)
-                                respond400Error EMConfigurationError RequestInvalid
-
+        addr <- doParseAccountAddress (Just "getAccountBalance") addrText
+        -- Check that the account exists on the chain.
+        -- VH/FIXME: Should we check some notion of the account or its transactions
+        --           being finalized here?
+        --           In that case, should this be done by using getNextSequenceNumber
+        --           and asserting @nanAllFinal@ and aborting otherwise?
+        runGRPCV2 (getAccountInfoV2 (AccAddress addr) LastFinal) $ \_ -> do
+          connect rawRequestBody (sinkParserEither json') >>= \case
+            Left _ -> tryDrop addr Normal gtuDropData' -- malformed or empty body, we assume normal drop.
+            Right v -> case fromJSON v of
+                        AE.Success x -> tryDrop addr x gtuDropData'
+                        AE.Error e -> do
+                          $(logWarn) (Text.pack e)
+                          respond400Error EMConfigurationError RequestInvalid
   where
     accountToText = Text.decodeUtf8 . addressToBytes
-    doGetAccInfo :: Text -> ClientMonad IO (GRPCResult (Maybe (Nonce, Amount)))
+    doGetAccInfo :: AccountAddress -> ClientMonad IO (GRPCResultV2 (Either String (Nonce, Amount)))
     doGetAccInfo t = do
-      lastFinBlock <- getLastFinalBlockHash
-      ai <- getAccountInfo t lastFinBlock
-      case ai of
-        Right (GRPCResponse hds Null) -> return $ Right $ GRPCResponse hds Nothing
-        Right (GRPCResponse hds val) -> return $ GRPCResponse hds . Just
-          <$> parseEither (withObject "account info" $ \o -> (,) <$> (o .: "accountNonce") <*> (o .: "accountAmount")) val
-        Left err -> return $ Left err
+      aiRes <- getAccountInfoV2 (AccAddress t) LastFinal
+      case getResponseValueAndHeaders' aiRes of
+        Left errRes -> return errRes
+        Right (val, hds) -> do
+          let v = do
+                ai <- val
+                return (aiAccountNonce ai, aiAccountAmount ai)
+          return $ StatusOk $ GRPCResponse hds v
     -- Determine if the transaction is or could become
-    -- successfully finalized.  Returns False if the
+    -- successfully finalized. Returns @False@ if the
     -- transaction is absent or is finalized but failed.
     doIsTransactionOK trHash = do
-      eitherStatus <- getTransactionStatus (Text.pack $ show trHash)
-      return $
-        eitherStatus >>= \case
-          GRPCResponse hds Null -> return $ GRPCResponse hds False
-          GRPCResponse hds (Object o) -> parseEither (.: "status") o >>= \case
-            "received" -> return $ GRPCResponse hds True
-            "finalized" -> HM.toList <$> parseEither (.: "outcomes") o >>= \case
-              [(_::BlockHash,TransactionSummary{..})] ->
+      bisRes <- getBlockItemStatusV2 trHash
+      return $ case bisRes of
+        -- Transaction was found
+        StatusOk (GRPCResponse hds val) -> case val of
+          Right Received ->
+            StatusOk $ GRPCResponse hds $ Right True
+          Right (Committed _) ->
+            StatusOk $ GRPCResponse hds $ Right True
+          Right (Finalized _ outcomeM) ->
+            case outcomeM of
+              Nothing -> StatusOk $ GRPCResponse hds $ Left "Expected exactly one outcome for a finalized transaction"
+              Just TransactionSummary{..} -> 
                 case tsResult of
-                  TxSuccess{} -> return $ GRPCResponse hds True
-                  TxReject{} -> return $ GRPCResponse hds False
-              _ -> throwError "expected exactly one outcome for a finalized transaction"
-            "committed" -> return $ GRPCResponse hds True
-            s -> throwError ("unexpected \"status\": " <> s)
-          _ -> throwError "expected null or object"
+                  TxSuccess{} -> StatusOk $ GRPCResponse hds $ Right True
+                  -- Transaction was finalized but failes
+                  TxReject{} -> StatusOk $ GRPCResponse hds $ Right False
+          Left err -> StatusOk $ GRPCResponse hds $ Left err
+        -- Transaction is absent
+        StatusNotOk (NOT_FOUND, _) -> StatusOk $ GRPCResponse [] $ Right False
+        StatusNotOk e -> StatusNotOk e
+        StatusInvalid -> StatusInvalid
+        RequestFailed err -> RequestFailed err
     sendTransaction transaction
-      = runGRPC (sendTransactionToBaker (NormalTransaction transaction) defaultNetId) $ \case
+      = runGRPCV2 (doSendBlockItem $ NormalTransaction transaction) $ \case
           False -> do -- this case cannot happen at this time
             $(logError) "GTU drop transaction rejected by node."
             respond400Error EMConfigurationError RequestInvalid
@@ -1891,6 +1887,7 @@ putGTUDropR addrText = do
         "errorMessage" .= i18n i EMConfigurationError,
         "error" .= fromEnum InternalError
         ]
+    -- VH/FIXME: Should we supply the block address here from the calling function, or is it fine to use last finalized for each request?
     tryDrop addr dropType gtuDropData@GTUDropData{..} = do
       -- number of keys we need to sign with
       let numKeys = sum . map (length . snd) $ dropKeys
@@ -1898,7 +1895,7 @@ putGTUDropR addrText = do
       rcpRecord <- runDB $ getBy (UniqueAccount (ByteStringSerialized addr))
       case rcpRecord of
         -- If there is no entry, try the drop
-        Nothing -> runGRPC (doGetNonce $ accountToText dropAccount) $ \nonce -> do
+        Nothing -> runGRPCV2 (getNextSequenceNumberV2 dropAccount) $ \nonce -> do
           currentTime <- liftIO $ round <$> getPOSIXTime
           (payload, thEnergyAmount) <- case dropType of
             Normal -> return (Transfer addr dropAmount, simpleTransferEnergyCost simpleTransferPayloadSize numKeys)
@@ -1916,7 +1913,7 @@ putGTUDropR addrText = do
             atrPayload = encodePayload payload
             atrHeader = TransactionHeader {
               thSender = dropAccount,
-              thNonce = nonce,
+              thNonce = nanNonce nonce, -- VH/FIXME: This is only reliable if all account transactions are finalized. Is this OK?
               thPayloadSize = payloadSize atrPayload,
               thExpiry = TransactionTime $ currentTime + 300,
               ..
@@ -1928,43 +1925,28 @@ putGTUDropR addrText = do
             Nothing -> tryDrop addr dropType gtuDropData
             Just _ -> sendTransaction transaction
         Just (Entity key (GTURecipient _ (ByteStringSerialized transaction))) ->
-          runGRPC (doGetAccInfo (accountToText dropAccount)) $ \case
-              Nothing -> do
-                $(logError) $ "Could not get GTU drop account ('" <> accountToText dropAccount  <> "') info."
-                configErr
-              Just (lastFinNonce, lastFinAmt) -> do
-                let trHash = getHash (NormalTransaction transaction) :: TransactionHash
-                runGRPC (doIsTransactionOK trHash) $ \case
-                  True -> sendResponse (object ["submissionId" .= trHash])
-                  False
-                    | lastFinAmt < dropAmount + 1000000 -- FIXME: This is outdated.
-                      -> do
-                        $(logError) "GTU drop account has insufficient funds"
-                        configErr
-                    | lastFinNonce > thNonce (atrHeader transaction)
-                      -> do
-                        -- Given the nonce, the transaction is no good. Delete and try again.
-                        runDB $ delete key
-                        tryDrop addr dropType gtuDropData
-                    | otherwise
-                      -> do
-                        currentTime <- liftIO $ round <$> getPOSIXTime
-                        if thExpiry (atrHeader transaction) < TransactionTime currentTime then do
-                          runDB $ delete key
-                          tryDrop addr dropType gtuDropData
-                        else sendTransaction transaction
-      where
-        doGetNonce :: Text -> ClientMonad IO (GRPCResult Nonce)
-        doGetNonce acc = do
-          nonceM <- getNextAccountNonce acc
-          return $ do
-            response <- nonceM
-            nonce <- parseEither
-              ( withObject "nonce" $ \v -> do
-                  v AE..: "nonce"
-              ) $ grpcResponseVal response
+          runGRPCV2 (doGetAccInfo addr) $ \(lastFinNonce, lastFinAmt) -> do
+            let trHash = getHash (NormalTransaction transaction) :: TransactionHash
+            runGRPCV2 (doIsTransactionOK trHash) $ \case
+              True -> sendResponse (object ["submissionId" .= trHash])
+              False
+                | lastFinAmt < dropAmount + 1000000 -- FIXME: This is outdated.
+                  -> do
+                    $(logError) "GTU drop account has insufficient funds"
+                    configErr
+                | lastFinNonce > thNonce (atrHeader transaction)
+                  -> do
+                    -- Given the nonce, the transaction is no good. Delete and try again.
+                    runDB $ delete key
+                    tryDrop addr dropType gtuDropData
+                | otherwise
+                  -> do
+                    currentTime <- liftIO $ round <$> getPOSIXTime
+                    if thExpiry (atrHeader transaction) < TransactionTime currentTime then do
+                      runDB $ delete key
+                      tryDrop addr dropType gtuDropData
+                    else sendTransaction transaction
 
-            return $ GRPCResponse (grpcHeaders response) nonce
 
 getGlobalFileR :: Handler TypedContent
 getGlobalFileR = toTypedContent . globalInfo <$> getYesod
@@ -1973,35 +1955,17 @@ getGlobalFileR = toTypedContent . globalInfo <$> getYesod
 -- then if both succeed checks that the last final block is less than `healthTolerance` seconds old.
 getHealthR :: Handler TypedContent
 getHealthR =
-  runGRPC doGetBlockFinalInfo $ \case
-      Nothing -> do
-        $(logError) $ "Could not get response from GRPC."
-        sendResponse $ object $ ["healthy" .= False, "reason" .= ("Could not get response from GRPC.":: String), "version" .= showVersion version]
-      Just lastFinalBlockInfo -> do
+  runGRPCV2 (getBlockInfoV2 LastFinal) $ \lastFinalBlockInfo -> do
         $(logInfo) "Successfully got best block info."
         _ :: [(Entity Entry, Entity Summary)] <- runDB $ E.select $
                   E.from $ \val -> do
                   E.limit 1
                   return val
-        -- get block slot time from block info object, compare with current time: reject if more than `healthTolerance` seconds old.
-        case fromJSON lastFinalBlockInfo of
-          Error _ -> do
-            i <- internationalize
-            sendResponseStatus badGateway502 $ object ["errorMessage" .= i18n i EMGRPCError, "error" .= fromEnum InternalError, "version" .= showVersion version]
-          Success (bir :: BlockInfo) -> do
-            currentTime <- liftIO Clock.getCurrentTime
-            Proxy{..} <- getYesod
-            if (Clock.diffUTCTime currentTime (biBlockSlotTime bir)) < (Clock.secondsToNominalDiffTime $ fromIntegral healthTolerance)
-            then sendResponse $ object ["healthy" .= True, "lastFinalTime" .= (biBlockSlotTime bir), "version" .= showVersion version]
-            else sendResponse $ object ["healthy" .= False, "reason" .= ("The last final block is too old.":: String), "lastFinalTime" .= (biBlockSlotTime bir), "version" .= showVersion version]
-  where
-    doGetBlockFinalInfo :: ClientMonad IO (GRPCResult (Maybe Value))
-    doGetBlockFinalInfo = do
-      bbi <- withLastFinalBlockHash Nothing getBlockInfo
-      case bbi of
-        Right (GRPCResponse hds Null) -> return $ Right $ GRPCResponse hds Nothing
-        Right (GRPCResponse hds val) -> return $ Right $ GRPCResponse hds $ Just val
-        Left err -> return $ Left err
+        currentTime <- liftIO Clock.getCurrentTime
+        Proxy{..} <- getYesod
+        if (Clock.diffUTCTime currentTime (biBlockSlotTime lastFinalBlockInfo)) < (Clock.secondsToNominalDiffTime $ fromIntegral healthTolerance)
+        then sendResponse $ object ["healthy" .= True, "lastFinalTime" .= (biBlockSlotTime lastFinalBlockInfo), "version" .= showVersion version]
+        else sendResponse $ object ["healthy" .= False, "reason" .= ("The last final block is too old.":: String), "lastFinalTime" .= (biBlockSlotTime lastFinalBlockInfo), "version" .= showVersion version]
 
 getIpsR :: Handler TypedContent
 getIpsR = toTypedContent . ipInfo <$> getYesod
@@ -2019,20 +1983,29 @@ getTermsAndConditionsVersion = do
 
 getBakerPoolR :: Word64 -> Handler TypedContent
 getBakerPoolR bid =
-    runGRPC doGetBaker $ \case
-      (_, AE.Null) -> respond404Error $ EMErrorResponse NotFound
-      (lf, psV) -> do
+    runGRPCV2WithNotFoundError
+      (Just $ EMErrorResponse NotFound)
+      (do
+        res <- getPoolInfoV2 LastFinal (BakerId $ AccountIndex bid)
+        case getResponseValueAndHeaders' res of
+          Left err -> return err
+          Right (val, hds) -> do
+            lf <- getBlockHashHeader hds
+            let v = do
+                  pStatus <- val
+                  return (pStatus, lf)
+            return $ StatusOk $ GRPCResponse hds v) $ \(pStatus, lf) -> do
         $(logInfo) "Successfully got baker pool status."
-        case AE.fromJSON psV of
-          AE.Success bps@BakerPoolStatus{..} ->
+        case pStatus of
+          bps@BakerPoolStatus{..} ->
             case psBakerStakePendingChange of
-              PPCNoChange -> sendResponse psV
-              PPCReduceBakerCapital{..} -> runGRPC (getRewardPeriodLength lf) $ \case
-                Nothing -> sendResponse psV
+              PPCNoChange -> sendResponse $ toJSON pStatus
+              PPCReduceBakerCapital{..} -> runGRPCV2 (getRewardPeriodLengthV2 lf) $ \case
+                Nothing -> sendResponse $ toJSON pStatus
                 -- if there is a pending change we add the estimated change time to the response object.
                 -- The way this is done is to patch the returned JSON Value. This is not ideal, but it seems preferrable
                 -- to introducing a new type just for this.
-                Just rewardEpochs -> runGRPC (getParameters lf) $ \(nextPaydayTime, epochDuration) -> do
+                Just rewardEpochs -> runGRPCV2 (getParameters lf) $ \(nextPaydayTime, epochDuration) -> do
                   let r = object [
                         "pendingChangeType" .= String "ReduceBakerCapital",
                         "bakerEquityCapital" .= ppcBakerEquityCapital,
@@ -2041,10 +2014,10 @@ getBakerPoolR bid =
                         ]
                   case AE.toJSON bps of
                     AE.Object o -> sendResponse (AE.toJSON (KM.insert "bakerStakePendingChange" r o))
-                    _ -> sendResponse psV
-              PPCRemovePool{..} -> runGRPC (getRewardPeriodLength lf) $ \case
-                Nothing -> sendResponse psV
-                Just rewardEpochs -> runGRPC (getParameters lf) $ \(nextPaydayTime, epochDuration) -> do
+                    _ -> sendResponse $ toJSON pStatus
+              PPCRemovePool{..} -> runGRPCV2 (getRewardPeriodLengthV2 lf) $ \case
+                Nothing -> sendResponse $ toJSON pStatus
+                Just rewardEpochs -> runGRPCV2 (getParameters lf) $ \(nextPaydayTime, epochDuration) -> do
                   let r = object [
                         "pendingChangeType" .= String "RemovePool",
                         "effectiveTime" .= ppcEffectiveTime,
@@ -2052,92 +2025,62 @@ getBakerPoolR bid =
                         ]
                   case AE.toJSON bps of
                     AE.Object o -> sendResponse (AE.toJSON (KM.insert "bakerStakePendingChange" r o))
-                    _ -> sendResponse psV
-          AE.Success PassiveDelegationStatus{} -> sendResponse psV
-          AE.Error err -> do
-            $(logError) $ "Could not parse pool status response: " <> Text.pack err
-            i <- internationalize
-            sendResponseStatus badGateway502 $ object [
-              "errorMessage" .= i18n i EMGRPCError,
-              "error" .= fromEnum InternalError
-              ]
+                    _ -> sendResponse $ toJSON pStatus
+          PassiveDelegationStatus{} -> sendResponse $ toJSON pStatus
   where
-    doGetBaker :: ClientMonad IO (GRPCResult (Text, Value))
-    doGetBaker = withLastFinalBlockHash Nothing (\lf ->
-      fmap (\x -> GRPCResponse (grpcHeaders x) $ (lf,) $ grpcResponseVal x)
-        <$> getPoolStatus (BakerId $ AccountIndex bid) False lf)
-    doGetNextPayday :: Text -> ClientMonad IO (GRPCResult UTCTime)
-    doGetNextPayday lastFinal = do
-      rewardStatus <- getRewardStatus lastFinal
-      return $ do
-        response <- rewardStatus
-        utc <- parseEither
-                    ( withObject "Best finalized block" $ \v -> do
-                        v AE..: "nextPaydayTime"
-                    ) $ grpcResponseVal response
-        return $ GRPCResponse (grpcHeaders response) utc
-    doGetEpochLength :: ClientMonad IO (GRPCResult Duration)
-    doGetEpochLength = do
-      consensusStatus <- getConsensusStatus
-      return $ do
-        response <- consensusStatus
-        dur <- parseEither
-                    ( withObject "Consensus status" $ \v -> do
-                        v AE..: "epochDuration"
-                    ) $ grpcResponseVal response
-        Right $ GRPCResponse (grpcHeaders response) dur
-    getParameters :: Text -> ClientMonad IO (GRPCResult (UTCTime, Duration))
-    getParameters lastFinal = do
-      nextPayday <- doGetNextPayday lastFinal
-      epochDuration <- doGetEpochLength
-      return $ do
-        GRPCResponse hds l <- nextPayday
-        GRPCResponse hds' r <- epochDuration
-        return $ GRPCResponse (hds ++ hds') (l, r)
+    getParameters :: BlockHash -> ClientMonad IO (GRPCResultV2 (Either String (UTCTime, Duration)))
+    getParameters bh = do
+      rewardStatus <- getTokenomicsInfoV2 (Given bh)
+      case getResponseValueAndHeaders' rewardStatus of
+        Left errRes -> return errRes
+        Right (val, hds) -> do
+          consensusInfo <- getConsensusInfoV2
+          case getResponseValueAndHeaders' consensusInfo of
+            Left errRes' -> return errRes'
+            Right (val', hds') -> do
+              let v = do
+                    rStatus <- val
+                    cStatus <- val'
+                    return (rsNextPaydayTime rStatus, csEpochDuration cStatus)
+              return $ StatusOk $ GRPCResponse (hds ++ hds') v
 
 getChainParametersR :: Handler TypedContent
 getChainParametersR =
-    runGRPC doGetParameters $ \(v :: Value) -> do
+    runGRPCV2 doGetParameters $ \(v :: Value) -> do
       $(logInfo) "Successfully got chain parameters."
       sendResponse v
   where
     doGetParameters = do
-      summary <- withLastFinalBlockHash Nothing getBlockSummary
-      return $ do
-        response <- summary
-        val <- parseEither
-                    ( withObject "Best finalized block" $ \v -> do
-                        updates <- v AE..: "updates"
-                        updates AE..: "chainParameters"
-                    ) . grpcResponseVal
-                    =<< summary
-
-        Right $ GRPCResponse (grpcHeaders response) val
+      bcpRes <- getBlockChainParametersV2 Best
+      return $ case getResponseValueAndHeaders' bcpRes of
+        Left errRes -> errRes
+        Right (Left err, hds) -> StatusOk $ GRPCResponse hds $ Left err
+        Right (Right (EChainParametersAndKeys ecpParams _), hds) -> StatusOk $ GRPCResponse hds $ Right $ toJSON ecpParams
 
 getNextPaydayR :: Handler TypedContent
 getNextPaydayR =
-    runGRPC doGetParameters $ \(v :: UTCTime) -> do
+    runGRPCV2 doGetParameters $ \(v :: UTCTime) -> do
       let timestampObject = object ["nextPaydayTime" .= v]
       $(logInfo) "Successfully got next payday."
       sendResponse $ toJSON timestampObject
   where
     doGetParameters = do
-      rewardStatus <- withLastFinalBlockHash Nothing getRewardStatus
-      return $ do
-        response <- rewardStatus
-        utc <- parseEither
-          ( withObject "Best finalized block" $ \v -> do
-              v AE..: "nextPaydayTime"
-          ) $ grpcResponseVal response
-        Right $ GRPCResponse (grpcHeaders response) utc
+      rewardStatusRes <- getTokenomicsInfoV2 Best
+      case getResponseValueAndHeaders' rewardStatusRes of
+        Left errRes -> return errRes
+        Right (Left err, hds) -> return $ StatusOk $ GRPCResponse hds $ Left err
+        Right (Right rewardStatus, hds) -> do
+          case rewardStatus of
+            RewardStatusV0{} -> -- This should not happen
+              return $ StatusOk $ GRPCResponse hds $ Left "Invariant error: GRPC payload conversion resulted in unexpected 'RewardStatusV0' variant."
+            RewardStatusV1{..} ->
+              return $ StatusOk $ GRPCResponse hds $ Right rsNextPaydayTime
 
 getPassiveDelegationR :: Handler TypedContent
 getPassiveDelegationR =
-    runGRPC doGetPassiveDelegation $ \v -> do
+    runGRPCV2 (getPassiveDelegationInfoV2 Best) $ \v -> do
       $(logInfo) "Successfully got baker pool status."
-      sendResponse v
-  where
-    doGetPassiveDelegation = withLastFinalBlockHash Nothing (getPoolStatus (BakerId $ AccountIndex 0) True)
+      sendResponse $ toJSON v
 
 matchesVersion :: Word -> Maybe ForcedUpdateConfig -> AE.Value
 matchesVersion _ Nothing = AE.object ["status" AE..= String "ok"]
@@ -2185,17 +2128,7 @@ getAppSettingsWorker fucAndroid fucIOS = do
 
 getEpochLengthR :: Handler TypedContent
 getEpochLengthR =
-    runGRPC doGetEpochLength $ \(v :: Duration) -> do
-      let epochLengthObject = object ["epochLength" .= v]
+    runGRPCV2 getConsensusInfoV2 $ \cInfo -> do
+      let epochLengthObject = object ["epochLength" .= csEpochDuration cInfo]
       $(logInfo) "Successfully got epoch length."
       sendResponse $ toJSON epochLengthObject
-  where
-    doGetEpochLength = do
-      consensusStatus <- getConsensusStatus
-      return $ do
-        response <- consensusStatus
-        dur <- parseEither
-                    ( withObject "Consensus status" $ \v -> do
-                        v AE..: "epochDuration"
-                    ) $ grpcResponseVal response
-        Right $ GRPCResponse (grpcHeaders response) dur
