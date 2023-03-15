@@ -1763,15 +1763,10 @@ putGTUDropR :: Text -> Handler TypedContent
 putGTUDropR addrText = do
     Proxy{..} <- getYesod
     case gtuDropData of
-      -- VH/FIXME: Should this be 404?
       Nothing -> respond404Error $ EMErrorResponse NotFound
       Just gtuDropData' -> do
         addr <- doParseAccountAddress (Just "putGTUDrop") addrText
         -- Check that the account exists on the chain.
-        -- VH/FIXME: Should we check some notion of the account or its transactions
-        --           being finalized here?
-        --           In that case, should this be done by using getNextSequenceNumber
-        --           and asserting @nanAllFinal@ and aborting otherwise?
         runGRPC (getAccountInfo (AccAddress addr) LastFinal) $ \_ -> do
           connect rawRequestBody (sinkParserEither json') >>= \case
             Left _ -> tryDrop addr Normal gtuDropData' -- malformed or empty body, we assume normal drop.
@@ -1831,7 +1826,6 @@ putGTUDropR addrText = do
         "errorMessage" .= i18n i EMConfigurationError,
         "error" .= fromEnum InternalError
         ]
-    -- VH/FIXME: Should we supply the block address here from the calling function, or is it fine to use last finalized for each request?
     tryDrop addr dropType gtuDropData@GTUDropData{..} = do
       -- number of keys we need to sign with
       let numKeys = sum . map (length . snd) $ dropKeys
@@ -1857,7 +1851,7 @@ putGTUDropR addrText = do
             atrPayload = encodePayload payload
             atrHeader = TransactionHeader {
               thSender = dropAccount,
-              thNonce = nanNonce nonce, -- VH/FIXME: This is only reliable if all account transactions are finalized. Is this OK?
+              thNonce = nanNonce nonce,
               thPayloadSize = payloadSize atrPayload,
               thExpiry = TransactionTime $ currentTime + 300,
               ..
