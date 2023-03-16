@@ -2,6 +2,9 @@
 
 ## Unreleased changes
 
+- The `--grpc-authentication-token` option has been removed.
+- The wallet proxy now internally uses the V2 GRPC API to interact with the node.
+
 ## 0.25.1
 
 - Fix displaying `message` in contract updates. Use hex consistently.
