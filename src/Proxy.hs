@@ -577,7 +577,7 @@ doParseAccountAddress :: Text -> Text -> Handler AccountAddress
 doParseAccountAddress ctx addrText =
   case addressFromText addrText of
     Left _ -> do
-      $(logInfo) $
+      $(logOther "Trace") $
           "Invalid account address '"
         <> addrText
         <> "' for '" <> ctx <> "' request."
@@ -2081,5 +2081,5 @@ getEpochLengthR :: Handler TypedContent
 getEpochLengthR =
     runGRPC getConsensusInfo $ \cInfo -> do
       let epochLengthObject = object ["epochLength" .= csEpochDuration cInfo]
-      $(logInfo) "Successfully got epoch length."
+      $(logOther "Trace") "Successfully got epoch length."
       sendResponse $ toJSON epochLengthObject
