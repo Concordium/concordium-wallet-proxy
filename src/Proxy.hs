@@ -366,10 +366,10 @@ runGRPCWithNotFoundError errM c k = do
         StatusOk (GRPCResponse hds resultValue) -> do
           case resultValue of
             Left err -> do
-              $(logError) $ "Error processing the response payload: " <> Text.pack err
+              $(logError) $ "Error converting GRPC response payload: " <> Text.pack err
               i <- internationalize
               sendResponseStatus internalServerError500 $ object [
-                "errorMessage" .= i18n i (EMErrorResponse $ Yesod.InternalError "Error processing the response payload."),
+                "errorMessage" .= i18n i (EMErrorResponse $ Yesod.InternalError "Error converting GRPC response payload."),
                 "error" .= fromEnum InternalError
                 ]
             Right val -> do
@@ -803,6 +803,8 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                   return $ StatusOk $ GRPCResponse hds v
       withExchangeRate = runGRPC fetchUpdates
 
+-- |Returns a @ClientMonad@ which submits the given @BareBlockItem@.
+-- Returns @True@ if the @BareBlockItem@ was successfully submitted to the node and @False@ otherwise.
 doSendBlockItem :: MonadIO m => BareBlockItem -> ClientMonad m (GRPCResult (Either a Bool))
 doSendBlockItem item = do
   sbiRes <- sendBlockItem item
@@ -855,6 +857,7 @@ putTransferR =
                 Left err -> fail err
                 Right tx -> return tx
 
+-- |Return a @ClientMonad@ which gets a "simple" status of the transaction with the given @TransactionHash@.
 getSimpleTransactionStatus :: MonadIO m => I18n -> TransactionHash -> ClientMonad m (GRPCResult (Either String Value))
 getSimpleTransactionStatus i trHash = do
   res <- getBlockItemStatus trHash
@@ -1755,7 +1758,7 @@ instance FromJSON DropSchedule where
       return Normal
     else fail "Unsupported drop type."
 
--- |Return a handler which GTU drop.
+-- |Return a handler which performs a GTU drop to the specified account.
 -- Attempt to make a GTU drop to the account with the specified address if @gtuDropData@ was provided
 -- in the environment settings. Responds with a 404-status code if @gtuDropData@ was absent.
 putGTUDropR :: Text -> Handler TypedContent
@@ -1765,7 +1768,7 @@ putGTUDropR addrText = do
       Nothing -> respond404Error $ EMErrorResponse NotFound
       Just gtuDropData' -> do
         addr <- doParseAccountAddress "putGTUDrop" addrText
-        -- Check that the account exists on the chain.
+        -- Check that the account exists in a finalized block.
         runGRPC (getAccountInfo (AccAddress addr) LastFinal) $ \_ -> do
           connect rawRequestBody (sinkParserEither json') >>= \case
             Left _ -> tryDrop addr Normal gtuDropData' -- malformed or empty body, we assume normal drop.
@@ -2020,7 +2023,7 @@ getNextPaydayR =
         Right (Right rewardStatus, hds) -> do
           case rewardStatus of
             RewardStatusV0{} ->
-              return $ StatusOk $ GRPCResponse hds $ Left "Received unexpected 'RewardStatusV0' variant in respons payload, expected 'RewardStatusV1'."
+              return $ StatusOk $ GRPCResponse hds $ Left "Received unexpected 'RewardStatusV0' variant in response payload, expected 'RewardStatusV1'."
             RewardStatusV1{..} ->
               return $ StatusOk $ GRPCResponse hds $ Right rsNextPaydayTime
 
