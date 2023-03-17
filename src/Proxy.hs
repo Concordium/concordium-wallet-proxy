@@ -366,7 +366,7 @@ runGRPCWithNotFoundError errM c k = do
         StatusOk (GRPCResponse hds resultValue) -> do
           case resultValue of
             Left err -> do
-              $(logError) $ "No result was available: " <> Text.pack err
+              $(logError) $ "Error processing the response payload: " <> Text.pack err
               i <- internationalize
               sendResponseStatus internalServerError500 $ object [
                 "errorMessage" .= i18n i (EMErrorResponse $ Yesod.InternalError "Error processing the response payload."),
@@ -392,7 +392,7 @@ runGRPCWithNotFoundError errM c k = do
           $(logError) $ "Got non-OK GRPC status code '" <> Text.pack (show NOT_FOUND) <> "':" <> Text.pack err
           i <- internationalize
           sendResponseStatus notFound404 $ object [
-            "errorMessage" .= i18n i (fromMaybe (EMGRPCErrorResponse $ "Non-OK GRPC status code '" <> show NOT_FOUND <> "': " <> err) errM),
+            "errorMessage" .= i18n i (fromMaybe (EMGRPCErrorResponse $ "Requested object was not found: " <> err) errM),
             "error" .= fromEnum DataNotFound
             ]
         StatusNotOk (status, err) -> do
@@ -406,7 +406,7 @@ runGRPCWithNotFoundError errM c k = do
           $(logError) $ "GRPC call failed: " <> Text.pack err
           i <- internationalize
           sendResponseStatus badGateway502 $ object [
-            "errorMessage" .= i18n i (EMGRPCErrorResponse err),
+            "errorMessage" .= i18n i (EMGRPCErrorResponse "Unable to communicate with the node."),
             "error" .= fromEnum InternalError
             ]
   where
@@ -483,7 +483,7 @@ getRewardPeriodLength lfb = do
 -- also be present, since accounts cannot be deleted from the chain.
 getAccountBalanceR :: Text -> Handler TypedContent
 getAccountBalanceR addrText = do
-    accAddr <- doParseAccountAddress (Just "getAccountBalance") addrText
+    accAddr <- doParseAccountAddress "getAccountBalance" addrText
     runGRPC (doGetBal accAddr) $ \(lastFinInfo, bestInfo, nextPayday, epochDuration, lastFinBlock) -> do
       let
           getBal :: AccountInfo -> Either (Maybe Value) (Maybe RewardPeriodLength -> Value)
@@ -571,16 +571,16 @@ getAccountBalanceR addrText = do
 
 -- |Return a handler which attempts to parse the specified text as an @AccountAddress@.
 -- If the address could not be parsed, an error is logged and a HTTP response with status
--- code @400@ is returned. Optionally takes a string specifying the context from which the
--- function was called, in which case it will be included in the logged message.
-doParseAccountAddress :: Maybe Text -> Text -> Handler AccountAddress
+-- code @400@ is returned. Takes a string specifying the context from which the function
+-- was called, which will be included in the logged message.
+doParseAccountAddress :: Text -> Text -> Handler AccountAddress
 doParseAccountAddress ctx addrText =
   case addressFromText addrText of
     Left _ -> do
-      $(logError) $
+      $(logInfo) $
           "Invalid account address '"
         <> addrText
-        <> maybe "'."  (\r -> "' for '" <> r <> "' request.") ctx
+        <> "' for '" <> ctx <> "' request."
       respond400Error EMMalformedAddress RequestInvalid
     Right addr -> return addr
 
@@ -590,7 +590,7 @@ doParseAccountAddress ctx addrText =
 -- code @404@ is returned
 getAccountNonceR :: Text -> Handler TypedContent
 getAccountNonceR addrText = do
-  addr <- doParseAccountAddress (Just "getAccountNonce") addrText
+  addr <- doParseAccountAddress "getAccountNonce" addrText
   runGRPCWithNotFoundError (Just EMAccountDoesNotExist) (getNextSequenceNumber addr) $ \nonce -> do
       $(logInfo) "Successfully got nonce."
       sendResponse $ toJSON nonce
@@ -599,7 +599,7 @@ getAccountNonceR addrText = do
 -- Return @404@ status code if account does not exist in the best block at the moment.
 getAccountEncryptionKeyR :: Text -> Handler TypedContent
 getAccountEncryptionKeyR addrText = do
-  addr <- doParseAccountAddress (Just "getAccountEncryptionKey") addrText
+  addr <- doParseAccountAddress "getAccountEncryptionKey" addrText
   runGRPCWithNotFoundError (Just EMAccountDoesNotExist) (getAccountInfo (AccAddress addr) Best) $ \accInfo -> do
     let encryptionKey = aiAccountEncryptionKey accInfo
     $(logInfo) $ "Retrieved account encryption key for " <> addrText
@@ -1284,7 +1284,7 @@ getAccountTransactionsWorker includeMemos addrText = do
   i <- internationalize
   -- Get the canonical address of the account.
   let getAddress k = do
-        givenAddr <- doParseAccountAddress (Just "getAccountTransactionsWorker") addrText
+        givenAddr <- doParseAccountAddress "getAccountTransactionsWorker" addrText
         let doGetAccAddress = do
               ai <- getAccountInfo (AccAddress givenAddr) LastFinal
               return $ case ai of
@@ -1292,7 +1292,6 @@ getAccountTransactionsWorker includeMemos addrText = do
                   StatusOk $ GRPCResponse hds $ Right (aiAccountAddress accInfo)
                 StatusOk (GRPCResponse hds (Left err)) ->
                   StatusOk $ GRPCResponse hds $ Left err
-                -- FIXME: Headers should be propagated even on a non-OK status.
                 StatusNotOk (NOT_FOUND, _) ->
                   -- If the account does not exist on the node, assume the given address is the one we want.
                   StatusOk $ GRPCResponse [] $ Right givenAddr
@@ -1765,7 +1764,7 @@ putGTUDropR addrText = do
     case gtuDropData of
       Nothing -> respond404Error $ EMErrorResponse NotFound
       Just gtuDropData' -> do
-        addr <- doParseAccountAddress (Just "putGTUDrop") addrText
+        addr <- doParseAccountAddress "putGTUDrop" addrText
         -- Check that the account exists on the chain.
         runGRPC (getAccountInfo (AccAddress addr) LastFinal) $ \_ -> do
           connect rawRequestBody (sinkParserEither json') >>= \case
@@ -2000,7 +1999,7 @@ getChainParametersR =
       sendResponse v
   where
     doGetParameters = do
-      bcpRes <- getBlockChainParameters Best
+      bcpRes <- getBlockChainParameters LastFinal
       return $ case getResponseValueAndHeaders bcpRes of
         Left errRes -> errRes
         Right (Left err, hds) -> StatusOk $ GRPCResponse hds $ Left err
@@ -2014,20 +2013,20 @@ getNextPaydayR =
       sendResponse $ toJSON timestampObject
   where
     doGetParameters = do
-      rewardStatusRes <- getTokenomicsInfo Best
+      rewardStatusRes <- getTokenomicsInfo LastFinal
       case getResponseValueAndHeaders rewardStatusRes of
         Left errRes -> return errRes
         Right (Left err, hds) -> return $ StatusOk $ GRPCResponse hds $ Left err
         Right (Right rewardStatus, hds) -> do
           case rewardStatus of
-            RewardStatusV0{} -> -- This should not happen
-              return $ StatusOk $ GRPCResponse hds $ Left "Invariant error: GRPC payload conversion resulted in unexpected 'RewardStatusV0' variant."
+            RewardStatusV0{} ->
+              return $ StatusOk $ GRPCResponse hds $ Left "Received unexpected 'RewardStatusV0' variant in respons payload, expected 'RewardStatusV1'."
             RewardStatusV1{..} ->
               return $ StatusOk $ GRPCResponse hds $ Right rsNextPaydayTime
 
 getPassiveDelegationR :: Handler TypedContent
 getPassiveDelegationR =
-    runGRPC (getPassiveDelegationInfo Best) $ \v -> do
+    runGRPC (getPassiveDelegationInfo LastFinal) $ \v -> do
       $(logInfo) "Successfully got baker pool status."
       sendResponse $ toJSON v
 
