@@ -621,9 +621,8 @@ doParseAccountAddress ctx addrText =
     Right addr -> return addr
 
 -- |Returns a handler which attempts to get the next account nonce of the specified address.
--- If the address could not be parsed, an error is logged and a HTTP response with status
--- code @400@ is returned. If the account does not exist, a HTTP response with status
--- code @404@ is returned
+-- If the address could not be parsed, a HTTP response with status code @400@ is returned.
+-- If the account does not exist, a HTTP response with status code @404@ is returned
 getAccountNonceR :: Text -> Handler TypedContent
 getAccountNonceR addrText = do
   addr <- doParseAccountAddress "getAccountNonce" addrText
