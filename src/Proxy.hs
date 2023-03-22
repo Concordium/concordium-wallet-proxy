@@ -429,15 +429,15 @@ runGRPCWithCustomError resp c k = do
   case responseInfoOrErrorData of
     -- An error occurred. Send an error response, potentially overriding default values.
     Left (errType, status, errCode, errMsg) -> do
-      (status', errCode', errMsg') <- case resp of
-        -- Custom error information was provided.
-        Just (onErrType, statusM, errCodeM, errMsgM) ->
-          -- If the error type matches that of the provided, override with the provided error information.
-          if errType == onErrType
-            then return (fromMaybe status statusM, fromMaybe errCode errCodeM, fromMaybe errMsg errMsgM)
-            else return (status, errCode, errMsg)
-        -- Otherwise, no custom error information was provided.
-        Nothing -> return (status, errCode, errMsg)
+      let (status', errCode', errMsg') = case resp of
+            -- Custom error information was provided.
+            Just (onErrType, statusM, errCodeM, errMsgM) ->
+              -- If the error type matches that of the provided, override with the provided error information.
+              if errType == onErrType
+                then (fromMaybe status statusM, fromMaybe errCode errCodeM, fromMaybe errMsg errMsgM)
+                else (status, errCode, errMsg)
+            -- Otherwise, no custom error information was provided.
+            Nothing -> (status, errCode, errMsg)
       i <- internationalize
       sendResponseStatus status' $ object [
         "errorMessage" .= i18n i errMsg',
@@ -827,19 +827,20 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
               tty' -> respond400Error (EMParseError $ "Could not parse transaction type: " <> tty') RequestInvalid
       fetchUpdates :: ClientMonad IO (GRPCResult (Either String (EnergyRate, ProtocolVersion)))
       fetchUpdates = do
-        consensusInfoRes <- getConsensusInfo 
+        consensusInfoRes <- getConsensusInfo
         case getResponseValueAndHeaders consensusInfoRes of
             Left errRes -> return errRes
-            Right (csRes, _) -> do
-              chainParamsRes <- getBlockChainParameters Best
+            Right (csRes, hds) -> do
+              best <- getBlockHashHeader hds
+              chainParamsRes <- getBlockChainParameters (Given best)
               case getResponseValueAndHeaders chainParamsRes of
                 Left errRes -> return errRes
-                Right (cpksRes, hds) -> do
+                Right (cpksRes, hds') -> do
                   let v = do
                         cs <- csRes
                         (EChainParametersAndKeys ecpParams _) <- cpksRes
                         return (_erEnergyRate $ _cpExchangeRates ecpParams, csProtocolVersion cs)
-                  return $ StatusOk $ GRPCResponse hds v
+                  return $ StatusOk $ GRPCResponse hds' v
       withExchangeRate = runGRPC fetchUpdates
 
 -- |Returns a @ClientMonad@ which submits the given @BareBlockItem@.
