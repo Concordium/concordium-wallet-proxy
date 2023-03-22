@@ -427,9 +427,8 @@ runGRPCWithCustomError resp c k = do
           return $
             Left (RequestFailedError, badGateway502, InternalError, EMGRPCErrorResponse "Unable to communicate with the node.")
   case responseInfoOrErrorData of
-    -- Send an error response, potentially overriding default values.
+    -- An error occurred. Send an error response, potentially overriding default values.
     Left (errType, status, errCode, errMsg) -> do
-      -- Use the specied error types here.
       (status', errCode', errMsg') <- case resp of
         -- Custom error information was provided.
         Just (onErrType, statusM, errCodeM, errMsgM) ->
@@ -437,7 +436,7 @@ runGRPCWithCustomError resp c k = do
           if errType == onErrType
             then return (fromMaybe status statusM, fromMaybe errCode errCodeM, fromMaybe errMsg errMsgM)
             else return (status, errCode, errMsg)
-        -- No custom error information was provided.
+        -- Otherwise, no custom error information was provided.
         Nothing -> return (status, errCode, errMsg)
       i <- internationalize
       sendResponseStatus status' $ object [
