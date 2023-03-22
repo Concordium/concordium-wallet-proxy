@@ -332,18 +332,30 @@ data ErrorType =
   | RequestFailedError
   deriving (Eq)
 
--- |Run a GRPC request. Like @runGRPCWithCustomError@ with no provided error information.
+-- |Run a GRPC request.
+-- Return a handler which runs a given @ClientMonad@ with return type @GRPCResult (Either String a)@, and responds with an
+-- error if the returned @GRPCResult@ is not @StatusOk@, or if it is @StatusOk (Left err)@. Otherwise the return value of
+-- type @a@ is mapped into a @Handler TypedContent@ under the provided callback. 
+--
+-- Client errors are mapped to status @badGateway502@ and error code @InternalError@ and returned in the response. Otherwise,
+-- the GRPC call was successful and the following mapping applies:
+--
+-- - @StatusOk (Left err)@ maps to status @internalServerError500@ and error code @InternalError@.
+-- - @StatusInvalid@ maps to status @badGateway502@ and error code @InternalError@.
+-- - @StatusNotOk (NOT_FOUND, err)@ maps to status @notFound404@ and error code @DataNotFound@.
+-- - @StatusNotOk (a, err)@ maps to status @badGateway502@ and error code @InternalError@.
+-- - @RequestFailed@ maps to status @badGateway502@ and error code @InternalError@.
 runGRPC :: ClientMonad IO (GRPCResult (Either String a)) -> (a -> Handler TypedContent) -> Handler TypedContent
 runGRPC = runGRPCWithCustomError Nothing
 
--- |Run a GRPC request, but use the provided error information in the response.
+-- |Run a GRPC request and optionally provide a @ResponseOnError@ to override the default error responses.
 -- Return a handler which runs a given @ClientMonad@ with return type @GRPCResult (Either String a)@, and responds with an
 -- error if the returned @GRPCResult@ is not @StatusOk@, or if it is @StatusOk (Left err)@. Otherwise the return value of
--- type @a@ is mapped into a @Handler TypedContent@ under the provided callback. Optionally takes a @ResponseOnError@ value
--- specifying and optional status code, error message and error code to be returned in the error response. This will override
--- the default responses. By default client errors are mapped to status @badGateway502@, error code @InternalError@ and error
--- message @EMGRPCError@. This can be overridden by supplying @ClientError@ in a @ResponseOnError@. If the GRPC call
--- succeeded, and no client error occurred, then the following mapping applies:
+-- type @a@ is mapped into a @Handler TypedContent@ under the provided callback.
+--
+-- Client errors are mapped to status @badGateway502@ and error code @InternalError@ and returned the response by default.
+-- These values can be overridden by supplying the value @ClientError@ in the supplied @ResponseOnError@. Otherwise, the
+-- GRPC call was successful and the following default mapping applies:
 --
 -- - @StatusOk (Left err)@ maps to status @internalServerError500@ and error code @InternalError@. These can be overridden by
 --   supplying @InvariantError@ in the @ResponseOnError@.
@@ -355,6 +367,8 @@ runGRPC = runGRPCWithCustomError Nothing
 --   supplying @StatusNotOkError a@ in the @ResponseOnError@.
 -- - @RequestFailed@ maps to status @badGateway502@ and error code @InternalError@. These can be overridden by supplying
 --   @RequestFailedError@ in the @ResponseOnError@.
+-- These can be overridden by supplying @ClientError@ in a @ResponseOnError@. If the GRPC call
+-- succeeded, and no client error occurred, then
 runGRPCWithCustomError :: Maybe ResponseOnError
                        -> ClientMonad IO (GRPCResult (Either String a)) -- ^ The @ClientMonad@ to run.
                        -> (a -> Handler TypedContent) -- ^ The handler.
