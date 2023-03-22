@@ -325,11 +325,11 @@ type ResponseOnError = (ErrorType, Maybe Status, Maybe ErrorCode, Maybe ErrorMes
 
 -- |Error types that can occur internally in @runGRPCWithCustomError@.
 data ErrorType =
-    ClientError
-  | InvariantError
-  | StatusInvalidError
-  | StatusNotOkError GRPCStatusCode
-  | RequestFailedError
+    ClientError -- ^ A client error occurred.
+  | InvariantError -- ^ The GRPC invocation succeeded with status code 'OK', but some invariant error occurred, e.g. when converting the payload.
+  | StatusInvalidError -- ^ An invalid GRPC status code was present in the response.
+  | StatusNotOkError GRPCStatusCode -- ^ A non-'OK' GRPC status code was present in the response.
+  | RequestFailedError -- ^ The GRPC invocation failed.
   deriving (Eq)
 
 -- |Run a GRPC request.
