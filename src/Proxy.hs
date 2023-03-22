@@ -44,7 +44,7 @@ import qualified Data.Aeson as AE
 import Data.Conduit (connect)
 import qualified Data.Serialize as S
 import Data.Conduit.Attoparsec  (sinkParserEither)
-import Network.HTTP.Types (badRequest400, notFound404, badGateway502, internalServerError500)
+import Network.HTTP.Types (badRequest400, notFound404, badGateway502, internalServerError500, Status)
 import Network.GRPC.HTTP2.Types (GRPCStatusCode(..))
 import Yesod hiding (InternalError)
 import qualified Yesod
@@ -161,7 +161,6 @@ share [mkPersist sqlSettings] [persistLowerCase|
     token_id TokenId
     total_supply (Ratio Integer)
   |]
-
 
 data ErrorCode = InternalError | RequestInvalid | DataNotFound
     deriving(Eq, Show, Enum)
@@ -321,27 +320,46 @@ parseSetCookie' c =
 parseSetCookieExpires' :: BS.ByteString -> Maybe UTCTime
 parseSetCookieExpires' s = parseTimeM True defaultTimeLocale "%a, %d %b %Y %X GMT" $ BS8.unpack s
 
--- |Run a GRPC request.
--- Return a handler which runs a @ClientMonad@ with return type @GRPCResult (Either String a)@,
--- and responds with an error if the returned @GRPCResult@ is not @StatusOk@, or if it is
--- @StatusOk (Left err)@. Otherwise the return value of type @a@ is mapped into a @Handler TypedContent@
--- under the provided callback.
-runGRPC :: ClientMonad IO (GRPCResult (Either String a))
-        -> (a -> Handler TypedContent)
-        -> Handler TypedContent
-runGRPC = runGRPCWithNotFoundError Nothing
+-- |Type used to specify custom error information in responses for @runGRPCWithCustomError@.
+type ResponseOnError = (ErrorType, Maybe Status, Maybe ErrorCode, Maybe ErrorMessage)
 
--- |Run a GRPC request, but return a specified error when the GRPC response contained status code NOT_FOUND.
--- Return a handler which runs a @ClientMonad@ with return type @GRPCResult (Either String a)@,
--- and responds with an error if the returned @GRPCResult@ is not @StatusOk@, or if it is
--- @StatusOk (Left err)@. Otherwise the return value of type @a@ is mapped into a @Handler TypedContent@
--- under the provided callback.
-runGRPCWithNotFoundError ::
-           Maybe ErrorMessage -- ^ Error message to include in the response on GRPC status code NOT_FOUND.
-        -> ClientMonad IO (GRPCResult (Either String a)) 
-        -> (a -> Handler TypedContent)
-        -> Handler TypedContent
-runGRPCWithNotFoundError errM c k = do
+-- |Error types that can occur internally in @runGRPCWithCustomError@.
+data ErrorType =
+    ClientError
+  | InvariantError
+  | StatusInvalidError
+  | StatusNotOkError GRPCStatusCode
+  | RequestFailedError
+  deriving (Eq)
+
+-- |Run a GRPC request. Like @runGRPCWithCustomError@ with no provided error information.
+runGRPC :: ClientMonad IO (GRPCResult (Either String a)) -> (a -> Handler TypedContent) -> Handler TypedContent
+runGRPC = runGRPCWithCustomError Nothing
+
+-- |Run a GRPC request, but use the provided error information in the response.
+-- Return a handler which runs a given @ClientMonad@ with return type @GRPCResult (Either String a)@, and responds with an
+-- error if the returned @GRPCResult@ is not @StatusOk@, or if it is @StatusOk (Left err)@. Otherwise the return value of
+-- type @a@ is mapped into a @Handler TypedContent@ under the provided callback. Optionally takes a @ResponseOnError@ value
+-- specifying and optional status code, error message and error code to be returned in the error response. This will override
+-- the default responses. By default client errors are mapped to status @badGateway502@, error code @InternalError@ and error
+-- message @EMGRPCError@. This can be overridden by supplying @ClientError@ in a @ResponseOnError@. If the GRPC call
+-- succeeded, and no client error occurred, then the following mapping applies:
+--
+-- - @StatusOk (Left err)@ maps to status @internalServerError500@ and error code @InternalError@. These can be overridden by
+--   supplying @InvariantError@ in the @ResponseOnError@.
+-- - @StatusInvalid@ maps to status @badGateway502@ and error code @InternalError@. These can be overridden by supplying
+--   @StatusInvalidError@ in the @ResponseOnError@.
+-- - @StatusNotOk (NOT_FOUND, err)@ maps to status @notFound404@ and error code @DataNotFound@. These can be overridden by
+--   supplying @StatusNotOkError NOT_FOUND@ in the @ResponseOnError@.
+-- - @StatusNotOk (a, err)@ maps to status @badGateway502@ and error code @InternalError@. These can be overridden by
+--   supplying @StatusNotOkError a@ in the @ResponseOnError@.
+-- - @RequestFailed@ maps to status @badGateway502@ and error code @InternalError@. These can be overridden by supplying
+--   @RequestFailedError@ in the @ResponseOnError@.
+runGRPCWithCustomError :: Maybe ResponseOnError
+                       -> ClientMonad IO (GRPCResult (Either String a)) -- ^ The @ClientMonad@ to run.
+                       -> (a -> Handler TypedContent) -- ^ The handler.
+                       -> Handler TypedContent
+runGRPCWithCustomError resp c k = do
   cfg <- grpcEnvData <$> getYesod
   cookies <- getCookies
   let
@@ -349,29 +367,25 @@ runGRPCWithNotFoundError errM c k = do
     exHandler e = pure (Left $ show e, Map.empty)
   $(logOther "Trace") $ "Invoking queries with headers: " <> Text.pack (show cookies)
   -- Run the client and handle any client-related exceptions.
-  (res, updatedCookies) <- liftIO $ fmap (\(x, y) -> (left show x, y)) (runClientWithCookies cookies cfg c) `catch` exHandler
+  (clientRes, updatedCookies) <- liftIO $ fmap (\(x, y) -> (left show x, y)) (runClientWithCookies cookies cfg c) `catch` exHandler
   -- Process the result.
-  case res of
+  responseInfoOrErrorData <- case clientRes of
     -- A client error occurred.
     Left clientError -> do
       $(logError) $ "Internal error accessing GRPC endpoint: " <> Text.pack (show clientError)
-      i <- internationalize
-      sendResponseStatus badGateway502 $ object [
-        "errorMessage" .= i18n i EMGRPCError,
-        "error" .= fromEnum InternalError
-        ]
+      return $ Left (ClientError, badGateway502, InternalError, EMGRPCError)
     -- Otherwise the HTTP/2 request succeeded and there is a GRPC result.
-    Right r -> do
-      case r of
+    Right grpcResult -> do
+      case grpcResult of
+        -- GRPC response with status code 'OK'.
         StatusOk (GRPCResponse hds resultValue) -> do
           case resultValue of
+            -- Invariant error, e.g. converting the GRPC response payload to Haskell datatype.
             Left err -> do
-              $(logError) $ "Error converting GRPC response payload: " <> Text.pack err
-              i <- internationalize
-              sendResponseStatus internalServerError500 $ object [
-                "errorMessage" .= i18n i (EMErrorResponse $ Yesod.InternalError "Error converting GRPC response payload."),
-                "error" .= fromEnum InternalError
-                ]
+              $(logError) $ "Invariant error: " <> Text.pack err
+              return $
+                Left (InvariantError, internalServerError500, InternalError, EMErrorResponse $ Yesod.InternalError "Invariant error.")
+            -- Otherwise the conversion succeeded.
             Right val -> do
               $(logOther "Trace") $ "Got these response headers: " <> Text.pack (show hds)
               -- set cookies in response
@@ -380,35 +394,46 @@ runGRPCWithNotFoundError errM c k = do
               $(logOther "Trace") $ "Set-cookies headers to be included in yesod response to client: " <> Text.pack (show scs)
               -- update cookie map
               cacheSet $! Map.union updatedCookies cookies
-              k val
+              return $ Right $ k val
+        -- GRPC response with an invalid status code.
         StatusInvalid -> do
           $(logError) "Got invalid GRPC status code."
-          i <- internationalize
-          sendResponseStatus badGateway502 $ object [
-            "errorMessage" .= i18n i (EMGRPCErrorResponse "Invalid GRPC status code."),
-            "error" .= fromEnum InternalError
-            ]
+          return $
+            Left (StatusInvalidError, badGateway502, InternalError, EMGRPCErrorResponse "Invalid GRPC status code.")
+        -- GRPC response with status code 'NOT_FOUND'.
         StatusNotOk (NOT_FOUND, err) -> do
-          $(logError) $ "Got non-OK GRPC status code '" <> Text.pack (show NOT_FOUND) <> "':" <> Text.pack err
-          i <- internationalize
-          sendResponseStatus notFound404 $ object [
-            "errorMessage" .= i18n i (fromMaybe (EMGRPCErrorResponse $ "Requested object was not found: " <> err) errM),
-            "error" .= fromEnum DataNotFound
-            ]
+          return $
+            Left (StatusNotOkError NOT_FOUND, notFound404, DataNotFound, EMGRPCErrorResponse $ "Requested object was not found: " <> err)
+        -- GRPC response with valid non-'OK' status code.
         StatusNotOk (status, err) -> do
           $(logError) $ "Got non-OK GRPC status code '" <> Text.pack (show status) <> "': " <> Text.pack err
-          i <- internationalize
-          sendResponseStatus badGateway502 $ object [
-            "errorMessage" .= i18n i (EMGRPCErrorResponse $ "Non-OK GRPC status code '" <> show status <> "'."),
-            "error" .= fromEnum InternalError
-            ]
+          return $
+            Left (StatusNotOkError status, badGateway502, InternalError, EMGRPCErrorResponse $ "Non-OK GRPC status code '" <> show status <> "'.")
+        -- GRPC request failed in some other way.
         RequestFailed err -> do
           $(logError) $ "GRPC call failed: " <> Text.pack err
-          i <- internationalize
-          sendResponseStatus badGateway502 $ object [
-            "errorMessage" .= i18n i (EMGRPCErrorResponse "Unable to communicate with the node."),
-            "error" .= fromEnum InternalError
-            ]
+          return $
+            Left (RequestFailedError, badGateway502, InternalError, EMGRPCErrorResponse "Unable to communicate with the node.")
+  case responseInfoOrErrorData of
+    -- Send an error response, potentially overriding default values.
+    Left (errType, status, errCode, errMsg) -> do
+      -- Use the specied error types here.
+      (status', errCode', errMsg') <- case resp of
+        -- Custom error information was provided.
+        Just (onErrType, statusM, errCodeM, errMsgM) ->
+          -- If the error type matches that of the provided, override with the provided error information.
+          if errType == onErrType
+            then return (fromMaybe status statusM, fromMaybe errCode errCodeM, fromMaybe errMsg errMsgM)
+            else return (status, errCode, errMsg)
+        -- No custom error information was provided.
+        Nothing -> return (status, errCode, errMsg)
+      i <- internationalize
+      sendResponseStatus status' $ object [
+        "errorMessage" .= i18n i errMsg',
+        "error" .= fromEnum errCode'
+        ]
+    -- Otherwise everything went well, so we send a 200 response.
+    Right h -> h
   where
     getYesodCookieMap :: Handler (Map.Map BS.ByteString BS.ByteString)
     getYesodCookieMap = Map.fromList
@@ -591,7 +616,9 @@ doParseAccountAddress ctx addrText =
 getAccountNonceR :: Text -> Handler TypedContent
 getAccountNonceR addrText = do
   addr <- doParseAccountAddress "getAccountNonce" addrText
-  runGRPCWithNotFoundError (Just EMAccountDoesNotExist) (getNextSequenceNumber addr) $ \nonce -> do
+  runGRPCWithCustomError
+    (Just (StatusNotOkError NOT_FOUND, Nothing, Nothing, Just EMAccountDoesNotExist))
+    (getNextSequenceNumber addr) $ \nonce -> do
       $(logInfo) "Successfully got nonce."
       sendResponse $ toJSON nonce
 
@@ -600,11 +627,13 @@ getAccountNonceR addrText = do
 getAccountEncryptionKeyR :: Text -> Handler TypedContent
 getAccountEncryptionKeyR addrText = do
   addr <- doParseAccountAddress "getAccountEncryptionKey" addrText
-  runGRPCWithNotFoundError (Just EMAccountDoesNotExist) (getAccountInfo (AccAddress addr) Best) $ \accInfo -> do
-    let encryptionKey = aiAccountEncryptionKey accInfo
-    $(logInfo) $ "Retrieved account encryption key for " <> addrText
-            <> ": " <> Text.pack (show encryptionKey)
-    sendResponse (object [ "accountEncryptionKey" .= encryptionKey ])
+  runGRPCWithCustomError
+    (Just (StatusNotOkError NOT_FOUND, Nothing, Nothing, Just EMAccountDoesNotExist))
+      (getAccountInfo (AccAddress addr) Best) $ \accInfo -> do
+        let encryptionKey = aiAccountEncryptionKey accInfo
+        $(logInfo) $ "Retrieved account encryption key for " <> addrText
+                <> ": " <> Text.pack (show encryptionKey)
+        sendResponse (object [ "accountEncryptionKey" .= encryptionKey ])
 
 -- |Get the cost of a transaction, based on its type. The following query parameters are supported
 -- - "type", the type of the transaction. This is mandatory.
@@ -1231,7 +1260,9 @@ cis2InvokeHelper contractAddr entrypoint serializedParam nrg k = do
               case getResponseValueAndHeaders iInstanceRes of
                 Left errRes -> return errRes
                 Right (v, hds') -> return $ StatusOk $ GRPCResponse hds' $ fmap (Wasm.initContractName cName,) v
-    runGRPCWithNotFoundError (Just $ EMErrorResponse NotFound) query $ \case
+    runGRPCWithCustomError
+      (Just (StatusNotOkError NOT_FOUND, Nothing, Nothing, Just $ EMErrorResponse NotFound))
+      query $ \case
         (_, InvokeContract.Failure{..}) -> do
           $logDebug $ "Invoke failed: " <> Text.pack (show rcrReason)
           respond400Error EMInvokeFailed RequestInvalid
@@ -1769,14 +1800,16 @@ putGTUDropR addrText = do
       Just gtuDropData' -> do
         addr <- doParseAccountAddress "putGTUDrop" addrText
         -- Check that the account exists in a finalized block.
-        runGRPC (getAccountInfo (AccAddress addr) LastFinal) $ \_ -> do
-          connect rawRequestBody (sinkParserEither json') >>= \case
-            Left _ -> tryDrop addr Normal gtuDropData' -- malformed or empty body, we assume normal drop.
-            Right v -> case fromJSON v of
-                        AE.Success x -> tryDrop addr x gtuDropData'
-                        AE.Error e -> do
-                          $(logWarn) (Text.pack e)
-                          respond400Error EMConfigurationError RequestInvalid
+        runGRPCWithCustomError
+          (Just (StatusNotOkError NOT_FOUND, Just badRequest400, Just RequestInvalid, Just $ EMAccountNotFinal))
+          (getAccountInfo (AccAddress addr) LastFinal) $ \_ -> do
+            connect rawRequestBody (sinkParserEither json') >>= \case
+              Left _ -> tryDrop addr Normal gtuDropData' -- malformed or empty body, we assume normal drop.
+              Right v -> case fromJSON v of
+                          AE.Success x -> tryDrop addr x gtuDropData'
+                          AE.Error e -> do
+                            $(logWarn) (Text.pack e)
+                            respond400Error EMConfigurationError RequestInvalid
   where
     doGetAccInfo :: AccountAddress -> ClientMonad IO (GRPCResult (Either String (Nonce, Amount)))
     doGetAccInfo t = do
@@ -1934,8 +1967,8 @@ getTermsAndConditionsVersion = do
 
 getBakerPoolR :: Word64 -> Handler TypedContent
 getBakerPoolR bid =
-    runGRPCWithNotFoundError
-      (Just $ EMErrorResponse NotFound)
+    runGRPCWithCustomError
+      (Just (StatusNotOkError NOT_FOUND, Just notFound404, Nothing, Just $ EMErrorResponse NotFound))
       (do
         res <- getPoolInfo LastFinal (BakerId $ AccountIndex bid)
         case getResponseValueAndHeaders res of
@@ -2010,7 +2043,9 @@ getChainParametersR =
 
 getNextPaydayR :: Handler TypedContent
 getNextPaydayR =
-    runGRPC doGetParameters $ \(v :: UTCTime) -> do
+    runGRPCWithCustomError
+      (Just (InvariantError, Just badRequest400, Just RequestInvalid, Just $ EMErrorResponse $ InvalidArgs []))
+    doGetParameters $ \(v :: UTCTime) -> do
       let timestampObject = object ["nextPaydayTime" .= v]
       $(logInfo) "Successfully got next payday."
       sendResponse $ toJSON timestampObject

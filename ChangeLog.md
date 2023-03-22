@@ -2,6 +2,8 @@
 
 ## Unreleased changes
 
+## 0.26
+
 - The `--grpc-authentication-token` option has been removed.
 - The wallet proxy now uses the node GRPC API V2 to interact with the node.
   The port specified with the `--grpc-port` option must therefore now be one
