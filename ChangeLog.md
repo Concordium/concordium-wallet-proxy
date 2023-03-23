@@ -2,6 +2,15 @@
 
 ## Unreleased changes
 
+## 0.26
+
+- The `--grpc-authentication-token` option has been removed.
+- The wallet proxy now uses the node GRPC API V2 to interact with the node.
+  The port specified with the `--grpc-port` option must therefore now be one
+  on which this is served. Since the default port on which the V2 GRPC API is
+  served by a node is 20000, the default value of this option has been updated
+  to reflect this.
+
 ## 0.25.1
 
 - Fix displaying `message` in contract updates. Use hex consistently.
