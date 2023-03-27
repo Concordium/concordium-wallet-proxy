@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.26.1
+
+- Fix bug in transactionCost which expected a block hash header in response.
+
 ## 0.26
 
 - The `--grpc-authentication-token` option has been removed.
