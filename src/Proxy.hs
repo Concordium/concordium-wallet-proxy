@@ -897,29 +897,41 @@ putTransferR =
                 Left err -> fail err
                 Right tx -> return tx
 
--- |Return a @ClientMonad@ which gets a "simple" status of the transaction with the given @TransactionHash@.
-getSimpleTransactionStatus :: MonadIO m => I18n -> TransactionHash -> ClientMonad m (GRPCResult (Either String Value))
+-- |An error that is the result of converting a transaction status to a "simple"
+-- transaction status.
+data OutcomeConversionError =
+  -- |Unexpected outcome of a transaction, e.g., transfer without a "transferred" event.
+  OCEError !String
+  -- |The transaction type is not supported.
+  | OCEUnsupportedType
+
+-- |Return a @ClientMonad@ which gets a "simple" status of the transaction with
+-- the given @TransactionHash@. If the transaction status is not for one of the
+-- supported transactions 'Nothing' is returned.
+getSimpleTransactionStatus :: MonadIO m => I18n -> TransactionHash -> ClientMonad m (GRPCResult (Either String (Maybe Value)))
 getSimpleTransactionStatus i trHash = do
   res <- getBlockItemStatus trHash
   return $ case res of
     StatusOk (GRPCResponse hds val) -> case val of
       Right Received ->
-        StatusOk $ GRPCResponse hds $ Right $ object ["status" .= String "received"]
+        StatusOk $ GRPCResponse hds $ Right (Just (object ["status" .= String "received"]))
       Right (Committed outcomeMap) -> do
         let outcomes = mapM snd $ Map.toList outcomeMap
         case outcomesToPairs <$> outcomes of
             Nothing -> StatusOk $ GRPCResponse hds $ Left "Expected exactly one outcome for each committed transaction"
-            Just (Left err) -> StatusOk $ GRPCResponse hds $ Left err
-            Just (Right fields) -> StatusOk $ GRPCResponse hds $ Right $ object $ ["status" .= String "committed", "blockHashes" .= (fst <$> Map.toList outcomeMap)] <> fields
+            Just (Left (OCEError err)) -> StatusOk $ GRPCResponse hds $ Left err
+            Just (Left OCEUnsupportedType) -> StatusOk $ GRPCResponse hds $ Right Nothing
+            Just (Right fields) -> StatusOk $ GRPCResponse hds $ Right (Just (object $ ["status" .= String "committed", "blockHashes" .= (fst <$> Map.toList outcomeMap)] <> fields))
       Right (Finalized bh outcomeM) ->
         case outcomeM of
           Nothing -> StatusOk $ GRPCResponse hds $ Left "Expected exactly one outcome for a finalized transaction"
           Just outcome -> do
             case outcomeToPairs outcome of
-              Left err -> StatusOk $ GRPCResponse hds $ Left err
-              Right fields -> StatusOk $ GRPCResponse hds $ Right $ object $ ["status" .= String "finalized", "blockHashes" .= [bh :: BlockHash]] <> fields
+              Left (OCEError err) -> StatusOk $ GRPCResponse hds $ Left err
+              Left OCEUnsupportedType -> StatusOk $ GRPCResponse hds $ Right Nothing
+              Right fields -> StatusOk $ GRPCResponse hds $ Right (Just (object $ ["status" .= String "finalized", "blockHashes" .= [bh :: BlockHash]] <> fields))
       Left err -> StatusOk $ GRPCResponse hds $ Left err
-    StatusNotOk (NOT_FOUND, _) -> StatusOk $ GRPCResponse [] $ Right $ object ["status" .= String "absent"]
+    StatusNotOk (NOT_FOUND, _) -> StatusOk $ GRPCResponse [] $ Right (Just (object ["status" .= String "absent"]))
     StatusNotOk e -> StatusNotOk e
     StatusInvalid -> StatusInvalid
     RequestFailed err -> RequestFailed err
@@ -928,7 +940,7 @@ getSimpleTransactionStatus i trHash = do
     addMemo [TransferMemo memo] xs = ("memo" .= memo):xs
     addMemo _ xs = xs
 
-    outcomeToPairs :: TransactionSummary -> Either String [Pair]
+    outcomeToPairs :: TransactionSummary -> Either OutcomeConversionError [Pair]
     outcomeToPairs TransactionSummary{..} =
       (["transactionHash" .= tsHash
       , "sender" .= tsSender
@@ -941,7 +953,7 @@ getSimpleTransactionStatus i trHash = do
             TxSuccess [CredentialDeployed {}] ->
               return ["outcome" .= String "success"]
             es ->
-              Left $ "Unexpected outcome of credential deployment: " ++ show es
+              Left  . OCEError $ "Unexpected outcome of credential deployment: " ++ show es
         (viewTransfer -> True) -> -- transaction is either a transfer or transfer with memo
           case tsResult of
             TxSuccess (Transferred{etTo = AddressAccount addr,..}:mmemo) ->
@@ -951,7 +963,7 @@ getSimpleTransactionStatus i trHash = do
                  "amount" .= etAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
-              Left $ "Unexpected outcome of simple transfer: " ++ show es
+              Left  . OCEError $ "Unexpected outcome of simple transfer: " ++ show es
         (viewEncryptedTransfer -> True) ->
           case tsResult of
             TxSuccess (EncryptedAmountsRemoved{..}:NewEncryptedAmount{..}:mmemo) ->
@@ -964,7 +976,7 @@ getSimpleTransactionStatus i trHash = do
                  "newSelfEncryptedAmount" .= earNewAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
-              Left $ "Unexpected outcome of encrypted transfer: " ++ show es
+              Left . OCEError $ "Unexpected outcome of encrypted transfer: " ++ show es
         TSTAccountTransaction (Just TTTransferToPublic) ->
           case tsResult of
             TxSuccess [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}] ->
@@ -976,7 +988,7 @@ getSimpleTransactionStatus i trHash = do
                       "amountAdded" .= aabdAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
-              Left $ "Unexpected outcome of secret to public transfer: " ++ show es
+              Left . OCEError $ "Unexpected outcome of secret to public transfer: " ++ show es
         TSTAccountTransaction (Just TTTransferToEncrypted) ->
           case tsResult of
             TxSuccess [EncryptedSelfAmountAdded{..}] ->
@@ -986,7 +998,7 @@ getSimpleTransactionStatus i trHash = do
                       "amountSubtracted" .= eaaAmount]
             TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
             es ->
-              Left $ "Unexpected outcome of public to secret transfer: " ++ show es
+              Left . OCEError $ "Unexpected outcome of public to secret transfer: " ++ show es
         TSTAccountTransaction (Just TTConfigureBaker) ->
             case tsResult of
                 TxSuccess ((eventBakerId -> (Just bid)) : _) ->
@@ -1005,7 +1017,7 @@ getSimpleTransactionStatus i trHash = do
                             "moduleRef" .= mref]
                 TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
                 es ->
-                  Left $ "Unexpected outcome of deploying module: " ++ show es
+                  Left . OCEError $ "Unexpected outcome of deploying module: " ++ show es
         TSTAccountTransaction (Just TTInitContract) ->
             case tsResult of
                 TxSuccess [ContractInitialized{..}] ->
@@ -1018,23 +1030,23 @@ getSimpleTransactionStatus i trHash = do
                             "events" .= ecEvents]
                 TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
                 es ->
-                  Left $ "Unexpected outcome of initialized module: " ++ show es
+                  Left . OCEError $ "Unexpected outcome of initialized module: " ++ show es
         TSTAccountTransaction (Just TTUpdate) ->
             case tsResult of
                 TxSuccess events ->
                     case eventsToMaybeValues events of
                       Just vals -> return ["outcome" .= String "success",
                                            "trace" .= vals]
-                      Nothing -> Left $ "Unexpected outcome of updating module: " ++ show tsResult
+                      Nothing -> Left . OCEError $ "Unexpected outcome of updating module: " ++ show tsResult
                 TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
         _ -> case tsResult of
               TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
-              _ -> Left "Unsupported transaction type for simple statuses."
-    outcomesToPairs :: [TransactionSummary] -> Either String [Pair]
+              _ -> Left OCEUnsupportedType
+    outcomesToPairs :: [TransactionSummary] -> Either OutcomeConversionError [Pair]
     outcomesToPairs l = do
       outcomes <- mapM outcomeToPairs l
       case outcomes of
-        [] -> Left "Expected at least one transaction outcome for a committed transaction"
+        [] -> Left  . OCEError $ "Expected at least one transaction outcome for a committed transaction"
         [o] -> return o
         (h:r)
           | all (h==) r -> return h
@@ -1103,7 +1115,9 @@ getSubmissionStatusR submissionId =
     Nothing -> respond400Error EMMalformedTransaction RequestInvalid
     Just txHash -> do
       i <- internationalize
-      runGRPC (getSimpleTransactionStatus i txHash) (sendResponse . toJSON)
+      runGRPC (getSimpleTransactionStatus i txHash) $ \case
+        Nothing -> respond400Error (EMGRPCErrorResponse "Unsupported transaction type for simple statuses.") RequestInvalid
+        Just v -> sendResponse v
 
 -- |Whether to include memos in formatted account transactions or not.
 -- If not, transfers with memos are mapped to a corresponding transfer without a memo.
