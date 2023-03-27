@@ -897,8 +897,12 @@ putTransferR =
                 Left err -> fail err
                 Right tx -> return tx
 
+-- |An error that is the result of converting a transaction status to a "simple"
+-- transaction status.
 data OutcomeConversionError =
+  -- |Unexpected outcome of a transaction, e.g., transfer without a "transferred" event.
   OCEError !String
+  -- |The transaction type is not supported.
   | OCEUnsupportedType
 
 -- |Return a @ClientMonad@ which gets a "simple" status of the transaction with
