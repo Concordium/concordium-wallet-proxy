@@ -830,9 +830,8 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
         consensusInfoRes <- getConsensusInfo
         case getResponseValueAndHeaders consensusInfoRes of
             Left errRes -> return errRes
-            Right (csRes, hds) -> do
-              best <- getBlockHashHeader hds
-              chainParamsRes <- getBlockChainParameters (Given best)
+            Right (csRes, _) -> do
+              chainParamsRes <- getBlockChainParameters Best
               case getResponseValueAndHeaders chainParamsRes of
                 Left errRes -> return errRes
                 Right (cpksRes, hds') -> do
