@@ -12,7 +12,6 @@ import Concordium.Types.Updates
 import Internationalization.Base
 import Concordium.ID.Types
 import Concordium.Wasm (contractAndFunctionName, initContractName)
-import qualified Concordium.Wasm as Wasm
 
 translation :: I18n
 translation = I18n {..}
@@ -34,6 +33,11 @@ translation = I18n {..}
         i18nUpdateTransaction UpdateRootKeys = "Update root keys"
         i18nUpdateTransaction UpdateLevel1Keys = "Update level 1 keys"
         i18nUpdateTransaction UpdateLevel2Keys = "Update level 2 keys"
+        i18nUpdateTransaction UpdateTimeoutParameters = "Update timeout parameters"
+        i18nUpdateTransaction UpdateMinBlockTime = "Update minimum block time"
+        i18nUpdateTransaction UpdateBlockEnergyLimit = "Update block energy limit"
+        i18nUpdateTransaction UpdateFinalizationCommitteeParameters = "Update finalization committee parameters"
+        
 
         i18nRejectReason ModuleNotWF = "Typechecking of module failed"
         i18nRejectReason (ModuleHashAlreadyExists mref) = "A module with the hash " <> descrModule mref <> " already exists"
@@ -131,7 +135,7 @@ translation = I18n {..}
           ", contract= " <> cname <>
           ", function= " <> fname <>
           ", amount=" <> descrAmount euAmount <>
-          ", message=" <> Text.pack (show (Wasm.parameter euMessage))
+          ", message=" <> Text.pack (show euMessage)
         i18nEvent (Transferred sender amt recv) = "Transferred " <> descrAmount amt <> " from " <> descrAddress sender <> " to " <> descrAddress recv
         i18nEvent (AccountCreated addr) = "Created account with address " <> descrAccount addr
         i18nEvent (CredentialDeployed _ addr) = "Deployed a credential to account " <> descrAccount addr
