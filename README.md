@@ -27,6 +27,7 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/nextPayday`: get the next payday.
 * `GET /v0/passiveDelegation`: get the status of passive delegation.
 * `GET /v0/appSettings`: get the up-to-date status of the old mobile wallet app.
+* `GET /v0/termsAndConditionsVersion`: get the latest version of terms and conditions.
 * `GET /v1/appSettings`: get the up-to-date status of the new mobile wallet app.
 * `GET /v0/epochLength`: get the epoch length in milliseconds.
 * `GET /v0/CIS2Tokens/{index}/{subindex}`: get the list of tokens on a given contract address.
