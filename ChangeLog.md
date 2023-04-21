@@ -2,6 +2,11 @@
 
 ## Unreleased changes
 
+## 0.26.2
+
+- Revert behaviour in case when accounts are not found. Now, again, a status
+  code 200 is returned with an empty object.
+
 ## 0.26.1
 
 - Fix bug in transactionCost which expected a block hash header in response.
