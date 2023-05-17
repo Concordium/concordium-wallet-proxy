@@ -2,6 +2,11 @@
 
 ## Unreleased changes
 
+## 0.26.3
+
+- Fix bug in CIS2TokenBalance endpoint where it sometimes returned an incorrect
+  amount due to overflow.
+
 ## 0.26.2
 
 - Revert behaviour in case when accounts are not found. Now, again, a status

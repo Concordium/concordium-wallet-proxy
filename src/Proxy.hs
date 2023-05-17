@@ -1317,7 +1317,7 @@ getTokenBalance = TokenBalance <$> go 0 0
             n <- S.getWord8
             if testBit n 7
                 then go (acc + (toInteger (clearBit n 7) `shiftL` (s * 7))) (s + 1)
-                else return $! (acc + toInteger (n `shiftL` (s * 7)))
+                else return $! (acc + toInteger n `shiftL` (s * 7))
 
 newtype Checksum = Checksum Hash
     deriving (Show, AE.ToJSON, AE.FromJSON, S.Serialize)
