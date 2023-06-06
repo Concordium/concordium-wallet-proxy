@@ -12,6 +12,7 @@ db_user="${DB_USER}"
 db_name="${DB_NAME}"
 db_password="${DB_PASSWORD}"
 drop_account_file="${DROP_ACCOUNT_FILE-}"
+drop_amount="${DROP_AMOUNT-}"
 forced_update_config_file_v0="${FORCED_UPDATE_CONFIG_FILE_V0-}"
 forced_update_config_file_v1="${FORCED_UPDATE_CONFIG_FILE_V1-}"
 use_tls="${USE_TLS:-false}" # if the variable is not set default to not enabling TLS
@@ -39,6 +40,9 @@ if [ -n "${tc_url}" ]; then
 fi
 if [ -n "${drop_account_file}" ]; then
 	args+=( --drop-account "${drop_account_file}" )
+fi
+if [ -n "${drop_amount}" ]; then
+	args+=( --drop-amount "${drop_amount}" )
 fi
 if [ -n "${forced_update_config_file_v0}" ]; then
 	args+=( --forced-update-config-v0 "${forced_update_config_file_v0}" )

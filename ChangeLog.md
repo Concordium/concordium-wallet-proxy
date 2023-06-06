@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.27.0
+
+- Make the CCD drop amount configurable at runtime via the `--drop-amount` option.
+
 ## 0.26.3
 
 - Fix bug in CIS2TokenBalance endpoint where it sometimes returned an incorrect

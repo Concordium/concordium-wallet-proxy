@@ -203,9 +203,11 @@ data Proxy = Proxy {
 -- | Data needed for GTU drops.
 data GTUDropData = GTUDropData {
   -- | Account to send GTU from.
-  dropAccount :: AccountAddress,
+  dropAccount :: !AccountAddress,
   -- | Keys for the account.
-  dropKeys :: [(CredentialIndex, [(KeyIndex, KeyPair)])]
+  dropKeys :: [(CredentialIndex, [(KeyIndex, KeyPair)])],
+  -- | Amount to drop
+  dropAmount :: !Amount
   }
 
 -- Database table for GTU drop
@@ -1779,10 +1781,6 @@ eventSubtotal self evts = case catMaybes $ eventCost <$> evts of
     eventCost AmountAddedByDecryption{..} = Just $ toInteger aabdAmount
     eventCost EncryptedSelfAmountAdded{..} = Just $ - toInteger eaaAmount
     eventCost _ = Nothing
-
-dropAmount :: Amount
-dropAmount = 2000000000
-
 
 {- | Try to execute a GTU drop to the given account.
 
