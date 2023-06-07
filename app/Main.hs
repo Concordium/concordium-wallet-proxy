@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
@@ -20,7 +21,9 @@ import System.Exit(die)
 import Control.Monad.Except
 import Control.Monad.Logger
 
+import Concordium.Types (Amount)
 import Concordium.Client.GRPC2
+import Concordium.Client.Utils
 import Concordium.Client.Commands as CMDS
 import Concordium.Client.Runner.Helper (getResponseValue)
 import Concordium.Common.Version (Version(Version), Versioned(Versioned))
@@ -35,6 +38,8 @@ data ProxyConfig = ProxyConfig {
   pcDBConnString :: ByteString,
   -- | Account file used for GTU drop. Only used on stagenet and testnet.
   pcGTUAccountFile :: Maybe FilePath,
+  -- | Amount to give out.
+  pcGTUDropAmount :: Amount,
   pcForcedUpdateConfigFileV0 :: Maybe FilePath,
   pcForcedUpdateConfigFileV1 :: Maybe FilePath,
   pcHealthTolerance :: Maybe Int,
@@ -54,6 +59,7 @@ parser = info (helper <*> parseProxyConfig)
       <*> optional (option auto (long "grpc-timeout" <> value 15 <> showDefault <> metavar "TIMEOUT" <> help "Timeout of grpc requests."))
       <*> strOption (long "db" <> metavar "STR" <> help "database connection string")
       <*> optional (strOption (long "drop-account" <> metavar "FILE" <> help "file with CCD drop account credentials (only used for stagenet and testnet)."))
+      <*> option (eitherReader amountFromStringInform) (long "drop-amount" <> metavar "CCD-AMOUNT" <> help "Amount of CCDs to drop upon request." <> value 2_000_000_000)
       <*> optional (strOption (long "forced-update-config-v0" <> metavar "FILE" <> help "file with the version configuration for forced app updates for the old mobile wallet."))
       <*> optional (strOption (long "forced-update-config-v1" <> metavar "FILE" <> help "file with the version configuration for forced app updates for the new mobile wallet."))
       <*> optional (option auto (long "health-tolerance" <> metavar "SECONDS" <> help "the maximum tolerated age of the last final block in seconds before the health query returns false."))
@@ -133,7 +139,7 @@ main = do
       let getKeys = AE.eitherDecode' keyFile >>= AE.parseEither accountParser
       case getKeys of
         Left err -> die $ "Cannot parse account keys: " ++ show err
-        Right (dropAccount, dropKeys) -> return . Just $ GTUDropData {..}
+        Right (dropAccount, dropKeys) -> return . Just $ GTUDropData {dropAmount = pcGTUDropAmount, ..}
   (forcedUpdateConfigIOSV0, forcedUpdateConfigAndroidV0) <- case pcForcedUpdateConfigFileV0 of
     Nothing -> return (Nothing, Nothing)
     Just fuFileName -> do
