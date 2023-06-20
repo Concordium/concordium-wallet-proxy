@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.28.0
+
+- Support node version 6.
+
 ## 0.27.0
 
 - Make the CCD drop amount configurable at runtime via the `--drop-amount` option.
