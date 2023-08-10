@@ -261,6 +261,9 @@ In case of success the response will always be a JSON object with required field
 - `"cost"` which is an Amount of CCD this transfer will cost at current
   conversion rates
 - `"energy"` which is the energy that is required be supplied for execution of this transaction.
+An optional `success` field is present if the `type` is `update` and all of the
+supplied parameters are provided. It is a boolean that indicates whether the
+contract invocation was successful, or whether contract execution failed.
 
 In case of invalid parameters the response will be as described in the [errors section](#errors) with the following possible status codes
 - `400` if any of the following apply
