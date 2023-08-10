@@ -1,12 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Internationalization(I18n, ErrorMessage(..), module Internationalization) where
+
+module Internationalization (I18n, ErrorMessage (..), module Internationalization) where
 
 import Control.Arrow
 import Data.Text (Text)
 import Yesod
 
-import Concordium.Types.Transactions
 import Concordium.Types.Execution
+import Concordium.Types.Transactions
 
 import Internationalization.Base
 import qualified Internationalization.En as En
@@ -50,8 +51,8 @@ getTranslation _ = Nothing
 internationalize :: MonadHandler m => m I18n
 internationalize = do
     langs <- languages
-    let (langCode, tr) = case [(c,t) | (c, Just t) <- (id &&& getTranslation) <$> langs] of
+    let (langCode, tr) = case [(c, t) | (c, Just t) <- (id &&& getTranslation) <$> langs] of
             [] -> defaultTranslation
-            (h:_) -> h
+            (h : _) -> h
     replaceOrAddHeader "Content-Language" langCode
     return tr

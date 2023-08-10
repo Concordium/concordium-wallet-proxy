@@ -1,14 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
+
 module Internationalization.Base where
 
-import Data.Text(Text,pack)
+import Data.Text (Text, pack)
 import qualified Data.Text as Text
 import Yesod
 
-import qualified Concordium.Wasm as Wasm
 import Concordium.Types
-import Concordium.Types.Transactions
 import Concordium.Types.Execution
+import Concordium.Types.Transactions
+import qualified Concordium.Wasm as Wasm
 
 import Concordium.Crypto.EncryptedTransfers
 import Concordium.ID.Types (CredentialType)
@@ -16,10 +17,10 @@ import Concordium.Types.Updates (UpdateType)
 
 data ErrorMessage
     = EMErrorResponse ErrorResponse
-    | EMGRPCError
-    -- ^The wallet proxy could not communicate with the node.
-    | EMGRPCErrorResponse String
-    -- ^The node rejected the call. We report the reason back to the caller.
+    | -- |The wallet proxy could not communicate with the node.
+      EMGRPCError
+    | -- |The node rejected the call. We report the reason back to the caller.
+      EMGRPCErrorResponse String
     | EMParseError String
     | EMCredentialRejected
     | EMTransactionRejected
@@ -30,24 +31,24 @@ data ErrorMessage
     | EMConfigurationError
     | EMAccountDoesNotExist
     | EMMissingParameter
-    -- |Action not supported due to the node protocol version not allowing it.
-    | EMActionNotCurrentlySupported
-    -- |Invoke of a smart contract failed with the given reason.
-    | EMInvokeFailed
-    -- |Expected a V1 contract, but a V0 contract was given.
-    | EMV0Contract
+    | -- |Action not supported due to the node protocol version not allowing it.
+      EMActionNotCurrentlySupported
+    | -- |Invoke of a smart contract failed with the given reason.
+      EMInvokeFailed
+    | -- |Expected a V1 contract, but a V0 contract was given.
+      EMV0Contract
 
-data I18n = I18n {
-    i18nRejectReason :: RejectReason -> Text,
-    i18nTransactionType :: TransactionType -> Text,
-    i18nMalformedTransaction :: Text,
-    i18nDeployCredential :: CredentialType -> Text,
-    i18nEvent :: Event -> Text,
-    i18nUpdateTransaction :: UpdateType -> Text,
-    i18nSpecialEvent :: SpecialTransactionOutcome -> Text,
-    i18nSpecialOutcomeShort :: SpecialTransactionOutcome -> Text,
-    i18nErrorMessage :: ErrorMessage -> Text
-}
+data I18n = I18n
+    { i18nRejectReason :: RejectReason -> Text,
+      i18nTransactionType :: TransactionType -> Text,
+      i18nMalformedTransaction :: Text,
+      i18nDeployCredential :: CredentialType -> Text,
+      i18nEvent :: Event -> Text,
+      i18nUpdateTransaction :: UpdateType -> Text,
+      i18nSpecialEvent :: SpecialTransactionOutcome -> Text,
+      i18nSpecialOutcomeShort :: SpecialTransactionOutcome -> Text,
+      i18nErrorMessage :: ErrorMessage -> Text
+    }
 
 descrModule :: ModuleRef -> Text
 descrModule = Text.pack . show
@@ -82,7 +83,7 @@ descrBakerId = Text.pack . show
 descrBaker :: BakerId -> AccountAddress -> Text
 descrBaker bid addr = Text.pack $ show addr ++ " (ID " ++ show bid ++ ")"
 
-descrDelegator :: DelegatorId  -> AccountAddress -> Text
+descrDelegator :: DelegatorId -> AccountAddress -> Text
 descrDelegator did addr = Text.pack $ show addr ++ " (ID " ++ show did ++ ")"
 
 descrAddress :: Address -> Text
