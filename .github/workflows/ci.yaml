@@ -9,6 +9,7 @@ on:
     - '**.hs'
     - 'stack*.yaml'
     - 'package.yaml'
+    - 'fourmolu.yaml'
     - 'deps/concordium-client'
 
   push:
@@ -19,6 +20,7 @@ on:
     - '**.hs'
     - 'stack*.yaml'
     - 'package.yaml'
+    - 'fourmolu.yaml'
     - 'deps/concordium-client'
 
   workflow_dispatch: # allow manual trigger
@@ -28,7 +30,26 @@ env:
   GHC: 9.2.7
 
 jobs:
-  concordium-client-build-and-test:
+  fourmolu:
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.draft }}
+
+    steps:
+    - name: Download fourmolu
+      uses: supplypike/setup-bin@v1
+      with:
+        uri: 'https://github.com/fourmolu/fourmolu/releases/download/v0.9.0.0/fourmolu-0.9.0.0-linux-x86_64'
+        name: 'fourmolu'
+        version: '0.9.0.0'
+
+    - name: Checkout project
+      uses: actions/checkout@v2
+
+    - name: Run fourmolu
+      run: |
+        fourmolu --color always --mode check $(git ls-files '*.hs')
+
+  concordium-wallet-proxy-build:
     runs-on: ubuntu-latest
     if: ${{ !github.event.pull_request.draft }}
     steps:
