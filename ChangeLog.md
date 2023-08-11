@@ -2,6 +2,12 @@
 
 ## Unreleased changes
 
+## 0.29.0
+
+- Add an optional `success` field to the `transactionStatus` response if
+  querying the cost of a contract update. It indicates whether contract
+  execution succeeded.
+
 ## 0.28.0
 
 - Support node version 6.

@@ -684,6 +684,11 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
         let costResponse energyCost = sendResponse $ object ["cost" .= computeCost rate energyCost
                                       , "energy" .= energyCost
                                       ]
+        let costResponseWithIndication (success, energyCost) = sendResponse $ object [
+              "cost" .= computeCost rate energyCost,
+              "energy" .= energyCost,
+              "success" .= success
+              ]
         case transactionType of
             Nothing -> respond400Error EMMissingParameter RequestInvalid
             Just tty -> case Text.unpack tty of
@@ -803,9 +808,12 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                       return $ case getResponseValueAndHeaders res of
                             Left errRes -> errRes
                             Right (Left err, hds) -> StatusOk $ GRPCResponse hds $ Left err
-                            Right (Right iiRes, hds) -> StatusOk $ GRPCResponse hds $ Right $ InvokeContract.rcrUsedEnergy iiRes
-                let cost invokeCost = minCost + (invokeCost + (invokeCost * fromIntegral energyBufferPercentage) `div` 100)
-                runGRPC getInvokeCost $ costResponse . cost
+                            Right (Right execRes, hds) -> StatusOk $ GRPCResponse hds $ Right execRes
+                let cost res = (success, minCost + (invokeCost + (invokeCost * fromIntegral energyBufferPercentage) `div` 100))
+                        where (success, invokeCost) = case res of
+                                InvokeContract.Success{..} -> (True, rcrUsedEnergy)
+                                InvokeContract.Failure{..} -> (False, rcrUsedEnergy)
+                runGRPC getInvokeCost $ costResponseWithIndication . cost
               "updateBakerKeys" -> do
                 let pSize = bakerConfigurePayloadSize False False False True Nothing False False False
                 costResponse $ bakerConfigureEnergyCostWithKeys pSize numSignatures
