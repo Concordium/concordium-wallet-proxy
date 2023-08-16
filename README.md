@@ -1291,7 +1291,8 @@ towards the `needsUpdate` outcome.
   
 The range format is fairly standard, e.g., `5,8,10-17` denotes app versions `5`,
 `8`, and `10` to `17`, inclusive. Infinite ranges are also supported, e.g.,
-`-64` denotes the range of versions `<= 64`.
+`-64` denotes the range of versions `<= 64`, and `64-` denotes the range of
+versions `>= 64`.
 
 The `suggestUrl` field is optional, and if not present the default is taken to
 be `url`. The `suggestUrl` value is used if the version mathches the suggested
