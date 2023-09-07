@@ -83,7 +83,7 @@ parser =
                 (Just (fromMaybe 15 timeout))
                 (CMDS.grpcUseTls backend)
 
-runSite :: YesodDispatch site => Int -> Network.Wai.Handler.Warp.HostPreference -> site -> IO ()
+runSite :: (YesodDispatch site) => Int -> Network.Wai.Handler.Warp.HostPreference -> site -> IO ()
 runSite port host site = do
     toWaiApp site
         >>= Network.Wai.Handler.Warp.runSettings
@@ -122,7 +122,7 @@ forcedUpdateConfigParser = AE.withObject "Forced update config" $ \v -> do
                         | null fucForceUpdate && null fucSuggestUpdate -> return Nothing
                         | otherwise -> fail "If non-empty ranges are given then the URL must be present."
 
--- |Return a pair of configurations, the first one for iOS the second for Android.
+-- | Return a pair of configurations, the first one for iOS the second for Android.
 forcedUpdateParser :: AE.Value -> AE.Parser (Maybe ForcedUpdateConfig, Maybe ForcedUpdateConfig)
 forcedUpdateParser = AE.withObject "Forced update configs" $ \v -> do
     ios <-

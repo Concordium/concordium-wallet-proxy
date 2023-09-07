@@ -112,16 +112,16 @@ import qualified Logging
 
 import Internationalization
 
--- |Wraps a type for persistent storage via a serialization to a 'ByteString'.
+-- | Wraps a type for persistent storage via a serialization to a 'ByteString'.
 newtype ByteStringSerialized a = ByteStringSerialized {unBSS :: a}
     deriving newtype (S.Serialize, Eq, Ord, Show)
 
-instance S.Serialize a => PersistField (ByteStringSerialized a) where
+instance (S.Serialize a) => PersistField (ByteStringSerialized a) where
     toPersistValue = toPersistValue . S.encode
     fromPersistValue =
         fromPersistValue >=> left (Text.pack) . S.decode
 
-instance S.Serialize a => PersistFieldSql (ByteStringSerialized a) where
+instance (S.Serialize a) => PersistFieldSql (ByteStringSerialized a) where
     sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy BS.ByteString)
 
 newtype TokenId = TokenId {unTokenId :: BSS.ShortByteString}
@@ -141,11 +141,11 @@ instance S.Serialize TokenId where
         len <- S.getWord8
         TokenId <$> S.getShortByteString (fromIntegral len)
 
--- |Create the database schema and types. This creates a type called @Summary@
--- with fields @summaryBlock@, @summaryTimestamp@, etc., with stated types.
--- Analogously for @Entry@ and @ContractEntry@.
--- It also generates functionality for retrieving these records from SQL rows.
--- This is used below when querying the database (e.g., Entity Summary).
+-- | Create the database schema and types. This creates a type called @Summary@
+--  with fields @summaryBlock@, @summaryTimestamp@, etc., with stated types.
+--  Analogously for @Entry@ and @ContractEntry@.
+--  It also generates functionality for retrieving these records from SQL rows.
+--  This is used below when querying the database (e.g., Entity Summary).
 share
     [mkPersist sqlSettings]
     [persistLowerCase|
@@ -177,17 +177,17 @@ share
 data ErrorCode = InternalError | RequestInvalid | DataNotFound
     deriving (Eq, Show, Enum)
 
--- |Configuration for the @appSettings@ endpoint that returns whether the app is
--- out of date or not.
+-- | Configuration for the @appSettings@ endpoint that returns whether the app is
+--  out of date or not.
 data ForcedUpdateConfig = ForcedUpdateConfig
-    { -- |Versions which are forced to update.
+    { -- | Versions which are forced to update.
       fucForceUpdate :: ![Range Word],
-      -- |Versions which are going to be suggested to update.
+      -- | Versions which are going to be suggested to update.
       fucSuggestUpdate :: ![Range Word],
-      -- |URL to update to if the version matches any of the above.
+      -- | URL to update to if the version matches any of the above.
       fucURL :: !String,
-      -- |URL to update to if the version matches the suggest update but not the
-      -- forced update.
+      -- | URL to update to if the version matches the suggest update but not the
+      --  forced update.
       fucSuggestURL :: !String
     }
     deriving (Show)
@@ -205,11 +205,11 @@ data Proxy = Proxy
       ipInfo :: Value,
       ipInfoV1 :: Value,
       logLevel :: Logging.LogLevel,
-      -- |The version of terms and conditions currently in effect.
-      -- If not set the endpoint termsAndConditionsVersion is disabled.
+      -- | The version of terms and conditions currently in effect.
+      --  If not set the endpoint termsAndConditionsVersion is disabled.
       tcVersion :: Maybe String,
-      -- |URL to access terms and conditions.
-      -- If not set the endpoint termsAndConditionsVersion is disabled.
+      -- | URL to access terms and conditions.
+      --  If not set the endpoint termsAndConditionsVersion is disabled.
       tcUrl :: Maybe String
     }
 
@@ -298,8 +298,8 @@ instance Yesod Proxy where
 
     shouldLogIO Proxy{..} _source level = return $ Logging.convertLogLevel level <= logLevel
 
--- |Terminate execution and respond with 400 status code with the given error
--- description.
+-- | Terminate execution and respond with 400 status code with the given error
+--  description.
 respond400Error :: ErrorMessage -> ErrorCode -> Handler a
 respond400Error err code = do
     i <- internationalize
@@ -309,8 +309,8 @@ respond400Error err code = do
               "error" .= fromEnum code
             ]
 
--- |Terminate execution and respond with 404 status code with the given error
--- description.
+-- | Terminate execution and respond with 404 status code with the given error
+--  description.
 respond404Error :: ErrorMessage -> Handler a
 respond404Error err = do
     i <- internationalize
@@ -320,7 +320,7 @@ respond404Error err = do
               "error" .= fromEnum DataNotFound
             ]
 
--- |Parse a set-cookie header string.
+-- | Parse a set-cookie header string.
 parseSetCookie' :: BS.ByteString -> SetCookie
 parseSetCookie' c =
     let sc = parseSetCookie c
@@ -338,14 +338,14 @@ parseSetCookie' c =
 -- ^ we need this for addHeader since expiry fails to parse in
 -- parseSetCookie in Web.Cookie.
 
--- |Parse a setcookie expires field.
+-- | Parse a setcookie expires field.
 parseSetCookieExpires' :: BS.ByteString -> Maybe UTCTime
 parseSetCookieExpires' s = parseTimeM True defaultTimeLocale "%a, %d %b %Y %X GMT" $ BS8.unpack s
 
--- |Type used to specify custom error information in responses for @runGRPCWithCustomError@.
+-- | Type used to specify custom error information in responses for @runGRPCWithCustomError@.
 type ResponseOnError = (ErrorType, Maybe Status, Maybe ErrorCode, Maybe ErrorMessage)
 
--- |Error types that can occur internally in @runGRPCWithCustomError@.
+-- | Error types that can occur internally in @runGRPCWithCustomError@.
 data ErrorType
     = -- | A client error occurred.
       ClientError
@@ -359,41 +359,41 @@ data ErrorType
       RequestFailedError
     deriving (Eq)
 
--- |Run a GRPC request.
--- Return a handler which runs a given @ClientMonad@ with return type @GRPCResult (Either String a)@, and responds with an
--- error if the returned @GRPCResult@ is not @StatusOk@, or if it is @StatusOk (Left err)@. Otherwise the return value of
--- type @a@ is mapped into a @Handler TypedContent@ under the provided callback.
+-- | Run a GRPC request.
+--  Return a handler which runs a given @ClientMonad@ with return type @GRPCResult (Either String a)@, and responds with an
+--  error if the returned @GRPCResult@ is not @StatusOk@, or if it is @StatusOk (Left err)@. Otherwise the return value of
+--  type @a@ is mapped into a @Handler TypedContent@ under the provided callback.
 --
--- Client errors are mapped to status @badGateway502@ and error code @InternalError@ and returned in the response. Otherwise,
--- the GRPC call was successful and the following mapping applies:
+--  Client errors are mapped to status @badGateway502@ and error code @InternalError@ and returned in the response. Otherwise,
+--  the GRPC call was successful and the following mapping applies:
 --
--- - @StatusOk (Left err)@ maps to status @internalServerError500@ and error code @InternalError@.
--- - @StatusInvalid@ maps to status @badGateway502@ and error code @InternalError@.
--- - @StatusNotOk (NOT_FOUND, err)@ maps to status @notFound404@ and error code @DataNotFound@.
--- - @StatusNotOk (a, err)@ maps to status @badGateway502@ and error code @InternalError@.
--- - @RequestFailed@ maps to status @badGateway502@ and error code @InternalError@.
+--  - @StatusOk (Left err)@ maps to status @internalServerError500@ and error code @InternalError@.
+--  - @StatusInvalid@ maps to status @badGateway502@ and error code @InternalError@.
+--  - @StatusNotOk (NOT_FOUND, err)@ maps to status @notFound404@ and error code @DataNotFound@.
+--  - @StatusNotOk (a, err)@ maps to status @badGateway502@ and error code @InternalError@.
+--  - @RequestFailed@ maps to status @badGateway502@ and error code @InternalError@.
 runGRPC :: ClientMonad IO (GRPCResult (Either String a)) -> (a -> Handler TypedContent) -> Handler TypedContent
 runGRPC = runGRPCWithCustomError Nothing
 
--- |Run a GRPC request and optionally provide a @ResponseOnError@ to override the default error responses.
--- Return a handler which runs a given @ClientMonad@ with return type @GRPCResult (Either String a)@, and responds with an
--- error if the returned @GRPCResult@ is not @StatusOk@, or if it is @StatusOk (Left err)@. Otherwise the return value of
--- type @a@ is mapped into a @Handler TypedContent@ under the provided callback.
+-- | Run a GRPC request and optionally provide a @ResponseOnError@ to override the default error responses.
+--  Return a handler which runs a given @ClientMonad@ with return type @GRPCResult (Either String a)@, and responds with an
+--  error if the returned @GRPCResult@ is not @StatusOk@, or if it is @StatusOk (Left err)@. Otherwise the return value of
+--  type @a@ is mapped into a @Handler TypedContent@ under the provided callback.
 --
--- Client errors are mapped to status @badGateway502@ and error code @InternalError@ and returned in the response by default.
--- These values can be overridden by supplying the value @ClientError@ in the supplied @ResponseOnError@. Otherwise, the
--- GRPC call was successful and the following default mapping applies:
+--  Client errors are mapped to status @badGateway502@ and error code @InternalError@ and returned in the response by default.
+--  These values can be overridden by supplying the value @ClientError@ in the supplied @ResponseOnError@. Otherwise, the
+--  GRPC call was successful and the following default mapping applies:
 --
--- - @StatusOk (Left err)@ maps to status @internalServerError500@ and error code @InternalError@. These can be overridden by
---   supplying @InvariantError@ in the @ResponseOnError@.
--- - @StatusInvalid@ maps to status @badGateway502@ and error code @InternalError@. These can be overridden by supplying
---   @StatusInvalidError@ in the @ResponseOnError@.
--- - @StatusNotOk (NOT_FOUND, err)@ maps to status @notFound404@ and error code @DataNotFound@. These can be overridden by
---   supplying @StatusNotOkError NOT_FOUND@ in the @ResponseOnError@.
--- - @StatusNotOk (a, err)@ maps to status @badGateway502@ and error code @InternalError@. These can be overridden by
---   supplying @StatusNotOkError a@ in the @ResponseOnError@.
--- - @RequestFailed@ maps to status @badGateway502@ and error code @InternalError@. These can be overridden by supplying
---   @RequestFailedError@ in the @ResponseOnError@.
+--  - @StatusOk (Left err)@ maps to status @internalServerError500@ and error code @InternalError@. These can be overridden by
+--    supplying @InvariantError@ in the @ResponseOnError@.
+--  - @StatusInvalid@ maps to status @badGateway502@ and error code @InternalError@. These can be overridden by supplying
+--    @StatusInvalidError@ in the @ResponseOnError@.
+--  - @StatusNotOk (NOT_FOUND, err)@ maps to status @notFound404@ and error code @DataNotFound@. These can be overridden by
+--    supplying @StatusNotOkError NOT_FOUND@ in the @ResponseOnError@.
+--  - @StatusNotOk (a, err)@ maps to status @badGateway502@ and error code @InternalError@. These can be overridden by
+--    supplying @StatusNotOkError a@ in the @ResponseOnError@.
+--  - @RequestFailed@ maps to status @badGateway502@ and error code @InternalError@. These can be overridden by supplying
+--    @RequestFailedError@ in the @ResponseOnError@.
 runGRPCWithCustomError ::
     Maybe ResponseOnError ->
     -- | The @ClientMonad@ to run.
@@ -494,13 +494,13 @@ runGRPCWithCustomError resp c k = do
             Just scm -> return $ Map.union scm yCookieMap
 
 firstPaydayAfter ::
-    -- |Time of the next payday.
+    -- | Time of the next payday.
     UTCTime ->
-    -- |Duration of an epoch
+    -- | Duration of an epoch
     Duration ->
-    -- |Length of a payday.
+    -- | Length of a payday.
     RewardPeriodLength ->
-    -- |Time at which the cooldown expires.
+    -- | Time at which the cooldown expires.
     UTCTime ->
     UTCTime
 firstPaydayAfter nextPayday epochDuration (RewardPeriodLength ep) cooldownEnd =
@@ -512,7 +512,7 @@ firstPaydayAfter nextPayday epochDuration (RewardPeriodLength ep) cooldownEnd =
                 mult :: Word = ceiling (timeDiff / paydayLength)
             in  Clock.addUTCTime (fromIntegral mult * paydayLength) nextPayday
 
-pendingChangeToJSON :: AE.KeyValue kv => Maybe UTCTime -> Duration -> Maybe RewardPeriodLength -> StakePendingChange' UTCTime -> [kv]
+pendingChangeToJSON :: (AE.KeyValue kv) => Maybe UTCTime -> Duration -> Maybe RewardPeriodLength -> StakePendingChange' UTCTime -> [kv]
 pendingChangeToJSON _ _ _ NoChange = []
 pendingChangeToJSON mnextPaydayTime epochDuration mrewardEpochs (ReduceStake amt eff) =
     [ "pendingChange"
@@ -549,15 +549,15 @@ getRewardPeriodLength lfb = do
                             SChainParametersV2 -> Just $ ecpParams ^. cpTimeParameters . supportedOParam . tpRewardPeriodLength
                     return $ StatusOk $ GRPCResponse hds $ Right rpLength
 
--- |Get the balance of an account. If successful, the result is a JSON
--- object consisting of the following optional fields:
---   * "finalizedBalance": the balance of the account at the last finalized block
---   * "currentBalance": the balance of the account at the current best block
--- If neither field is present, the account does not currently exist.
--- The "finalizedBalance" field will be absent if the account has been created since
--- the last finalized block.
--- If the "finalizedBalance" field is present, then the "currentBalance" field will
--- also be present, since accounts cannot be deleted from the chain.
+-- | Get the balance of an account. If successful, the result is a JSON
+--  object consisting of the following optional fields:
+--    * "finalizedBalance": the balance of the account at the last finalized block
+--    * "currentBalance": the balance of the account at the current best block
+--  If neither field is present, the account does not currently exist.
+--  The "finalizedBalance" field will be absent if the account has been created since
+--  the last finalized block.
+--  If the "finalizedBalance" field is present, then the "currentBalance" field will
+--  also be present, since accounts cannot be deleted from the chain.
 getAccountBalanceR :: Text -> Handler TypedContent
 getAccountBalanceR addrText = do
     accAddr <- doParseAccountAddress "getAccountBalance" addrText
@@ -659,10 +659,10 @@ getAccountBalanceR addrText = do
                                     RewardStatusV0{} -> return $ StatusOk $ GRPCResponse rsHds $ Right (Just (lastFinInfo, bestInfo, Nothing, epochDuration, lastFinBlock))
                                     RewardStatusV1{..} -> return $ StatusOk $ GRPCResponse rsHds $ Right (Just (lastFinInfo, bestInfo, Just rsNextPaydayTime, epochDuration, lastFinBlock))
 
--- |Return a handler which attempts to parse the specified text as an @AccountAddress@.
--- If the address could not be parsed, an error is logged and a HTTP response with status
--- code @400@ is returned. Takes a string specifying the context from which the function
--- was called, which will be included in the logged message.
+-- | Return a handler which attempts to parse the specified text as an @AccountAddress@.
+--  If the address could not be parsed, an error is logged and a HTTP response with status
+--  code @400@ is returned. Takes a string specifying the context from which the function
+--  was called, which will be included in the logged message.
 doParseAccountAddress :: Text -> Text -> Handler AccountAddress
 doParseAccountAddress ctx addrText =
     case addressFromText addrText of
@@ -676,9 +676,9 @@ doParseAccountAddress ctx addrText =
             respond400Error EMMalformedAddress RequestInvalid
         Right addr -> return addr
 
--- |Returns a handler which attempts to get the next account nonce of the specified address.
--- If the address could not be parsed, a HTTP response with status code @400@ is returned.
--- If the account does not exist, a HTTP response with status code @404@ is returned
+-- | Returns a handler which attempts to get the next account nonce of the specified address.
+--  If the address could not be parsed, a HTTP response with status code @400@ is returned.
+--  If the account does not exist, a HTTP response with status code @404@ is returned
 getAccountNonceR :: Text -> Handler TypedContent
 getAccountNonceR addrText = do
     addr <- doParseAccountAddress "getAccountNonce" addrText
@@ -689,8 +689,8 @@ getAccountNonceR addrText = do
             $(logInfo) "Successfully got nonce."
             sendResponse $ toJSON nonce
 
--- |Get the account encryption key at the best block.
--- Return @404@ status code if account does not exist in the best block at the moment.
+-- | Get the account encryption key at the best block.
+--  Return @404@ status code if account does not exist in the best block at the moment.
 getAccountEncryptionKeyR :: Text -> Handler TypedContent
 getAccountEncryptionKeyR addrText = do
     addr <- doParseAccountAddress "getAccountEncryptionKey" addrText
@@ -706,11 +706,11 @@ getAccountEncryptionKeyR addrText = do
                     <> Text.pack (show encryptionKey)
             sendResponse (object ["accountEncryptionKey" .= encryptionKey])
 
--- |Get the cost of a transaction, based on its type. The following query parameters are supported
--- - "type", the type of the transaction. This is mandatory.
--- - "numSignatures", the number of signatures on the transaction, defaults to 1 if not present.
--- - "memoSize", the size of the transfer memo. Only supported if the node is running protocol version 2 or higher, and
---   only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
+-- | Get the cost of a transaction, based on its type. The following query parameters are supported
+--  - "type", the type of the transaction. This is mandatory.
+--  - "numSignatures", the number of signatures on the transaction, defaults to 1 if not present.
+--  - "memoSize", the size of the transfer memo. Only supported if the node is running protocol version 2 or higher, and
+--    only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
 getTransactionCostR :: Handler TypedContent
 getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
     numSignatures <- fromMaybe "1" <$> lookupGetParam "numSignatures"
@@ -929,9 +929,9 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                         return $ StatusOk $ GRPCResponse hds' v
     withExchangeRate = runGRPC fetchUpdates
 
--- |Returns a @ClientMonad@ which submits the given @BareBlockItem@.
--- Returns @True@ if the @BareBlockItem@ was successfully submitted to the node and @False@ otherwise.
-doSendBlockItem :: MonadIO m => BareBlockItem -> ClientMonad m (GRPCResult (Either a Bool))
+-- | Returns a @ClientMonad@ which submits the given @BareBlockItem@.
+--  Returns @True@ if the @BareBlockItem@ was successfully submitted to the node and @False@ otherwise.
+doSendBlockItem :: (MonadIO m) => BareBlockItem -> ClientMonad m (GRPCResult (Either a Bool))
 doSendBlockItem item = do
     sbiRes <- sendBlockItem item
     case getResponseValueAndHeaders sbiRes of
@@ -956,7 +956,7 @@ putCredentialR =
                                 sendResponse (object ["submissionId" .= (getHash (CredentialDeployment vValue) :: TransactionHash)])
                     | otherwise -> respond400Error (EMParseError $ "Invalid version number " ++ show vVersion) RequestInvalid
 
--- |Use the serialize instance of a type to deserialize
+-- | Use the serialize instance of a type to deserialize
 decodeBase16 :: (MonadFail m) => Text.Text -> m BS.ByteString
 decodeBase16 t =
     case BS16.decode (Text.encodeUtf8 t) of
@@ -987,18 +987,18 @@ putTransferR =
                     Left err -> fail err
                     Right tx -> return tx
 
--- |An error that is the result of converting a transaction status to a "simple"
--- transaction status.
+-- | An error that is the result of converting a transaction status to a "simple"
+--  transaction status.
 data OutcomeConversionError
-    = -- |Unexpected outcome of a transaction, e.g., transfer without a "transferred" event.
+    = -- | Unexpected outcome of a transaction, e.g., transfer without a "transferred" event.
       OCEError !String
-    | -- |The transaction type is not supported.
+    | -- | The transaction type is not supported.
       OCEUnsupportedType
 
--- |Return a @ClientMonad@ which gets a "simple" status of the transaction with
--- the given @TransactionHash@. If the transaction status is not for one of the
--- supported transactions 'Nothing' is returned.
-getSimpleTransactionStatus :: MonadIO m => I18n -> TransactionHash -> ClientMonad m (GRPCResult (Either String (Maybe Value)))
+-- | Return a @ClientMonad@ which gets a "simple" status of the transaction with
+--  the given @TransactionHash@. If the transaction status is not for one of the
+--  supported transactions 'Nothing' is returned.
+getSimpleTransactionStatus :: (MonadIO m) => I18n -> TransactionHash -> ClientMonad m (GRPCResult (Either String (Maybe Value)))
 getSimpleTransactionStatus i trHash = do
     res <- getBlockItemStatus trHash
     return $ case res of
@@ -1229,7 +1229,7 @@ viewScheduledTransfer (TSTAccountTransaction (Just TTTransferWithSchedule)) = Tr
 viewScheduledTransfer (TSTAccountTransaction (Just TTTransferWithScheduleAndMemo)) = True
 viewScheduledTransfer _ = False
 
--- |Get the baker ID from a baker configuration event
+-- | Get the baker ID from a baker configuration event
 eventBakerId :: Event -> Maybe BakerId
 eventBakerId BakerAdded{..} = Just ebaBakerId
 eventBakerId BakerRemoved{..} = Just ebrBakerId
@@ -1250,8 +1250,8 @@ getSubmissionStatusR submissionId =
                 Nothing -> respond400Error (EMGRPCErrorResponse "Unsupported transaction type for simple statuses.") RequestInvalid
                 Just v -> sendResponse v
 
--- |Whether to include memos in formatted account transactions or not.
--- If not, transfers with memos are mapped to a corresponding transfer without a memo.
+-- | Whether to include memos in formatted account transactions or not.
+--  If not, transfers with memos are mapped to a corresponding transfer without a memo.
 data IncludeMemos = IncludeMemo | ExcludeMemo
     deriving (Eq, Show)
 
@@ -1297,9 +1297,9 @@ getCIS2Tokens index subindex = do
             ]
                 <> maybeToList (("from" .=) <$> mfrom)
 
--- |Lookup token ids from the tokenId query parameter, and attempt to parse
--- them as a comma-separated list. Responds with an invalid request error
--- in case parsing is unsuccessful.
+-- | Lookup token ids from the tokenId query parameter, and attempt to parse
+--  them as a comma-separated list. Responds with an invalid request error
+--  in case parsing is unsuccessful.
 parseCIS2TokenIds :: Handler [TokenId]
 parseCIS2TokenIds = do
     param <-
@@ -1383,20 +1383,20 @@ getCIS2TokenBalance index subindex addrText = do
                                     urls
                                 )
 
--- |Helper to handle the boilerplate common to both the metadata and balance of
--- queries. It handles getting the address of a contract, handling errors in
--- invocations, and calling the respective handlers for the specific query via
--- the continuation.
+-- | Helper to handle the boilerplate common to both the metadata and balance of
+--  queries. It handles getting the address of a contract, handling errors in
+--  invocations, and calling the respective handlers for the specific query via
+--  the continuation.
 cis2InvokeHelper ::
-    -- |Address of the contract to invoke.
+    -- | Address of the contract to invoke.
     ContractAddress ->
-    -- |Its entrypoint.
+    -- | Its entrypoint.
     Wasm.EntrypointName ->
-    -- |The parameter to invoke
+    -- | The parameter to invoke
     Wasm.Parameter ->
-    -- |Energy to allow for the invoke.
+    -- | Energy to allow for the invoke.
     Energy ->
-    -- |Continuation applied to the name of the contract (without @_init@) and the return value produced by a successful result.
+    -- | Continuation applied to the name of the contract (without @_init@) and the return value produced by a successful result.
     (Text -> BS8.ByteString -> Handler TypedContent) ->
     HandlerFor Proxy TypedContent
 cis2InvokeHelper contractAddr entrypoint serializedParam nrg k = do
@@ -1434,15 +1434,15 @@ cis2InvokeHelper contractAddr entrypoint serializedParam nrg k = do
                     Nothing -> respond400Error EMV0Contract RequestInvalid
                     Just rv -> k name rv
 
--- |Balance of a CIS2 token.
+-- | Balance of a CIS2 token.
 newtype TokenBalance = TokenBalance Integer
     deriving (Show)
 
 instance AE.ToJSON TokenBalance where
     toJSON (TokenBalance i) = toJSON (show i)
 
--- |A custom parser for a CIS2 token that uses LEB128 to parse the token
--- balance.
+-- | A custom parser for a CIS2 token that uses LEB128 to parse the token
+--  balance.
 getTokenBalance :: S.Get TokenBalance
 getTokenBalance = TokenBalance <$> go 0 0
   where
@@ -1457,11 +1457,11 @@ getTokenBalance = TokenBalance <$> go 0 0
 newtype Checksum = Checksum Hash
     deriving (Show, AE.ToJSON, AE.FromJSON, S.Serialize)
 
--- |CIS2 token metadata URL.
+-- | CIS2 token metadata URL.
 data MetadataURL = MetadataURL
-    { -- |Metadata URL.
+    { -- | Metadata URL.
       muURL :: !Text,
-      -- |Optional checksum (sha256) of the contents of the metadata URL.
+      -- | Optional checksum (sha256) of the contents of the metadata URL.
       muChecksum :: Maybe Hash
     }
 
@@ -1475,7 +1475,7 @@ getMetadataUrl = do
             muChecksum <- getMaybe S.get
             return MetadataURL{..}
 
--- |List transactions for the account.
+-- | List transactions for the account.
 getAccountTransactionsWorker :: IncludeMemos -> Text -> Handler TypedContent
 getAccountTransactionsWorker includeMemos addrText = do
     i <- internationalize
@@ -1590,11 +1590,11 @@ getAccountTransactionsWorker includeMemos addrText = do
                             extractedType
                                 E.==. E.val (Just "encryptedAmountTransfer")
                                 E.||. extractedType
-                                E.==. E.val (Just "transferToEncrypted")
+                                    E.==. E.val (Just "transferToEncrypted")
                                 E.||. extractedType
-                                E.==. E.val (Just "transferToPublic")
+                                    E.==. E.val (Just "transferToPublic")
                                 E.||. extractedType
-                                E.==. E.val (Just "encryptedAmountTransferWithMemo")
+                                    E.==. E.val (Just "encryptedAmountTransferWithMemo")
                 Just _ -> Nothing
 
         rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
@@ -1649,15 +1649,15 @@ getAccountTransactionsWorker includeMemos addrText = do
                                 ]
                                     <> (maybe [] (\sid -> ["from" .= sid]) startId)
 
--- |Convert a timestamp to seconds since the unix epoch. A timestamp can be a fractional number, e.g., 17.5.
+-- | Convert a timestamp to seconds since the unix epoch. A timestamp can be a fractional number, e.g., 17.5.
 timestampToFracSeconds :: Timestamp -> Double
 timestampToFracSeconds Timestamp{..} = fromRational (toInteger tsMillis Rational.% 1000)
 
--- |Format a transaction affecting an account.
+-- | Format a transaction affecting an account.
 formatEntry ::
-    -- |Whether to include memos in the enties. If not,
-    -- then transfers with memos are mapped to
-    -- corresponding transfers without memos.
+    -- | Whether to include memos in the enties. If not,
+    --  then transfers with memos are mapped to
+    --  corresponding transfers without memos.
     IncludeMemos ->
     -- | Whether to include a raw reject reason for account transactions or not.
     Bool ->
@@ -1901,14 +1901,14 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                     <> encryptedCost
     return $ object $ ["id" .= key] <> blockDetails <> transactionDetails
 
--- |Check whether the two addresses point to the same account. In protocol
--- versions 1 and 2 this should just be account address equality, and in
--- protocol version 3 it should technically be checking on the chain as well
--- since in principle there might be accounts which clash on the first 29 bytes.
--- But that will not happen in practice and if it does before we update to P3 we
--- can update the proxy with a more expensive and complex check. After we have
--- successfully updated to P3 and there have been no clashes, there will be no
--- further possible clashes.
+-- | Check whether the two addresses point to the same account. In protocol
+--  versions 1 and 2 this should just be account address equality, and in
+--  protocol version 3 it should technically be checking on the chain as well
+--  since in principle there might be accounts which clash on the first 29 bytes.
+--  But that will not happen in practice and if it does before we update to P3 we
+--  can update the proxy with a more expensive and complex check. After we have
+--  successfully updated to P3 and there have been no clashes, there will be no
+--  further possible clashes.
 sameAccount :: AccountAddress -> AccountAddress -> Bool
 sameAccount a1 a2 = accountAddressEmbed a1 == accountAddressEmbed a2
 
@@ -1977,9 +1977,9 @@ eventSubtotal self evts = case catMaybes $ eventCost <$> evts of
 
 -- | Try to execute a GTU drop to the given account.
 --
---1.  Lookup the account on the chain
+-- 1.  Lookup the account on the chain
 --        - If it's not finalized, return 404 Not Found (account not final)
---2.  Lookup the account in the database
+-- 2.  Lookup the account in the database
 --    A. If there is an entry,
 --        A.1. query the send account's last finalized nonce and balance
 --          - on failure, return 502 Bad Gateway (configuration error)
@@ -2007,9 +2007,9 @@ instance FromJSON DropSchedule where
                     then return Normal
                     else fail "Unsupported drop type."
 
--- |Return a handler which performs a GTU drop to the specified account.
--- Attempt to make a GTU drop to the account with the specified address if @gtuDropData@ was provided
--- in the environment settings. Responds with a 404-status code if @gtuDropData@ was absent.
+-- | Return a handler which performs a GTU drop to the specified account.
+--  Attempt to make a GTU drop to the account with the specified address if @gtuDropData@ was provided
+--  in the environment settings. Responds with a 404-status code if @gtuDropData@ was absent.
 putGTUDropR :: Text -> Handler TypedContent
 putGTUDropR addrText = do
     Proxy{..} <- getYesod
@@ -2327,9 +2327,9 @@ getAppSettingsV1 = do
     getAppSettingsWorker forcedUpdateConfigAndroidV1 forcedUpdateConfigIOSV1
 
 getAppSettingsWorker ::
-    -- |Forced update configuration for the Android variant of the app.
+    -- | Forced update configuration for the Android variant of the app.
     Maybe ForcedUpdateConfig ->
-    -- |Forced update configuration for the IOS variant of the app.
+    -- | Forced update configuration for the IOS variant of the app.
     Maybe ForcedUpdateConfig ->
     Handler TypedContent
 getAppSettingsWorker fucAndroid fucIOS = do

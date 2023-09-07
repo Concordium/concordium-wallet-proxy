@@ -17,9 +17,9 @@ import Concordium.Types.Updates (UpdateType)
 
 data ErrorMessage
     = EMErrorResponse ErrorResponse
-    | -- |The wallet proxy could not communicate with the node.
+    | -- | The wallet proxy could not communicate with the node.
       EMGRPCError
-    | -- |The node rejected the call. We report the reason back to the caller.
+    | -- | The node rejected the call. We report the reason back to the caller.
       EMGRPCErrorResponse String
     | EMParseError String
     | EMCredentialRejected
@@ -31,11 +31,11 @@ data ErrorMessage
     | EMConfigurationError
     | EMAccountDoesNotExist
     | EMMissingParameter
-    | -- |Action not supported due to the node protocol version not allowing it.
+    | -- | Action not supported due to the node protocol version not allowing it.
       EMActionNotCurrentlySupported
-    | -- |Invoke of a smart contract failed with the given reason.
+    | -- | Invoke of a smart contract failed with the given reason.
       EMInvokeFailed
-    | -- |Expected a V1 contract, but a V0 contract was given.
+    | -- | Expected a V1 contract, but a V0 contract was given.
       EMV0Contract
 
 data I18n = I18n
