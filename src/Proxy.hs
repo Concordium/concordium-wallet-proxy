@@ -1587,14 +1587,10 @@ getAccountTransactionsWorker includeMemos addrText = do
                     let extractedType = coerced s EJ.#>>. ["Left", "type", "contents"] -- the transaction type.
                     -- check if the transaction is encrypting, decrypting, or transferring an encrypted amount.
                     in  E.where_ $
-                            extractedType
-                                E.==. E.val (Just "encryptedAmountTransfer")
-                                E.||. extractedType
-                                    E.==. E.val (Just "transferToEncrypted")
-                                E.||. extractedType
-                                    E.==. E.val (Just "transferToPublic")
-                                E.||. extractedType
-                                    E.==. E.val (Just "encryptedAmountTransferWithMemo")
+                            extractedType E.==. E.val (Just "encryptedAmountTransfer")
+                                E.||. extractedType E.==. E.val (Just "transferToEncrypted")
+                                E.||. extractedType E.==. E.val (Just "transferToPublic")
+                                E.||. extractedType E.==. E.val (Just "encryptedAmountTransferWithMemo")
                 Just _ -> Nothing
 
         rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
