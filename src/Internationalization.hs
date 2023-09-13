@@ -45,10 +45,10 @@ getTranslation :: Text -> Maybe I18n
 getTranslation "en" = Just En.translation
 getTranslation _ = Nothing
 
--- |Get a function for rendering internationalizable values according to the
--- client's requested language, setting the content language to indicate the
--- response language.
-internationalize :: MonadHandler m => m I18n
+-- | Get a function for rendering internationalizable values according to the
+--  client's requested language, setting the content language to indicate the
+--  response language.
+internationalize :: (MonadHandler m) => m I18n
 internationalize = do
     langs <- languages
     let (langCode, tr) = case [(c, t) | (c, Just t) <- (id &&& getTranslation) <$> langs] of

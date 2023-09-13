@@ -5,7 +5,7 @@ module Logging where
 import qualified Control.Monad.Logger as Logger
 import qualified Data.Text as Text
 
--- |The level of a log entry.
+-- | The level of a log entry.
 data LogLevel
     = LLOff
     | LLError
