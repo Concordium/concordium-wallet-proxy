@@ -59,7 +59,7 @@ import qualified Database.Esqueleto.Legacy as E
 import qualified Database.Esqueleto.PostgreSQL.JSON as EJ
 import Lens.Micro.Platform hiding ((.=))
 import Network.GRPC.HTTP2.Types (GRPCStatusCode (..))
-import Network.HTTP.Types (Status, badGateway502, badRequest400, internalServerError500, notFound404)
+import Network.HTTP.Types (Status, badGateway502, badRequest400, internalServerError500, notFound404, serviceUnavailable503)
 import System.Random
 import Text.Read hiding (String)
 import Web.Cookie
@@ -174,7 +174,7 @@ share
     total_supply (Ratio Integer)
   |]
 
-data ErrorCode = InternalError | RequestInvalid | DataNotFound
+data ErrorCode = InternalError | RequestInvalid | DataNotFound | Unavailable
     deriving (Eq, Show, Enum)
 
 -- | Configuration for the @appSettings@ endpoint that returns whether the app is
@@ -446,6 +446,18 @@ runGRPCWithCustomError resp c k = do
                 StatusNotOk (NOT_FOUND, err) -> do
                     return $
                         Left (StatusNotOkError NOT_FOUND, notFound404, DataNotFound, EMGRPCErrorResponse $ "Requested object was not found: " <> err)
+                -- GRPC response with status code 'CANCELLED', i.e., the server timed out the request.
+                StatusNotOk (CANCELLED, err) -> do
+                    return $
+                        Left (StatusNotOkError CANCELLED, serviceUnavailable503, Unavailable, EMGRPCErrorResponse $ "The node is overloaded so the request was cancelled: " <> err)
+                -- GRPC response with status code 'RESOURCE_EXHAUSTED'.
+                StatusNotOk (RESOURCE_EXHAUSTED, err) -> do
+                    return $
+                        Left (StatusNotOkError RESOURCE_EXHAUSTED, serviceUnavailable503, Unavailable, EMGRPCErrorResponse $ "The node is overloaded so the request was cancelled: " <> err)
+                -- GRPC response with status code 'DEADLINE_EXCEEDED'
+                StatusNotOk (DEADLINE_EXCEEDED, err) -> do
+                    return $
+                        Left (StatusNotOkError DEADLINE_EXCEEDED, serviceUnavailable503, Unavailable, EMGRPCErrorResponse $ "The node is overloaded so the request was cancelled: " <> err)
                 -- GRPC response with valid non-'OK' status code.
                 StatusNotOk (status, err) -> do
                     $(logError) $ "Got non-OK GRPC status code '" <> Text.pack (show status) <> "': " <> Text.pack err

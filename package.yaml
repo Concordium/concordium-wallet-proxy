@@ -1,5 +1,5 @@
 name:                wallet-proxy
-version:             0.29.0
+version:             0.29.1
 github:              "Concordium/concordium-wallet-proxy"
 author:              "Concordium"
 maintainer:          "developers@concordium.com"
