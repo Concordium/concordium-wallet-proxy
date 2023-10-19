@@ -2,6 +2,11 @@
 
 ## Unreleased changes
 
+## 0.29.1
+
+- Improve reconnect handling. If the request to the node times out or fails due
+  to resource exhaustion then the connection to the node is longer reset.
+
 ## 0.29.0
 
 - Add an optional `success` field to the `transactionStatus` response if
