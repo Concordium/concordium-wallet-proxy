@@ -26,7 +26,7 @@ translation = I18n{..}
     i18nUpdateTransaction UpdateMintDistribution = "Update parameters of the mint distribution"
     i18nUpdateTransaction UpdateTransactionFeeDistribution = "Update transaction fee distribution"
     i18nUpdateTransaction UpdateGASRewards = "Update parameters for GAS rewards distribution"
-    i18nUpdateTransaction UpdatePoolParameters = "Update baker pool parameters"
+    i18nUpdateTransaction UpdatePoolParameters = "Update staking pool parameters"
     i18nUpdateTransaction UpdateTimeParameters = "Update time parameters"
     i18nUpdateTransaction UpdateCooldownParameters = "Update cooldown parameters"
     i18nUpdateTransaction UpdateAddAnonymityRevoker = "Add anonymity revoker"
@@ -65,10 +65,10 @@ translation = I18n{..}
     i18nRejectReason NonIncreasingSchedule = "Attempt to transfer amount with non-increasing schedule."
     i18nRejectReason FirstScheduledReleaseExpired = "The first scheduled release is in the past."
     i18nRejectReason (ScheduledSelfTransfer _) = "Attempt to transfer from account A to A with schedule."
-    i18nRejectReason (AlreadyABaker bid) = "Baker with ID " <> Text.pack (show bid) <> " already exists."
-    i18nRejectReason (NotABaker addr) = "Account " <> descrAccount addr <> " is not a baker."
+    i18nRejectReason (AlreadyABaker bid) = "Validator with ID " <> Text.pack (show bid) <> " already exists."
+    i18nRejectReason (NotABaker addr) = "Account " <> descrAccount addr <> " is not a validator."
     i18nRejectReason InsufficientBalanceForBakerStake = "Sender account has insufficient balance to cover the requested stake."
-    i18nRejectReason BakerInCooldown = "Request to make change to the baker while the baker is in the cooldown period."
+    i18nRejectReason BakerInCooldown = "Request to make change to the validator while the validator is in the cooldown period."
     i18nRejectReason NonExistentCredentialID = "Credential ID does not exist."
     i18nRejectReason InvalidCredentials = "One or more of the credentials is invalid."
     i18nRejectReason (DuplicateCredIDs _) = "One or more of the credential IDs is duplicate."
@@ -79,16 +79,16 @@ translation = I18n{..}
     i18nRejectReason NotAllowedMultipleCredentials = "The account is not allowed to have multiple credentials."
     i18nRejectReason NotAllowedToReceiveEncrypted = "The account is not allowed to receive encrypted transfers."
     i18nRejectReason NotAllowedToHandleEncrypted = "The account is not allowed to handle encrypted amounts."
-    i18nRejectReason MissingBakerAddParameters = "One or more arguments are missing in order to add a baker."
+    i18nRejectReason MissingBakerAddParameters = "One or more arguments are missing in order to add a validator."
     i18nRejectReason FinalizationRewardCommissionNotInRange = "Finalization reward commission rate is not within the allowed range."
-    i18nRejectReason BakingRewardCommissionNotInRange = "Baking reward commission rate is not within the allowed range."
+    i18nRejectReason BakingRewardCommissionNotInRange = "Block reward commission rate is not within the allowed range."
     i18nRejectReason TransactionFeeCommissionNotInRange = "Transaction fee commission rate is not within the allowed range."
-    i18nRejectReason AlreadyADelegator = "Attempt to add baker that is already a baker."
+    i18nRejectReason AlreadyADelegator = "Attempt to add validator that is already a validator."
     i18nRejectReason InsufficientBalanceForDelegationStake = "Sender account has insufficient balance to cover the requested stake."
     i18nRejectReason MissingDelegationAddParameters = "One or more arguments are missing in order to add a delegator."
-    i18nRejectReason DelegatorInCooldown = "Request to make change to the baker while the baker is in the cooldown period."
+    i18nRejectReason DelegatorInCooldown = "Request to make change to the validator while the validator is in the cooldown period."
     i18nRejectReason (NotADelegator addr) = "Account " <> descrAccount addr <> " is not a delegator."
-    i18nRejectReason (DelegationTargetNotABaker _) = "Delegation target is not a baker."
+    i18nRejectReason (DelegationTargetNotABaker _) = "Delegation target is not a validator."
     i18nRejectReason StakeOverMaximumThresholdForPool = "Stake is above maximum threshold."
     i18nRejectReason PoolWouldBecomeOverDelegated = "Delegation stake is too high, over-delegation is not allowed."
     i18nRejectReason PoolClosed = "Delegation to a closed pool is not allowed."
@@ -99,11 +99,11 @@ translation = I18n{..}
     i18nTransactionType TTUpdate = "Invoke smart contract"
     i18nTransactionType TTTransfer = "Transfer"
     i18nTransactionType TTTransferWithMemo = "Transfer with a memo"
-    i18nTransactionType TTUpdateBakerStake = "Update baker stake"
-    i18nTransactionType TTUpdateBakerKeys = "Update baker keys"
-    i18nTransactionType TTUpdateBakerRestakeEarnings = "Update whether to restake baker earnings"
-    i18nTransactionType TTAddBaker = "Add baker"
-    i18nTransactionType TTRemoveBaker = "Remove baker"
+    i18nTransactionType TTUpdateBakerStake = "Update validator stake"
+    i18nTransactionType TTUpdateBakerKeys = "Update validator keys"
+    i18nTransactionType TTUpdateBakerRestakeEarnings = "Update whether to restake validator earnings"
+    i18nTransactionType TTAddBaker = "Add validator"
+    i18nTransactionType TTRemoveBaker = "Remove validator"
     i18nTransactionType TTUpdateCredentialKeys = "Update credential keys"
     i18nTransactionType TTEncryptedAmountTransfer = "Shielded transfer"
     i18nTransactionType TTEncryptedAmountTransferWithMemo = "Shielded transfer with a memo"
@@ -113,7 +113,7 @@ translation = I18n{..}
     i18nTransactionType TTTransferWithScheduleAndMemo = "Transfer with schedule and a memo"
     i18nTransactionType TTUpdateCredentials = "Update account credentials"
     i18nTransactionType TTRegisterData = "Register data on the chain"
-    i18nTransactionType TTConfigureBaker = "Configure baker"
+    i18nTransactionType TTConfigureBaker = "Configure validator"
     i18nTransactionType TTConfigureDelegation = "Configure delegation"
 
     i18nDeployCredential Initial = "Deploy initial account credential"
@@ -147,12 +147,12 @@ translation = I18n{..}
     i18nEvent (Transferred sender amt recv) = "Transferred " <> descrAmount amt <> " from " <> descrAddress sender <> " to " <> descrAddress recv
     i18nEvent (AccountCreated addr) = "Created account with address " <> descrAccount addr
     i18nEvent (CredentialDeployed _ addr) = "Deployed a credential to account " <> descrAccount addr
-    i18nEvent BakerAdded{..} = "Added baker " <> descrBaker ebaBakerId ebaAccount <> " and initial stake " <> descrAmount ebaStake
-    i18nEvent BakerRemoved{..} = "Removed baker " <> descrBaker ebrBakerId ebrAccount
-    i18nEvent BakerStakeIncreased{..} = "Stake of baker " <> descrBaker ebsiBakerId ebsiAccount <> " increased to " <> descrAmount ebsiNewStake
-    i18nEvent BakerStakeDecreased{..} = "Stake of baker " <> descrBaker ebsiBakerId ebsiAccount <> " decreased to " <> descrAmount ebsiNewStake
-    i18nEvent BakerSetRestakeEarnings{..} = "Baker " <> descrBaker ebsreBakerId ebsreAccount <> if ebsreRestakeEarnings then " set to restake earnings." else " unset restaking of earnings."
-    i18nEvent BakerKeysUpdated{..} = "Baker " <> descrBaker ebkuBakerId ebkuAccount <> " keys updated."
+    i18nEvent BakerAdded{..} = "Added validator " <> descrBaker ebaBakerId ebaAccount <> " and initial stake " <> descrAmount ebaStake
+    i18nEvent BakerRemoved{..} = "Removed validator " <> descrBaker ebrBakerId ebrAccount
+    i18nEvent BakerStakeIncreased{..} = "Stake of validator " <> descrBaker ebsiBakerId ebsiAccount <> " increased to " <> descrAmount ebsiNewStake
+    i18nEvent BakerStakeDecreased{..} = "Stake of validator " <> descrBaker ebsiBakerId ebsiAccount <> " decreased to " <> descrAmount ebsiNewStake
+    i18nEvent BakerSetRestakeEarnings{..} = "Validator " <> descrBaker ebsreBakerId ebsreAccount <> if ebsreRestakeEarnings then " set to restake earnings." else " unset restaking of earnings."
+    i18nEvent BakerKeysUpdated{..} = "Validator " <> descrBaker ebkuBakerId ebkuAccount <> " keys updated."
     i18nEvent CredentialKeysUpdated{..} = "Updated keys of credential with ID " <> Text.pack (show ckuCredId)
     i18nEvent NewEncryptedAmount{..} = "New encrypted amount added to account " <> descrAccount neaAccount
     i18nEvent EncryptedAmountsRemoved{..} = "Consumed encrypted amounts on account " <> descrAccount earAccount
@@ -167,11 +167,11 @@ translation = I18n{..}
     i18nEvent Resumed{..} | rSuccess = "Operation succeeded and execution of " <> descrInstance rAddress <> " resumed."
     i18nEvent Resumed{..} | otherwise = "Operation failed and execution of " <> descrInstance rAddress <> " resumed."
     i18nEvent Upgraded{..} = "Smart contract instance at " <> descrInstance euAddress <> " was upgraded from " <> descrModule euFrom <> " to " <> descrModule euTo <> "."
-    i18nEvent BakerSetOpenStatus{..} = "Open status of baker " <> descrBaker ebsosBakerId ebsosAccount <> " set to " <> descrOpenStatus ebsosOpenStatus
-    i18nEvent BakerSetMetadataURL{..} = "Metadata URL of baker " <> descrBaker ebsmuBakerId ebsmuAccount <> " set to " <> descrMetadataURL ebsmuMetadataURL
-    i18nEvent BakerSetTransactionFeeCommission{..} = "Transaction fee commission of baker " <> descrBaker ebstfcBakerId ebstfcAccount <> " set to " <> descrAmountFraction ebstfcTransactionFeeCommission
-    i18nEvent BakerSetBakingRewardCommission{..} = "Baking reward commission of baker " <> descrBaker ebsbrcBakerId ebsbrcAccount <> " set to " <> descrAmountFraction ebsbrcBakingRewardCommission
-    i18nEvent BakerSetFinalizationRewardCommission{..} = "Finalization reward commission of baker " <> descrBaker ebsfrcBakerId ebsfrcAccount <> " set to " <> descrAmountFraction ebsfrcFinalizationRewardCommission
+    i18nEvent BakerSetOpenStatus{..} = "Open status of validator " <> descrBaker ebsosBakerId ebsosAccount <> " set to " <> descrOpenStatus ebsosOpenStatus
+    i18nEvent BakerSetMetadataURL{..} = "Metadata URL of validator " <> descrBaker ebsmuBakerId ebsmuAccount <> " set to " <> descrMetadataURL ebsmuMetadataURL
+    i18nEvent BakerSetTransactionFeeCommission{..} = "Transaction fee commission of validator " <> descrBaker ebstfcBakerId ebstfcAccount <> " set to " <> descrAmountFraction ebstfcTransactionFeeCommission
+    i18nEvent BakerSetBakingRewardCommission{..} = "Block reward commission of validator " <> descrBaker ebsbrcBakerId ebsbrcAccount <> " set to " <> descrAmountFraction ebsbrcBakingRewardCommission
+    i18nEvent BakerSetFinalizationRewardCommission{..} = "Finalization reward commission of validator " <> descrBaker ebsfrcBakerId ebsfrcAccount <> " set to " <> descrAmountFraction ebsfrcFinalizationRewardCommission
     i18nEvent DelegationStakeIncreased{..} = "Stake of delegator " <> descrDelegator edsiDelegatorId edsiAccount <> " increased to " <> descrAmount edsiNewStake
     i18nEvent DelegationStakeDecreased{..} = "Stake of delegator " <> descrDelegator edsdDelegatorId edsdAccount <> " decreased to " <> descrAmount edsdNewStake
     i18nEvent DelegationSetRestakeEarnings{..} = "Delegator " <> descrDelegator edsreDelegatorId edsreAccount <> if edsreRestakeEarnings then " set to restake earnings." else " unset restaking of earnings."
@@ -181,16 +181,16 @@ translation = I18n{..}
             <> " set delegation target to "
             <> case edsdtDelegationTarget of
                 DelegatePassive -> "passive delegation"
-                DelegateToBaker bid -> "baker pool " <> Text.pack (show bid)
+                DelegateToBaker bid -> "staking pool " <> Text.pack (show bid)
     i18nEvent DelegationAdded{..} = "Added delegator " <> descrDelegator edaDelegatorId edaAccount
     i18nEvent DelegationRemoved{..} = "Removed delegator " <> descrDelegator edrDelegatorId edrAccount
     i18nSpecialEvent BakingRewards{..} =
-        "Baking rewards\n"
+        "Block rewards\n"
             <> Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)
     i18nSpecialEvent Mint{..} =
         "New CCD minted\n "
             <> Text.unlines
-                [ "  - " <> descrAmount stoMintBakingReward <> " to the baking reward account",
+                [ "  - " <> descrAmount stoMintBakingReward <> " to the validator reward account",
                   "  - " <> descrAmount stoMintFinalizationReward <> " to the finalization reward account",
                   "  - " <> descrAmount stoMintPlatformDevelopmentCharge <> " as the platform development charge to account " <> descrAccount stoFoundationAccount
                 ]
@@ -203,7 +203,7 @@ translation = I18n{..}
                 [ "  - " <> descrAmount stoTransactionFees <> " transaction fees in the block",
                   "  - " <> descrAmount stoOldGASAccount <> " was the old balance of the GAS account",
                   "  - " <> descrAmount stoNewGASAccount <> " is the new balance of the GAS account",
-                  "  - " <> descrAmount stoBakerReward <> " awarded to the block baker to address " <> descrAccount stoBaker,
+                  "  - " <> descrAmount stoBakerReward <> " awarded to the block validator to address " <> descrAccount stoBaker,
                   "  - " <> descrAmount stoFoundationCharge <> " awarded to the foundation account " <> descrAccount stoFoundationAccount
                 ]
     i18nSpecialEvent PaydayFoundationReward{..} =
@@ -219,7 +219,7 @@ translation = I18n{..}
             <> ": \n"
             <> Text.unlines
                 [ "  - " <> descrAmount stoTransactionFees <> " from transaction fees",
-                  "  - " <> descrAmount stoBakerReward <> " from baking rewards",
+                  "  - " <> descrAmount stoBakerReward <> " from block rewards",
                   "  - " <> descrAmount stoFinalizationReward <> " from finalization rewards"
                 ]
       where
@@ -240,13 +240,13 @@ translation = I18n{..}
             <> ":\n"
             <> Text.unlines
                 [ "  - " <> descrAmount stoTransactionFees <> " from transaction fees",
-                  "  - " <> descrAmount stoBakerReward <> " from baking rewards",
+                  "  - " <> descrAmount stoBakerReward <> " from block rewards",
                   "  - " <> descrAmount stoFinalizationReward <> " from finalization rewards"
                 ]
       where
         poolName = maybe "passive delegators" (\bid -> "pool with ID " <> descrBakerId bid) stoPoolOwner
 
-    i18nSpecialOutcomeShort BakingRewards{} = "Baking rewards"
+    i18nSpecialOutcomeShort BakingRewards{} = "Block rewards"
     i18nSpecialOutcomeShort Mint{} = "New CCD minted"
     i18nSpecialOutcomeShort FinalizationRewards{} = "Finalization rewards"
     i18nSpecialOutcomeShort BlockReward{} = "Block rewards"
