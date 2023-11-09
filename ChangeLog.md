@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.29.2
+
+- Rename baker to validator in transaction outcomes.
+
 ## 0.29.1
 
 - Improve reconnect handling. If the request to the node times out or fails due
