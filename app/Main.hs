@@ -18,6 +18,7 @@ import qualified Network.Wai.Handler.Warp
 import Proxy
 import Yesod
 
+import Control.Monad
 import Control.Monad.Except
 import Control.Monad.Logger
 import System.Exit (die)

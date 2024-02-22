@@ -2,6 +2,8 @@
 
 ## Unreleased changes
 
+- Update GHC version to 9.6.4 (lts-22.9).
+
 ## 0.29.2
 
 - Rename baker to validator in transaction outcomes.

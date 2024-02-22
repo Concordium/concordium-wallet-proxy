@@ -31,7 +31,7 @@ import Data.Ratio
 
 import Control.Arrow (first, left)
 import Control.Exception (SomeException, catch)
-import Control.Monad.Except
+import Control.Monad
 import Data.Aeson (Result (..), fromJSON, withObject)
 import qualified Data.Aeson as AE
 import qualified Data.Aeson.KeyMap as KM
