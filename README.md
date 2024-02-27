@@ -1310,3 +1310,11 @@ versions `>= 64`.
 The `suggestUrl` field is optional, and if not present the default is taken to
 be `url`. The `suggestUrl` value is used if the version mathches the suggested
 update, but **not** the forced update.
+
+## Release
+
+There is a release job that will build and push a docker image to dockerhub.
+It can be [run
+manually](https://github.com/Concordium/concordium-wallet-proxy/actions/workflows/release-docker-image.yaml)
+via a trigger, or it runs automatically when a release tag of the form *.*.*-* is pushed.
+The job needs approval since it accesses secrets.
