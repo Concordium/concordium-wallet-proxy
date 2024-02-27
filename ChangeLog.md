@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.30.0
+
+- Add endpoints `v1/CIS2TokenMetadata` and `v1/CIS2TokenBalance` that return a
+  subset of tokens which could be successfully queried.
 - Update GHC version to 9.6.4 (lts-22.9).
 
 ## 0.29.2
