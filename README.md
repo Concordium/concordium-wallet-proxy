@@ -33,7 +33,7 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/CIS2Tokens/{index}/{subindex}`: get the list of tokens on a given contract address.
 * `GET /v0/CIS2TokenMetadata/{index}/{subindex}`: get the metadata of tokens in on given contract address.
 * `GET /v0/CIS2TokenBalance/{index}/{subindex}/{account address}`: get the balance of tokens on given contract address for a given account address.
-* `GET /v1/CIS2TokenMetadata/{index}/{subindex}`: get the metadata of tokens in on given contract address, ignoring failing requests.
+* `GET /v1/CIS2TokenMetadata/{index}/{subindex}`: get the metadata of tokens on given contract address, ignoring failing requests.
 * `GET /v1/CIS2TokenBalance/{index}/{subindex}/{account address}`: get the balance of tokens on given contract address for a given account address, ignoring failing requests.
 
 
