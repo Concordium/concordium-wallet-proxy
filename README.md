@@ -33,6 +33,8 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/CIS2Tokens/{index}/{subindex}`: get the list of tokens on a given contract address.
 * `GET /v0/CIS2TokenMetadata/{index}/{subindex}`: get the metadata of tokens in on given contract address.
 * `GET /v0/CIS2TokenBalance/{index}/{subindex}/{account address}`: get the balance of tokens on given contract address for a given account address.
+* `GET /v1/CIS2TokenMetadata/{index}/{subindex}`: get the metadata of tokens in on given contract address, ignoring failing requests.
+* `GET /v1/CIS2TokenBalance/{index}/{subindex}/{account address}`: get the balance of tokens on given contract address for a given account address, ignoring failing requests.
 
 
 ### Errors
@@ -120,7 +122,7 @@ The `AccountBalance` value is always an object with the following four fields
     * `"amount"` .. the amount that will be released at the given timestamp
     * `"transactions"` .. an array of transaction hashes that contribute to
       the amount that will be released.
-  
+
   - `"total"`: The sum of all the pending amounts, to be used when calculating the available amount.
   More explicitly, the format of `"accountReleaseSchedule"` is:
   ```
@@ -784,6 +786,12 @@ and an example response is
 }
 ```
 
+The `v1` version of this endpoint has the same formats, but differs in the following ways
+- only up to 20 tokens can be requested at once
+- the response will contain token metadata links only for those that could be queried. This is in contrast to v0 endpoint
+  which will fail with invalid request error if any of the token's metadata could not be queried.
+
+
 ## Get token balance for an account address
 
 The endpoint `v0/CIS2TokenBalance/index/subindex/accountAddress` retrieves the
@@ -826,6 +834,11 @@ and an example response is
   }
 ]
 ```
+
+The `v1` version of this endpoint has the same formats, but differs in the following ways
+- only up to 20 tokens can be requested at once
+- the response will contain token balances only for those that could be queried. This is in contrast to v0 endpoint
+  which will fail with invalid request error if any of the token's balance could not be queried.
 
 
 ## Notes on account balances.
@@ -1288,7 +1301,7 @@ The field
 
 The `forceUpdateVersions` is matched first, so overlapping ranges are biased
 towards the `needsUpdate` outcome.
-  
+
 The range format is fairly standard, e.g., `5,8,10-17` denotes app versions `5`,
 `8`, and `10` to `17`, inclusive. Infinite ranges are also supported, e.g.,
 `-64` denotes the range of versions `<= 64`, and `64-` denotes the range of

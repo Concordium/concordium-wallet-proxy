@@ -270,6 +270,8 @@ mkYesod
 /v0/CIS2Tokens/#Word64/#Word64 CIS2Tokens GET
 /v0/CIS2TokenMetadata/#Word64/#Word64 CIS2TokenMetadata GET
 /v0/CIS2TokenBalance/#Word64/#Word64/#Text CIS2TokenBalance GET
+/v1/CIS2TokenMetadata/#Word64/#Word64 CIS2TokenMetadataV1 GET
+/v1/CIS2TokenBalance/#Word64/#Word64/#Text CIS2TokenBalanceV1 GET
 /v0/termsAndConditionsVersion TermsAndConditionsVersion GET
 |]
 
@@ -399,8 +401,8 @@ runGRPCWithCustomError ::
     -- | The @ClientMonad@ to run.
     ClientMonad IO (GRPCResult (Either String a)) ->
     -- | The handler.
-    (a -> Handler TypedContent) ->
-    Handler TypedContent
+    (a -> Handler c) ->
+    Handler c
 runGRPCWithCustomError resp c k = do
     cfg <- grpcEnvData <$> getYesod
     cookies <- getCookies
@@ -1362,6 +1364,39 @@ getCIS2TokenMetadata index subindex = do
                                 )
                         ]
 
+getCIS2TokenMetadataV1 :: Word64 -> Word64 -> Handler TypedContent
+getCIS2TokenMetadataV1 index subindex = do
+    let nrg = Energy 50_000 -- ~50ms worth of
+    let contractAddr = ContractAddress (ContractIndex index) (ContractSubindex subindex)
+    tids <- parseCIS2TokenIds
+    unless (length tids <= 20) $ respond400Error (EMParseError "Too many tokens requested.") RequestInvalid
+    let getURLs = do
+            len <- S.getWord16le
+            unless (len == 1) $ fail "Expected one URL."
+            replicateM (fromIntegral len) getMetadataUrl
+    (lf, iInfo) <- retrieveInstanceInfo contractAddr
+    responses <- forM tids $ \tid -> do
+        let serializedParam = Wasm.Parameter . BSS.toShort . S.runPut $ do
+                S.putWord16le 1
+                S.put tid
+        cis2InvokeHelperError lf contractAddr iInfo (Wasm.EntrypointName "tokenMetadata") serializedParam nrg $
+            \case
+                (_, InvokeContract.Success{..})
+                    | Just rv <- rcrReturnValue,
+                      Right [md] <- S.runGet getURLs rv -> do
+                        return . Just $
+                            object
+                                [ "tokenId" .= tid,
+                                  "metadataURL" .= muURL md,
+                                  "metadataChecksum" .= muChecksum md
+                                ]
+                (_, _notSuccess) -> return Nothing
+    sendResponse $
+        object
+            [ "contractName" .= (Wasm.initContractName (Wasm.iiName iInfo)),
+              "metadata" .= AE.toJSON (catMaybes responses)
+            ]
+
 getCIS2TokenBalance :: Word64 -> Word64 -> Text -> Handler TypedContent
 getCIS2TokenBalance index subindex addrText = do
     let nrg = Energy 500_000 -- ~500ms worth of
@@ -1376,6 +1411,7 @@ getCIS2TokenBalance index subindex addrText = do
             cis2InvokeHelper contractAddr (Wasm.EntrypointName "balanceOf") serializedParam nrg $ \_ rv -> do
                 let getBalances = do
                         len <- S.getWord16le
+                        unless (fromIntegral len == length tids) $ fail "Unexpected response length."
                         replicateM (fromIntegral len) getTokenBalance
                 case S.runGet getBalances rv of
                     Left err -> do
@@ -1395,10 +1431,108 @@ getCIS2TokenBalance index subindex addrText = do
                                     urls
                                 )
 
+-- | Like 'getCIS2TokenBalance' but instead of making one query to the node
+--  it checks each token individually and responds with a partial list of responses.
+getCIS2TokenBalanceV1 :: Word64 -> Word64 -> Text -> Handler TypedContent
+getCIS2TokenBalanceV1 index subindex addrText = do
+    let nrg = Energy 50_000 -- ~50ms worth of
+    let contractAddr = ContractAddress (ContractIndex index) (ContractSubindex subindex)
+    let getBalances = do
+            len <- S.getWord16le
+            unless (len == 1) $ fail "Unexpected response."
+            replicateM (fromIntegral len) getTokenBalance
+    case addressFromText addrText of
+        Left err -> respond400Error (EMParseError err) RequestInvalid
+        Right addr -> do
+            tids <- parseCIS2TokenIds
+            unless (length tids <= 20) $ respond400Error (EMParseError "Too many tokens requested.") RequestInvalid
+            (lf, iInfo) <- retrieveInstanceInfo contractAddr
+            json <- forM tids $ \tid -> do
+                let serializedParam = Wasm.Parameter . BSS.toShort . S.runPut $ do
+                        S.putWord16le 1
+                        S.put tid
+                        S.put (AddressAccount addr)
+                cis2InvokeHelperError lf contractAddr iInfo (Wasm.EntrypointName "balanceOf") serializedParam nrg $
+                    \case
+                        (_, InvokeContract.Success{..})
+                            | Just rv <- rcrReturnValue,
+                              Right [bal] <- S.runGet getBalances rv -> do
+                                return $
+                                    Just $
+                                        object
+                                            [ "tokenId" .= tid,
+                                              "balance" .= bal
+                                            ]
+                        _notSuccess -> do
+                            return $ Nothing
+            sendResponse $ AE.toJSON (catMaybes json)
+
 -- | Helper to handle the boilerplate common to both the metadata and balance of
 --  queries. It handles getting the address of a contract, handling errors in
 --  invocations, and calling the respective handlers for the specific query via
 --  the continuation.
+cis2InvokeHelperError ::
+    -- | Block hash to query in.
+    BlockHash ->
+    -- | Address of the instance.
+    ContractAddress ->
+    -- | Instance information.
+    Wasm.InstanceInfo ->
+    -- | Its entrypoint.
+    Wasm.EntrypointName ->
+    -- | The parameter to invoke
+    Wasm.Parameter ->
+    -- | Energy to allow for the invoke.
+    Energy ->
+    -- | Continuation applied to the name of the contract (without @_init@) and the response of the query.
+    ((Text, InvokeContract.InvokeContractResult) -> Handler c) ->
+    HandlerFor Proxy c
+cis2InvokeHelperError lf contractAddr iInfo entrypoint serializedParam nrg k = do
+    let contractName = Wasm.iiName iInfo
+    let invokeContext =
+            InvokeContract.ContractContext
+                { ccInvoker = Nothing,
+                  ccContract = contractAddr,
+                  ccAmount = 0,
+                  ccMethod = Wasm.uncheckedMakeReceiveName contractName entrypoint,
+                  ccParameter = serializedParam,
+                  ccEnergy = nrg
+                }
+    let query = do
+            iInstanceRes <- invokeInstance (Given lf) invokeContext
+            case getResponseValueAndHeaders iInstanceRes of
+                Left errRes -> return errRes
+                Right (v, hds') -> return $ StatusOk $ GRPCResponse hds' $ fmap (Wasm.initContractName contractName,) v
+    runGRPCWithCustomError
+        (Just (StatusNotOkError NOT_FOUND, Nothing, Nothing, Just $ EMErrorResponse NotFound))
+        query
+        k
+
+-- | Get the instance information, failing if the instance does not exist.
+-- Returns the block which was queried and the instance information.
+retrieveInstanceInfo ::
+    -- | Address of the contract to query
+    ContractAddress ->
+    HandlerFor Proxy (BlockHash, Wasm.InstanceInfo)
+retrieveInstanceInfo contractAddr = do
+    let query = do
+            iInfoRes <- getInstanceInfo contractAddr LastFinal
+            case getResponseValueAndHeaders iInfoRes of
+                Left errRes -> return errRes
+                Right (Left err, hds) -> return $ StatusOk $ GRPCResponse hds $ Left err
+                Right (Right iInfo, hds) -> do
+                    lf <- getBlockHashHeader hds
+                    return $ StatusOk $ GRPCResponse hds $ Right (lf, iInfo)
+    runGRPCWithCustomError
+        (Just (StatusNotOkError NOT_FOUND, Nothing, Nothing, Just $ EMErrorResponse NotFound))
+        query
+        return
+
+-- | Helper to handle the boilerplate common to both the metadata and balance of
+--  queries. It handles getting the address of a contract, handling errors in
+--  invocations, and calling the respective handlers for the specific query via
+--  the continuation. This helper responds with a 400 invalid request error if
+--  the contract query cannot be successfully completed.
 cis2InvokeHelper ::
     -- | Address of the contract to invoke.
     ContractAddress ->
@@ -1409,35 +1543,12 @@ cis2InvokeHelper ::
     -- | Energy to allow for the invoke.
     Energy ->
     -- | Continuation applied to the name of the contract (without @_init@) and the return value produced by a successful result.
-    (Text -> BS8.ByteString -> Handler TypedContent) ->
-    HandlerFor Proxy TypedContent
+    (Text -> BS8.ByteString -> Handler c) ->
+    HandlerFor Proxy c
 cis2InvokeHelper contractAddr entrypoint serializedParam nrg k = do
-    let invokeContext contractName =
-            InvokeContract.ContractContext
-                { ccInvoker = Nothing,
-                  ccContract = contractAddr,
-                  ccAmount = 0,
-                  ccMethod = Wasm.uncheckedMakeReceiveName contractName entrypoint,
-                  ccParameter = serializedParam,
-                  ccEnergy = nrg
-                }
-    let query = do
-            iInfoRes <- getInstanceInfo contractAddr LastFinal
-            case getResponseValueAndHeaders iInfoRes of
-                Left errRes -> return errRes
-                Right (Left err, hds) -> return $ StatusOk $ GRPCResponse hds $ Left err
-                Right (Right iInfo, hds) -> do
-                    lf <- getBlockHashHeader hds
-                    let cName = Wasm.iiName iInfo
-                    let ctx = invokeContext cName
-                    iInstanceRes <- invokeInstance (Given lf) ctx
-                    case getResponseValueAndHeaders iInstanceRes of
-                        Left errRes -> return errRes
-                        Right (v, hds') -> return $ StatusOk $ GRPCResponse hds' $ fmap (Wasm.initContractName cName,) v
-    runGRPCWithCustomError
-        (Just (StatusNotOkError NOT_FOUND, Nothing, Nothing, Just $ EMErrorResponse NotFound))
-        query
-        $ \case
+    (bh, iInfo) <- retrieveInstanceInfo contractAddr
+    cis2InvokeHelperError bh contractAddr iInfo entrypoint serializedParam nrg $
+        \case
             (_, InvokeContract.Failure{..}) -> do
                 $logDebug $ "Invoke failed: " <> Text.pack (show rcrReason)
                 respond400Error EMInvokeFailed RequestInvalid
