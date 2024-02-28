@@ -405,7 +405,15 @@ runGRPCWithCustomError ::
     Handler c
 runGRPCWithCustomError resp c k = do
     cfg <- grpcEnvData <$> getYesod
-    cookies <- getCookies
+    -- The cache stores any cookies we had seen in this request, together with
+    -- the flag indicating if we already set the response set-cookie headers.
+    -- The latter is necessary since for some client requests the proxy makes a
+    -- number of requests to the node, each of those sends Set-Cookie headers in
+    -- response and we don't want to forward all of these back to the client,
+    -- since it leads to very large headers with too many duplicate set-cookie
+    -- headers. The compromise we have is that we only forward the first set of
+    -- cookies we get from the node request back to the client.
+    (cookies, alreadySet) <- getCookies
     let
         exHandler :: SomeException -> IO (Either String a, Map.Map BS.ByteString BS.ByteString)
         exHandler e = pure (Left $ show e, Map.empty)
@@ -434,10 +442,12 @@ runGRPCWithCustomError resp c k = do
                             $(logOther "Trace") $ "Got these response headers: " <> Text.pack (show hds)
                             -- set cookies in response
                             let scs = parseSetCookie' . snd <$> (filter $ ("set-cookie" ==) . fst) hds
-                            mapM_ setCookie scs
-                            $(logOther "Trace") $ "Set-cookies headers to be included in yesod response to client: " <> Text.pack (show scs)
+                            unless alreadySet $ do
+                                mapM_ setCookie scs
+                                $(logOther "Trace") $ "Set-cookies headers to be included in yesod response to client: " <> Text.pack (show scs)
                             -- update cookie map
-                            cacheSet $! Map.union updatedCookies cookies
+                            let !newCookies = Map.union updatedCookies cookies
+                            cacheSet $! (newCookies, True)
                             return $ Right $ k val
                 -- GRPC response with an invalid status code.
                 StatusInvalid -> do
@@ -497,15 +507,15 @@ runGRPCWithCustomError resp c k = do
             . fmap (\(k', v') -> (Text.encodeUtf8 k', Text.encodeUtf8 v'))
             . reqCookies
             <$> getRequest
-    getCookies :: Handler (Map.Map BS.ByteString BS.ByteString)
+    getCookies :: Handler (Map.Map BS.ByteString BS.ByteString, Bool)
     getCookies = do
         -- map of cookies to be included in runClient
-        sCookieMapM <- cacheGet
+        cacheContents <- cacheGet
         -- yesod cookies in client request
         yCookieMap <- getYesodCookieMap
-        case sCookieMapM of
-            Nothing -> return yCookieMap
-            Just scm -> return $ Map.union scm yCookieMap
+        case cacheContents of
+            Nothing -> return (yCookieMap, False)
+            Just (scm, alreadySet) -> return $ (Map.union scm yCookieMap, alreadySet)
 
 firstPaydayAfter ::
     -- | Time of the next payday.
