@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.30.1
+
+- Reduce the amount of set-cookie headers set in complex queries.
+
 ## 0.30.0
 
 - Add endpoints `v1/CIS2TokenMetadata` and `v1/CIS2TokenBalance` that return a
