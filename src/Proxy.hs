@@ -2314,11 +2314,11 @@ getIpsR = toTypedContent . ipInfo <$> getYesod
 
 getIpsV1R :: Handler TypedContent
 getIpsV1R = do
-  includeCompanyParam <- lookupGetParam "company"
-  let ipInfo = case includeCompanyParam of
-        (Just "true") -> ipInfoWithCompanyV1
-        _ -> ipInfoV1
-  toTypedContent . ipInfo <$> getYesod
+    includeCompanyParam <- lookupGetParam "company"
+    let ipInfo = case includeCompanyParam of
+            (Just "true") -> ipInfoWithCompanyV1
+            _ -> ipInfoV1
+    toTypedContent . ipInfo <$> getYesod
 
 getTermsAndConditionsVersion :: Handler TypedContent
 getTermsAndConditionsVersion = do
