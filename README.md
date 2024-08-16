@@ -7,6 +7,8 @@
 The wallet proxy provides the following endpoints:
 
 * `GET /v0/accBalance/{account address}`: get the balance on an account
+* `GET /v1/accBalance/{account address}`: get the balance on an account, including
+  cooldowns and the available balance.
 * `GET /v0/accNonce/{account address}`: get the next nonce for an account
 * `GET /v0/accEncryptionKey/{account address}`: get the public encryption key of
   the account
@@ -93,6 +95,12 @@ $ curl -XGET localhost:3000/v0/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN
 {"currentBalance":AccountBalance,"finalizedBalance":AccountBalance}
 ```
 
+Or (v1):
+```console
+$ curl -XGET localhost:3000/v1/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
+{"currentBalance":AccountBalance,"finalizedBalance":AccountBalance}
+```
+
 The result is a JSON object with two __optional__ fields:
 - `currentBalance` is the balance on the account in the current best block;
 - `finalizedBalance` is the balance on the account in the most recently finalized block.
@@ -101,7 +109,7 @@ If neither field is present, then the account does not currently exist on the ch
 If only `currentBalance` is present, then the account has been created, but its creation has not yet been finalized.
 Otherwise, both fields will appear.
 
-The `AccountBalance` value is always an object with the following four fields
+The `AccountBalance` value is always an object with the following fields
 * `"accountAmount"` (required) which is an Amount type, i.e., a string containing an integral value.
   This amount represents the total amount owned by the account, no matter if it is locked up or not.
   It does not however include the encrypted amounts. To compute the available amount we have to calculate:
@@ -174,6 +182,15 @@ The `AccountBalance` value is always an object with the following four fields
       first payday after the cooldown ends, e.g. `"2022-03-30T16:43:53.5Z"`.
     * `"newStake"` (optional): This field is present if the value of the field `"change"` is `"reduceStake"`,
         and the value is the new stake after the cooldown.
+* `"accountCooldowns"` (v1 only, required): an array (possibly empty) of cooldown amounts in the account's inactive stake.
+  Each entry consists of the following fields:
+  - `"timestamp"`: the timestamp at which the cooldown is expected to expire
+  - `"amount"`: the amount of cooldown stake expiring at this time
+  - `"status"`: the status of this cooldown entry; one of the following values:
+    * `"cooldown"`: the stake is no longer effective for the current payday, and will become available at the specified time.
+    * `"precooldown"`: the stake may still be effective for the current payday, and will begin cooldown at the next payday, and is expected to become available at the specified time.
+    * `"preprecooldown"`: the stake may still be effective for the current payday, and will enter precooldown at the next snapshot epoch (i.e. one epoch before the payday), and is expected to become available at the specified time.
+* `"accountAtDisposal"` (v1 only, required): the balance of the account that is available to be spent or transferred, accounting for any stake (active or inactive) and locked balance.
 
 ## Account Nonce
 
@@ -935,7 +952,7 @@ in the case that the baker is NOT in a cooldown period, or
 {
     "bakerEquityCapital": "1000000000",
     "pendingChangeType": "ReduceBakerCapital",
-    "effectiveTime": "2022-03-30T16:43:53.5Z"
+    "effectiveTime": "2022-03-30T16:43:53.5Z",
     "estimatedChangeTime": "2022-03-30T17:00:00.0Z"
 }
 ```
@@ -943,13 +960,19 @@ in case that the baker's stake is reduced, or
 ```json
 {
     "pendingChangeType": "RemovePool",
-    "effectiveTime": "2022-03-31T23:54:48.25Z"
+    "effectiveTime": "2022-03-31T23:54:48.25Z",
     "estimatedChangeTime": "2022-04-01T06:00:00.0Z"
 }
 ```
 in case that the baker pool is removed.
 The value of `"openStatus"` is either `"openForAll"`, `"closedForNew"` or `"closedForAll"`.
 
+The `"currentPaydayStatus"` can be `null` when the baker pool is open, but the baker is
+not yet eligible to participate in consensus. This is the case from the point at which
+the baker first registers until it is in the committee for the current payday.
+
+This returns a `404` error status (with `error` code 2) if there is no *active* baker
+with the given ID.
 
 ## Chain Parameters
 A GET request to `/v0/chainParameters` returns a
