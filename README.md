@@ -20,8 +20,9 @@ The wallet proxy provides the following endpoints:
 * `PUT /v0/testnetGTUDrop/{account address}`: request a CCD drop to the specified account
 * `GET /v0/health`: get a response specifying if the wallet proxy is up to date
 * `GET /v0/global`: get the cryptographic parameters obtained from the node it is connected to
-* `GET /v0/ip_info`: get the identity providers information, including links for
-  submitting initial identity issuance requests.
+* `GET /v0/ip_info`: get the identity providers information with links for submitting initial identity issuance requests.
+* `GET /v1/ip_info`: get the identity providers information with links for submitting identity issuance and recovery requests.
+* `GET /v2/ip_info`: get the identity providers information (including company ID providers) with for submitting identity issuance and recovery requests.
 * `GET /v0/bakerPool/{bakerId}`: get the status of a baker pool given the baker ID.
 * `GET /v0/chainParameters`: get the chain parameters.
 * `GET /v0/nextPayday`: get the next payday.
