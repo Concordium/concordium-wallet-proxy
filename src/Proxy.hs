@@ -204,6 +204,7 @@ data Proxy = Proxy
       globalInfo :: Value,
       ipInfo :: Value,
       ipInfoV1 :: Value,
+      ipInfoWithCompanyV1 :: Value,
       logLevel :: Logging.LogLevel,
       -- | The version of terms and conditions currently in effect.
       --  If not set the endpoint termsAndConditionsVersion is disabled.
@@ -2312,7 +2313,12 @@ getIpsR :: Handler TypedContent
 getIpsR = toTypedContent . ipInfo <$> getYesod
 
 getIpsV1R :: Handler TypedContent
-getIpsV1R = toTypedContent . ipInfoV1 <$> getYesod
+getIpsV1R = do
+  includeCompanyParam <- lookupGetParam "company"
+  let ipInfo = case includeCompanyParam of
+        (Just "true") -> ipInfoWithCompanyV1
+        _ -> ipInfoV1
+  toTypedContent . ipInfo <$> getYesod
 
 getTermsAndConditionsVersion :: Handler TypedContent
 getTermsAndConditionsVersion = do

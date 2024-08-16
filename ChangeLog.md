@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.31.0
+
+- Make `/v1/ip_info` endpoint only include company ID providers when query parameter `company` is `true`.
+
 ## 0.30.1
 
 - Reduce the amount of set-cookie headers set in complex queries.
