@@ -4,7 +4,7 @@
 
 ## 0.31.0
 
-- Introduce `/v2/ip_info` endpoint which include Company ID providers, the information is provided to the service using `--ip-data-v2 <FILE>`.
+- Introduce `/v2/ip_info` endpoint which includes Company ID providers. The information is provided to the service using `--ip-data-v2 <FILE>`.
 
 ## 0.30.1
 
