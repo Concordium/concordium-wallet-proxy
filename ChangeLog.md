@@ -4,7 +4,7 @@
 
 ## 0.31.0
 
-- Make `/v1/ip_info` endpoint only include company ID providers when query parameter `company` is `true`.
+- Introduce `/v2/ip_info` endpoint which include Company ID providers, the information is provided to the service using `--ip-data-v2 <FILE>`.
 
 ## 0.30.1
 

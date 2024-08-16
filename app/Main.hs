@@ -47,7 +47,7 @@ data ProxyConfig = ProxyConfig
       pcHealthTolerance :: Maybe Int,
       pcIpInfo :: FilePath,
       pcIpInfoV1 :: FilePath,
-      pcIpInfoWithCompanyV1 :: FilePath,
+      pcIpInfoV2 :: FilePath,
       logLevel :: Logging.LogLevel,
       tcVersion :: Maybe String,
       tcUrl :: Maybe String
@@ -71,7 +71,7 @@ parser =
             <*> optional (option auto (long "health-tolerance" <> metavar "SECONDS" <> help "the maximum tolerated age of the last final block in seconds before the health query returns false."))
             <*> strOption (long "ip-data" <> metavar "FILE" <> help "File with public and private information on the identity providers, together with metadata.")
             <*> strOption (long "ip-data-v1" <> metavar "FILE" <> help "File with public and private information on the identity providers (excluding Company ID providers) for the flow without initial accounts, together with metadata.")
-            <*> strOption (long "ip-data-company-v1" <> metavar "FILE" <> help "File with public and private information on the identity providers (including Company ID providers) for the flow without initial accounts, together with metadata.")
+            <*> strOption (long "ip-data-v2" <> metavar "FILE" <> help "File with public and private information on the identity providers (including Company ID providers) for the flow without initial accounts, together with metadata.")
             <*> option (eitherReader Logging.logLevelFromString) (long "log-level" <> metavar "LOGLEVEL" <> value Logging.LLOff <> showDefault <> help "Log level. Can be one of either 'off', 'error', 'warning', 'info', 'debug' or 'trace'.")
             <*> optional (strOption (long "tc-version" <> metavar "STRING" <> help "Version of terms and conditions in effect."))
             <*> optional (strOption (long "tc-url" <> metavar "URL" <> help "Link to the terms and conditions."))
@@ -170,7 +170,7 @@ main = do
                 Right cfg -> return cfg
     Right ipInfo <- AE.eitherDecode' <$> LBS.readFile pcIpInfo
     Right ipInfoV1 <- AE.eitherDecode' <$> LBS.readFile pcIpInfoV1
-    Right ipInfoWithCompanyV1 <- AE.eitherDecode' <$> LBS.readFile pcIpInfoWithCompanyV1
+    Right ipInfoV2 <- AE.eitherDecode' <$> LBS.readFile pcIpInfoV2
     runStderrLoggingT . filterL $ do
         $logDebug ("Using iOS V0 update config: " <> fromString (show forcedUpdateConfigIOSV0))
         $logDebug ("Using Android V0 update config: " <> fromString (show forcedUpdateConfigAndroidV0))
