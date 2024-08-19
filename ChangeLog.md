@@ -2,6 +2,11 @@
 
 ## Unreleased changes
 
+- Add endpoint `/v1/accBalance` that exposes the cooldowns on the account
+  (`accountCooldowns`) and the available account balance (`accountAtDisposal`).
+- Revise `/v0/bakerPool` so that pools that have been closed are treated as
+  not found.
+
 ## 0.30.1
 
 - Reduce the amount of set-cookie headers set in complex queries.
