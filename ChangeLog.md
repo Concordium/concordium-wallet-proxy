@@ -7,6 +7,10 @@
 - Revise `/v0/bakerPool` so that pools that have been closed are treated as
   not found.
 
+## 0.31.0
+
+- Introduce `/v2/ip_info` endpoint which includes Company ID providers. The information is provided to the service using `--ip-data-v2 <FILE>`.
+
 ## 0.30.1
 
 - Reduce the amount of set-cookie headers set in complex queries.

@@ -204,6 +204,7 @@ data Proxy = Proxy
       globalInfo :: Value,
       ipInfo :: Value,
       ipInfoV1 :: Value,
+      ipInfoV2 :: Value,
       logLevel :: Logging.LogLevel,
       -- | The version of terms and conditions currently in effect.
       --  If not set the endpoint termsAndConditionsVersion is disabled.
@@ -260,6 +261,7 @@ mkYesod
 /v0/health HealthR GET
 /v0/ip_info IpsR GET
 /v1/ip_info IpsV1R GET
+/v2/ip_info IpsV2R GET
 /v1/accTransactions/#Text AccountTransactionsV1R GET
 /v0/bakerPool/#Word64 BakerPoolR GET
 /v0/chainParameters ChainParametersR GET
@@ -2333,6 +2335,9 @@ getIpsR = toTypedContent . ipInfo <$> getYesod
 
 getIpsV1R :: Handler TypedContent
 getIpsV1R = toTypedContent . ipInfoV1 <$> getYesod
+
+getIpsV2R :: Handler TypedContent
+getIpsV2R = toTypedContent . ipInfoV2 <$> getYesod
 
 getTermsAndConditionsVersion :: Handler TypedContent
 getTermsAndConditionsVersion = do
