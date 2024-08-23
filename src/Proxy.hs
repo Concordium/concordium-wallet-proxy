@@ -651,15 +651,16 @@ getAccountBalanceR ver addrText = do
                                     let di rpl = object $ infoWithoutPending <> pendingChangeToJSON nextPayday epochDuration rpl asiDelegationPendingChange
                                     in  Right $ \rpl -> object (balanceInfo ++ ["accountDelegation" .= di rpl])
                 lastFinBalComp = getBal lastFinInfo
-                bestBalComp = getBal bestInfo
+                bestBalComp = maybe (Left Nothing) getBal bestInfo
             let response lastFinBal bestBal = do
                     $(logInfo) $
                         "Retrieved account balance for "
                             <> addrText
                             <> ": finalizedBalance="
                             <> (Text.pack $ show lastFinBal)
-                            <> ", currentBalance="
-                            <> (Text.pack $ show bestBal)
+                            <> case bestBal of
+                                Nothing -> mempty
+                                Just bal -> ", currentBalance=" <> (Text.pack $ show bal)
                     sendResponse $
                         object $
                             (maybe [] (\b -> ["finalizedBalance" .= b]) lastFinBal)
@@ -670,7 +671,7 @@ getAccountBalanceR ver addrText = do
                 (Right lastFinBalF, Left bestBal) -> runGRPC (getRewardPeriodLength lastFinBlock) $ \rpl -> response (Just (lastFinBalF rpl)) bestBal
                 (Right lastFinBalF, Right bestBalF) -> runGRPC (getRewardPeriodLength lastFinBlock) $ \rpl -> response (Just (lastFinBalF rpl)) (Just (bestBalF rpl))
   where
-    doGetBal :: AccountAddress -> ClientMonad IO (GRPCResult (Either String (Maybe (AccountInfo, AccountInfo, Maybe UTCTime, Duration, BlockHash))))
+    doGetBal :: AccountAddress -> ClientMonad IO (GRPCResult (Either String (Maybe (AccountInfo, Maybe AccountInfo, Maybe UTCTime, Duration, BlockHash))))
     doGetBal accAddr = do
         -- Get the consensus info, for retrieving the epoch duration.
         cInfoRes <- getConsensusInfo
@@ -690,10 +691,15 @@ getAccountBalanceR ver addrText = do
                             StatusOk r -> case grpcResponseVal r of
                                 Left err -> return $ StatusOk $ GRPCResponse (grpcHeaders r) $ Left err
                                 Right info -> k info
+                let withBestInfo cont = case ver of
+                        AccountBalanceV0 -> do
+                            -- Get the account info for the account in the best block.
+                            bestAccInfoRes <- getAccountInfo (AccAddress accAddr) Best
+                            onResponse bestAccInfoRes (cont . Just)
+                        AccountBalanceV1 -> cont Nothing
                 onResponse lastFinAccInfoRes $ \lastFinInfo -> do
-                    -- Get the account info for the account in the best block.
-                    bestAccInfoRes <- getAccountInfo (AccAddress accAddr) Best
-                    onResponse bestAccInfoRes $ \bestInfo -> do
+                    -- Get the account info for the account in the best block (only for v0).
+                    withBestInfo $ \bestInfo -> do
                         -- Get the reward status in the last finalized block, for retrieving the next payday time.
                         rewardStatusRes <- getTokenomicsInfo (Given lastFinBlock)
                         case getResponseValueAndHeaders rewardStatusRes of

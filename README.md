@@ -99,14 +99,17 @@ $ curl -XGET localhost:3000/v0/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN
 Or (v1):
 ```console
 $ curl -XGET localhost:3000/v1/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
-{"currentBalance":AccountBalance,"finalizedBalance":AccountBalance}
+{"finalizedBalance":AccountBalance}
 ```
 
 The result is a JSON object with two __optional__ fields:
-- `currentBalance` is the balance on the account in the current best block;
+- `currentBalance` (v0 only) is the balance on the account in the current best block;
 - `finalizedBalance` is the balance on the account in the most recently finalized block.
 
-If neither field is present, then the account does not currently exist on the chain.
+For the `v1` endpoint, only `finalizedBalance` is ever present.
+If it is absent, the account has not yet been finalized on the chain.
+
+For the `v0` endpoint, if neither field is present, then the account does not currently exist on the chain.
 If only `currentBalance` is present, then the account has been created, but its creation has not yet been finalized.
 Otherwise, both fields will appear.
 
