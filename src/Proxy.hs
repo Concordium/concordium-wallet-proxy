@@ -247,7 +247,8 @@ defaultNetId = 100
 mkYesod
     "Proxy"
     [parseRoutes|
-/v0/accBalance/#Text AccountBalanceR GET
+/v0/accBalance/#Text AccountBalanceV0R GET
+/v1/accBalance/#Text AccountBalanceV1R GET
 /v0/accNonce/#Text AccountNonceR GET
 /v0/accEncryptionKey/#Text AccountEncryptionKeyR GET
 /v0/accTransactions/#Text AccountTransactionsV0R GET
@@ -575,6 +576,18 @@ getRewardPeriodLength lfb = do
                             SChainParametersV2 -> Just $ ecpParams ^. cpTimeParameters . supportedOParam . tpRewardPeriodLength
                     return $ StatusOk $ GRPCResponse hds $ Right rpLength
 
+--  |Version of the AccountBalance endpoint.
+data AccountBalanceVersion
+    = AccountBalanceV0
+    | AccountBalanceV1
+    deriving (Eq, Ord)
+
+getAccountBalanceV0R :: Text -> Handler TypedContent
+getAccountBalanceV0R = getAccountBalanceR AccountBalanceV0
+
+getAccountBalanceV1R :: Text -> Handler TypedContent
+getAccountBalanceV1R = getAccountBalanceR AccountBalanceV1
+
 -- | Get the balance of an account. If successful, the result is a JSON
 --  object consisting of the following optional fields:
 --    * "finalizedBalance": the balance of the account at the last finalized block
@@ -584,8 +597,8 @@ getRewardPeriodLength lfb = do
 --  the last finalized block.
 --  If the "finalizedBalance" field is present, then the "currentBalance" field will
 --  also be present, since accounts cannot be deleted from the chain.
-getAccountBalanceR :: Text -> Handler TypedContent
-getAccountBalanceR addrText = do
+getAccountBalanceR :: AccountBalanceVersion -> Text -> Handler TypedContent
+getAccountBalanceR ver addrText = do
     accAddr <- doParseAccountAddress "getAccountBalance" addrText
     runGRPC (doGetBal accAddr) $ \case
         Nothing -> sendResponse (object []) -- send an empty object if something
@@ -595,13 +608,20 @@ getAccountBalanceR addrText = do
             let
                 getBal :: AccountInfo -> Either (Maybe Value) (Maybe RewardPeriodLength -> Value)
                 getBal AccountInfo{..} = do
-                    let balanceInfo =
+                    let extraBalanceInfo
+                            | ver >= AccountBalanceV1 =
+                                [ "accountCooldowns" .= aiAccountCooldowns,
+                                  "accountAtDisposal" .= aiAccountAvailableAmount
+                                ]
+                            | otherwise = []
+                        balanceInfo =
                             [ "accountAmount" .= aiAccountAmount,
                               "accountEncryptedAmount" .= aiAccountEncryptedAmount,
                               "accountNonce" .= aiAccountNonce,
                               "accountReleaseSchedule" .= aiAccountReleaseSchedule,
                               "accountIndex" .= aiAccountIndex
                             ]
+                                ++ extraBalanceInfo
                     case aiStakingInfo of
                         AccountStakingNone -> Left . Just $ object balanceInfo
                         AccountStakingBaker{..} -> do
@@ -631,15 +651,16 @@ getAccountBalanceR addrText = do
                                     let di rpl = object $ infoWithoutPending <> pendingChangeToJSON nextPayday epochDuration rpl asiDelegationPendingChange
                                     in  Right $ \rpl -> object (balanceInfo ++ ["accountDelegation" .= di rpl])
                 lastFinBalComp = getBal lastFinInfo
-                bestBalComp = getBal bestInfo
+                bestBalComp = maybe (Left Nothing) getBal bestInfo
             let response lastFinBal bestBal = do
                     $(logInfo) $
                         "Retrieved account balance for "
                             <> addrText
                             <> ": finalizedBalance="
                             <> (Text.pack $ show lastFinBal)
-                            <> ", currentBalance="
-                            <> (Text.pack $ show bestBal)
+                            <> case bestBal of
+                                Nothing -> mempty
+                                Just bal -> ", currentBalance=" <> (Text.pack $ show bal)
                     sendResponse $
                         object $
                             (maybe [] (\b -> ["finalizedBalance" .= b]) lastFinBal)
@@ -650,7 +671,7 @@ getAccountBalanceR addrText = do
                 (Right lastFinBalF, Left bestBal) -> runGRPC (getRewardPeriodLength lastFinBlock) $ \rpl -> response (Just (lastFinBalF rpl)) bestBal
                 (Right lastFinBalF, Right bestBalF) -> runGRPC (getRewardPeriodLength lastFinBlock) $ \rpl -> response (Just (lastFinBalF rpl)) (Just (bestBalF rpl))
   where
-    doGetBal :: AccountAddress -> ClientMonad IO (GRPCResult (Either String (Maybe (AccountInfo, AccountInfo, Maybe UTCTime, Duration, BlockHash))))
+    doGetBal :: AccountAddress -> ClientMonad IO (GRPCResult (Either String (Maybe (AccountInfo, Maybe AccountInfo, Maybe UTCTime, Duration, BlockHash))))
     doGetBal accAddr = do
         -- Get the consensus info, for retrieving the epoch duration.
         cInfoRes <- getConsensusInfo
@@ -670,10 +691,15 @@ getAccountBalanceR addrText = do
                             StatusOk r -> case grpcResponseVal r of
                                 Left err -> return $ StatusOk $ GRPCResponse (grpcHeaders r) $ Left err
                                 Right info -> k info
+                let withBestInfo cont = case ver of
+                        AccountBalanceV0 -> do
+                            -- Get the account info for the account in the best block.
+                            bestAccInfoRes <- getAccountInfo (AccAddress accAddr) Best
+                            onResponse bestAccInfoRes (cont . Just)
+                        AccountBalanceV1 -> cont Nothing
                 onResponse lastFinAccInfoRes $ \lastFinInfo -> do
-                    -- Get the account info for the account in the best block.
-                    bestAccInfoRes <- getAccountInfo (AccAddress accAddr) Best
-                    onResponse bestAccInfoRes $ \bestInfo -> do
+                    -- Get the account info for the account in the best block (only for v0).
+                    withBestInfo $ \bestInfo -> do
                         -- Get the reward status in the last finalized block, for retrieving the next payday time.
                         rewardStatusRes <- getTokenomicsInfo (Given lastFinBlock)
                         case getResponseValueAndHeaders rewardStatusRes of
@@ -2345,8 +2371,8 @@ getBakerPoolR bid =
         $ \(pStatus, lf) -> do
             $(logInfo) "Successfully got baker pool status."
             case pStatus of
-                bps@BakerPoolStatus{..} ->
-                    case psBakerStakePendingChange of
+                bps@BakerPoolStatus{psActiveStatus = Just ActiveBakerPoolStatus{..}} ->
+                    case abpsBakerStakePendingChange of
                         PPCNoChange -> sendResponse $ toJSON pStatus
                         PPCReduceBakerCapital{..} -> runGRPC (getRewardPeriodLength lf) $ \case
                             Nothing -> sendResponse $ toJSON pStatus
@@ -2376,7 +2402,8 @@ getBakerPoolR bid =
                                 case AE.toJSON bps of
                                     AE.Object o -> sendResponse (AE.toJSON (KM.insert "bakerStakePendingChange" r o))
                                     _ -> sendResponse $ toJSON pStatus
-                PassiveDelegationStatus{} -> sendResponse $ toJSON pStatus
+                -- If the baker pool is not active, we return Not Found.
+                _ -> respond404Error $ EMErrorResponse NotFound
   where
     getParameters :: BlockHash -> ClientMonad IO (GRPCResult (Either String (UTCTime, Duration)))
     getParameters bh = do

@@ -2,6 +2,13 @@
 
 ## Unreleased changes
 
+## 0.32.0
+
+- Add endpoint `/v1/accBalance` that exposes the cooldowns on the account
+  (`accountCooldowns`) and the available account balance (`accountAtDisposal`).
+- Revise `/v0/bakerPool` so that pools that have been closed are treated as
+  not found.
+
 ## 0.31.0
 
 - Introduce `/v2/ip_info` endpoint which includes Company ID providers. The information is provided to the service using `--ip-data-v2 <FILE>`.
