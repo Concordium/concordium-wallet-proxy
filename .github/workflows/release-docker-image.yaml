@@ -14,7 +14,7 @@ env:
   REGISTRY: docker.io
   IMAGE_NAME: wallet-proxy
   # the build image
-  BASE_IMAGE_TAG: rust1.68-ghc9.6.4
+  BASE_IMAGE_TAG: rust1.73-ghc9.6.4
 
 jobs:
   build-and-push-image:
