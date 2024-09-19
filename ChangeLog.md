@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## 0.32.1
+
+- Endpoint `/v1/accBalance` displays correct `accountAtDisposal` when used with a node version < 7.
+
 ## 0.32.0
 
 - Add endpoint `/v1/accBalance` that exposes the cooldowns on the account
