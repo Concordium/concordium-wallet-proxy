@@ -2,6 +2,8 @@
 
 ## Unreleased changes
 
+- Update GHC version to 9.6.6 (lts-22.39).
+
 ## 0.32.1
 
 - Endpoint `/v1/accBalance` displays correct `accountAtDisposal` when used with a node version < 7.

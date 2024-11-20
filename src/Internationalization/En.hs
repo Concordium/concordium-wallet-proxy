@@ -184,6 +184,8 @@ translation = I18n{..}
                 DelegateToBaker bid -> "staking pool " <> Text.pack (show bid)
     i18nEvent DelegationAdded{..} = "Added delegator " <> descrDelegator edaDelegatorId edaAccount
     i18nEvent DelegationRemoved{..} = "Removed delegator " <> descrDelegator edrDelegatorId edrAccount
+    i18nEvent BakerSuspended{..} = "Validator " <> Text.pack (show ebsBakerId) <> " was suspended."
+    i18nEvent BakerResumed{..} = "Validator " <> Text.pack (show ebrBakerId) <> " was resumed."
     i18nSpecialEvent BakingRewards{..} =
         "Block rewards\n"
             <> Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)

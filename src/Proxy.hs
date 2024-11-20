@@ -570,10 +570,7 @@ getRewardPeriodLength lfb = do
             case cpksRes of
                 Left err -> return $ StatusOk $ GRPCResponse hds $ Left err
                 Right (EChainParametersAndKeys (ecpParams :: ChainParameters' cpv) _) -> do
-                    let rpLength = case chainParametersVersion @cpv of
-                            SChainParametersV0 -> Nothing
-                            SChainParametersV1 -> Just $ ecpParams ^. cpTimeParameters . supportedOParam . tpRewardPeriodLength
-                            SChainParametersV2 -> Just $ ecpParams ^. cpTimeParameters . supportedOParam . tpRewardPeriodLength
+                    let rpLength = ecpParams ^? cpTimeParameters . traversed . tpRewardPeriodLength
                     return $ StatusOk $ GRPCResponse hds $ Right rpLength
 
 --  |Version of the AccountBalance endpoint.
