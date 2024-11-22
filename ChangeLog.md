@@ -2,7 +2,10 @@
 
 ## Unreleased changes
 
+## 0.33.0
+
 - Update GHC version to 9.6.6 (lts-22.39).
+- Support timestamps in scheduled transactions serialized in RFC3339 format in the database.
 
 ## 0.32.1
 
