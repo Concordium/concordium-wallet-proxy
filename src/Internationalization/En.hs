@@ -38,6 +38,7 @@ translation = I18n{..}
     i18nUpdateTransaction UpdateMinBlockTime = "Update minimum block time"
     i18nUpdateTransaction UpdateBlockEnergyLimit = "Update block energy limit"
     i18nUpdateTransaction UpdateFinalizationCommitteeParameters = "Update finalization committee parameters"
+    i18nUpdateTransaction UpdateValidatorScoreParameters = "Update validator score parameters"
 
     i18nRejectReason ModuleNotWF = "Typechecking of module failed"
     i18nRejectReason (ModuleHashAlreadyExists mref) = "A module with the hash " <> descrModule mref <> " already exists"
@@ -184,8 +185,8 @@ translation = I18n{..}
                 DelegateToBaker bid -> "staking pool " <> Text.pack (show bid)
     i18nEvent DelegationAdded{..} = "Added delegator " <> descrDelegator edaDelegatorId edaAccount
     i18nEvent DelegationRemoved{..} = "Removed delegator " <> descrDelegator edrDelegatorId edrAccount
-    i18nEvent BakerSuspended{..} = "Validator " <> Text.pack (show ebsBakerId) <> " was suspended."
-    i18nEvent BakerResumed{..} = "Validator " <> Text.pack (show ebrBakerId) <> " was resumed."
+    i18nEvent BakerSuspended{..} = "Validator " <> descrBaker ebsBakerId ebsAccount <> " was suspended."
+    i18nEvent BakerResumed{..} = "Validator " <> descrBaker ebrBakerId ebrAccount <> " was resumed."
     i18nSpecialEvent BakingRewards{..} =
         "Block rewards\n"
             <> Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)
@@ -247,6 +248,14 @@ translation = I18n{..}
                 ]
       where
         poolName = maybe "passive delegators" (\bid -> "pool with ID " <> descrBakerId bid) stoPoolOwner
+    i18nSpecialEvent ValidatorPrimedForSuspension{..} =
+        "Validator "
+            <> descrBaker vpfsBakerId vpfsAccount
+            <> " was primed for suspension at the next pay day."
+    i18nSpecialEvent ValidatorSuspended{..} =
+        "Validator "
+            <> descrBaker vsBakerId vsAccount
+            <> " was suspended due to inactivity."
 
     i18nSpecialOutcomeShort BakingRewards{} = "Block rewards"
     i18nSpecialOutcomeShort Mint{} = "New CCD minted"
@@ -256,6 +265,8 @@ translation = I18n{..}
     i18nSpecialOutcomeShort PaydayAccountReward{} = "Reward payout"
     i18nSpecialOutcomeShort BlockAccrueReward{} = "Accrual of block rewards"
     i18nSpecialOutcomeShort PaydayPoolReward{} = "Pool rewards"
+    i18nSpecialOutcomeShort ValidatorPrimedForSuspension{} = "Validator primed for suspension"
+    i18nSpecialOutcomeShort ValidatorSuspended{} = "Validator suspended"
 
     i18nErrorMessage (EMErrorResponse NotFound) = "Not found"
     i18nErrorMessage (EMErrorResponse InternalError{}) = "Internal server error"

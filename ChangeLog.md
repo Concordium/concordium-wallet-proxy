@@ -2,6 +2,11 @@
 
 ## Unreleased changes
 
+- `/v*/accBalance` endpoints include `isSuspended` flag in the `bakerPoolInfo`.
+- `/v0/bakerPool` endpoint includes `isSuspended`, `isPrimedForSuspension` and `missedRounds`.
+- Add `/v2/accTransactions` endpoint that includes `validatorPrimedForSuspension` and
+  `validatorSuspended` pseudo-transaction types.
+
 ## 0.33.0
 
 - Update GHC version to 9.6.6 (lts-22.39).

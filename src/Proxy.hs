@@ -263,6 +263,7 @@ mkYesod
 /v1/ip_info IpsV1R GET
 /v2/ip_info IpsV2R GET
 /v1/accTransactions/#Text AccountTransactionsV1R GET
+/v2/accTransactions/#Text AccountTransactionsV2R GET
 /v0/bakerPool/#Word64 BakerPoolR GET
 /v0/chainParameters ChainParametersR GET
 /v0/nextPayday NextPaydayR GET
@@ -628,7 +629,8 @@ getAccountBalanceR ver addrText = do
                                       "bakerId" .= _bakerIdentity asiBakerInfo,
                                       "bakerElectionVerifyKey" .= _bakerElectionVerifyKey asiBakerInfo,
                                       "bakerSignatureVerifyKey" .= _bakerSignatureVerifyKey asiBakerInfo,
-                                      "bakerAggregationVerifyKey" .= _bakerAggregationVerifyKey asiBakerInfo
+                                      "bakerAggregationVerifyKey" .= _bakerAggregationVerifyKey asiBakerInfo,
+                                      "isSuspended" .= asiIsSuspended
                                     ]
                                         <> maybe [] (\bpi -> ["bakerPoolInfo" .= bpi]) asiPoolInfo
                             case asiPendingChange of
@@ -1079,7 +1081,7 @@ getSimpleTransactionStatus i trHash = do
     addMemo [TransferMemo memo] xs = ("memo" .= memo) : xs
     addMemo _ xs = xs
 
-    outcomeToPairs :: TransactionSummary -> Either OutcomeConversionError [Pair]
+    outcomeToPairs :: SupplementedTransactionSummary -> Either OutcomeConversionError [Pair]
     outcomeToPairs TransactionSummary{..} =
         ( [ "transactionHash" .= tsHash,
             "sender" .= tsSender,
@@ -1206,7 +1208,7 @@ getSimpleTransactionStatus i trHash = do
                 _ -> case tsResult of
                     TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
                     _ -> Left OCEUnsupportedType
-    outcomesToPairs :: [TransactionSummary] -> Either OutcomeConversionError [Pair]
+    outcomesToPairs :: [SupplementedTransactionSummary] -> Either OutcomeConversionError [Pair]
     outcomesToPairs l = do
         outcomes <- mapM outcomeToPairs l
         case outcomes of
@@ -1218,7 +1220,7 @@ getSimpleTransactionStatus i trHash = do
     -- This function returns the JSON representing an event that can occur due to a smart contract update transaction.
     -- It returns @Nothing@ if used on an event different from the four smart contract update events `Updated`, `Transferred`,
     -- `Interrupted`, `Resumed`.
-    updateEventToMaybeValue :: Event -> Maybe Value
+    updateEventToMaybeValue :: SupplementedEvent -> Maybe Value
     updateEventToMaybeValue Updated{..} =
         Just $
             object
@@ -1258,7 +1260,7 @@ getSimpleTransactionStatus i trHash = do
     -- It returns @Just@ if all the events are among the events `Updated`, `Transferred`,
     -- `Interrupted`, `Resumed`. Otherwise @Nothing@.
     -- It is only supposed to be called on a list of the above events.
-    eventsToMaybeValues :: [Event] -> Maybe [Value]
+    eventsToMaybeValues :: [SupplementedEvent] -> Maybe [Value]
     eventsToMaybeValues events = sequence $ updateEventToMaybeValue <$> events
 
 -- helper functions to be used in view patterns to match both transfers and
@@ -1279,13 +1281,20 @@ viewScheduledTransfer (TSTAccountTransaction (Just TTTransferWithScheduleAndMemo
 viewScheduledTransfer _ = False
 
 -- | Get the baker ID from a baker configuration event
-eventBakerId :: Event -> Maybe BakerId
+eventBakerId :: Event' supplemented -> Maybe BakerId
 eventBakerId BakerAdded{..} = Just ebaBakerId
 eventBakerId BakerRemoved{..} = Just ebrBakerId
 eventBakerId BakerStakeIncreased{..} = Just ebsiBakerId
 eventBakerId BakerStakeDecreased{..} = Just ebsiBakerId
 eventBakerId BakerSetRestakeEarnings{..} = Just ebsreBakerId
 eventBakerId BakerKeysUpdated{..} = Just ebkuBakerId
+eventBakerId BakerSetOpenStatus{..} = Just ebsosBakerId
+eventBakerId BakerSetMetadataURL{..} = Just ebsmuBakerId
+eventBakerId BakerSetTransactionFeeCommission{..} = Just ebstfcBakerId
+eventBakerId BakerSetBakingRewardCommission{..} = Just ebsbrcBakerId
+eventBakerId BakerSetFinalizationRewardCommission{..} = Just ebsfrcBakerId
+eventBakerId BakerSuspended{..} = Just ebsBakerId
+eventBakerId BakerResumed{..} = Just ebrBakerId
 eventBakerId _ = Nothing
 
 -- Get the status of the submission.
@@ -1304,11 +1313,19 @@ getSubmissionStatusR submissionId =
 data IncludeMemos = IncludeMemo | ExcludeMemo
     deriving (Eq, Show)
 
+-- | Whether ValidatorSuspended and ValidatorPrimedForSuspension events are included in
+--  the account transactions.
+data IncludeSuspensionEvents = IncludeSuspensionEvents | ExcludeSuspensionEvents
+    deriving (Eq, Show)
+
 getAccountTransactionsV0R :: Text -> Handler TypedContent
-getAccountTransactionsV0R = getAccountTransactionsWorker ExcludeMemo
+getAccountTransactionsV0R = getAccountTransactionsWorker ExcludeMemo ExcludeSuspensionEvents
 
 getAccountTransactionsV1R :: Text -> Handler TypedContent
-getAccountTransactionsV1R = getAccountTransactionsWorker IncludeMemo
+getAccountTransactionsV1R = getAccountTransactionsWorker IncludeMemo ExcludeSuspensionEvents
+
+getAccountTransactionsV2R :: Text -> Handler TypedContent
+getAccountTransactionsV2R = getAccountTransactionsWorker IncludeMemo IncludeSuspensionEvents
 
 getCIS2Tokens :: Word64 -> Word64 -> Handler TypedContent
 getCIS2Tokens index subindex = do
@@ -1634,8 +1651,8 @@ getMetadataUrl = do
             return MetadataURL{..}
 
 -- | List transactions for the account.
-getAccountTransactionsWorker :: IncludeMemos -> Text -> Handler TypedContent
-getAccountTransactionsWorker includeMemos addrText = do
+getAccountTransactionsWorker :: IncludeMemos -> IncludeSuspensionEvents -> Text -> Handler TypedContent
+getAccountTransactionsWorker includeMemos includeSuspensionEvents addrText = do
     i <- internationalize
     -- Get the canonical address of the account.
     let getAddress k = do
@@ -1704,7 +1721,15 @@ getAccountTransactionsWorker includeMemos addrText = do
                 -- - either the transaction is an account transaction
                 -- - or if not check that it is not a finalization reward.
                 Just "allButFinalization" -> Just $ \s -> E.where_ (isAccountTransaction s E.||. extractedTag s E.!=. E.val (Just "FinalizationRewards"))
-                Just "none" -> Just $ \s -> E.where_ $ isAccountTransaction s
+                Just "none" -> Just $ case includeSuspensionEvents of
+                    -- If suspension events are excluded, then we only include account transactions.
+                    ExcludeSuspensionEvents -> E.where_ . isAccountTransaction
+                    -- If suspension events are included, we include them as well as account transactions.
+                    IncludeSuspensionEvents -> \s ->
+                        E.where_ $
+                            isAccountTransaction s
+                                E.||. extractedTag s E.==. E.val (Just "ValidatorSuspended")
+                                E.||. extractedTag s E.==. E.val (Just "ValidatorPrimedForSuspension")
                 Just _ -> Nothing
 
         maybeBlockRewardFilter <-
@@ -1751,6 +1776,15 @@ getAccountTransactionsWorker includeMemos addrText = do
                                 E.||. extractedType E.==. E.val (Just "encryptedAmountTransferWithMemo")
                 Just _ -> Nothing
 
+        -- For older versions of the endpoint, we exclude suspension events.
+        let suspensionFilter = case includeSuspensionEvents of
+                IncludeSuspensionEvents -> const $ return ()
+                ExcludeSuspensionEvents -> \s ->
+                    E.where_ $
+                        E.not_ $
+                            (extractedTag s E.==. E.val (Just "ValidatorSuspended"))
+                                E.||. (extractedTag s E.==. E.val (Just "ValidatorPrimedForSuspension"))
+
         rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
         case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter, maybeTypeFilter) of
             (Nothing, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
@@ -1780,6 +1814,7 @@ getAccountTransactionsWorker includeMemos addrText = do
                         bakingRewardFilter s
                         encryptedFilter s
                         typeFilter s
+                        suspensionFilter s
                         -- sort with the requested method or ascending over EntryId.
                         E.orderBy [ordering (e E.^. EntryId)]
                         -- Limit the number of returned rows
@@ -1928,6 +1963,30 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                   "details"
                     .= object
                         [ "type" .= ("paydayPoolReward" :: Text),
+                          "outcome" .= ("success" :: Text),
+                          "description" .= i18n i (ShortDescription v),
+                          "events" .= [i18n i v]
+                        ]
+                ]
+        AE.Success (Right v@ValidatorPrimedForSuspension{}) ->
+            return
+                [ "origin" .= object ["type" .= ("none" :: Text)],
+                  "total" .= (0 :: Amount),
+                  "details"
+                    .= object
+                        [ "type" .= ("validatorPrimedForSuspension" :: Text),
+                          "outcome" .= ("success" :: Text),
+                          "description" .= i18n i (ShortDescription v),
+                          "events" .= [i18n i v]
+                        ]
+                ]
+        AE.Success (Right v@ValidatorSuspended{}) ->
+            return
+                [ "origin" .= object ["type" .= ("none" :: Text)],
+                  "total" .= (0 :: Amount),
+                  "details"
+                    .= object
+                        [ "type" .= ("validatorSuspended" :: Text),
                           "outcome" .= ("success" :: Text),
                           "description" .= i18n i (ShortDescription v),
                           "events" .= [i18n i v]
