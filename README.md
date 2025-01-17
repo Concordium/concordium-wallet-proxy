@@ -167,6 +167,8 @@ The `AccountBalance` value is always an object with the following fields
       first payday after the cooldown ends, e.g. `"2022-03-30T16:43:53.5Z"`.
     * `"newStake"` (optional): This field is present if the value of the field `"change"` is `"reduceStake"`,
         and the value is the new stake after the cooldown.
+  - `"isSuspended"` (required, historically absent): `true` if the validator is supended, `false` otherwise.
+    This is always `false` prior to protocol version 8.
 * `"accountDelegation"` (optional) if present indicates that this account is
   registered as a delegator. If present, the value is always an object with fields
   - `"stakedAmount"` (required): the amount that is currently staked
@@ -459,8 +461,12 @@ a submission id is returned, which can be used to query the status of the transf
 ## Get transactions
 
 The endpoint `/accTransactions/{account address}` retrieves a partial list of transactions affecting an account.
-There are two versions of the endpoint, `v0` and `v1`.
-They both support the following parameters.
+There are three versions of the endpoint, `v0`, `v1` and `v2`.
+Version `v0` treats transactions with memos as the equivalent transaction without a memo.
+Versions `v0` and `v1` exclude the special transaction outcomes for suspending inactive validators,
+which are included in `v2`.
+
+They support the following parameters.
 - `order`: whether to order the transactions in ascending or descending order of occurrence. A value beginning with `d` or `D` is interpreted as descending; any other (or no) value is interpreted as ascending.
 - `from`: a transaction id. If the order is ascending, return transactions with higher ids than this; if the order is descending, return transactions with lower ids.
 - `limit`: the maximum number of transactions to return; defaults to 20; values above 1000 are treated as 1000.
@@ -593,11 +599,16 @@ It consists of the following fields:
   - `"updateCredentials"`
   - `"updateAccountKeys"`
   - `"chainUpdate"`
+  - `"configureBaker"`
+  - `"configureDelegation"`
   - `"Malformed account transaction"`
-  - in `v1` endpoint type can additionally be one of
+  - in the `v1` and `v2` endpoints type can additionally be one of
     - `transferWithMemo`
     - `encryptedAmountTransferWithMemo`
     - `transferWithScheduleAndMemo`
+  - in the `v2` endpoint `type` can additionaly be one of
+    - `"validatorPrimedForSuspension"`
+    - `"validatorSuspended"`
 - `description` (required): a brief localized description of the type of the transaction
 - `outcome` (required):
   - `"success"` if the transaction was executed successfully
@@ -941,8 +952,11 @@ On success, the response is of the following form:
         "bakerEquityCapital": "3000000000000",
         "lotteryPower": 0.20008001762276778,
         "blocksBaked": 27,
-        "delegatedCapital": "1500480508"
-    }
+        "delegatedCapital": "1500480508",
+        "isPrimedForSuspension": false,
+        "missedRounds": 0
+    },
+    "isSuspended": false
 }
 ```
 In the above, the value `"bakerStakePendingChange"` is either of the form
@@ -974,6 +988,9 @@ The value of `"openStatus"` is either `"openForAll"`, `"closedForNew"` or `"clos
 The `"currentPaydayStatus"` can be `null` when the baker pool is open, but the baker is
 not yet eligible to participate in consensus. This is the case from the point at which
 the baker first registers until it is in the committee for the current payday.
+
+The `"isPrimedForSuspension"` and `"missedRounds"` fields of `"currentPaydayStatus"` are
+only present from protocol version 8, as is the `"isSuspended"` field.
 
 This returns a `404` error status (with `error` code 2) if there is no *active* baker
 with the given ID.
