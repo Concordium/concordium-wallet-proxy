@@ -2,6 +2,8 @@
 
 ## Unreleased changes
 
+## 0.34.0
+
 - `/v*/accBalance` endpoints include `isSuspended` flag in the `bakerPoolInfo`.
 - `/v0/bakerPool` endpoint includes `isSuspended`, `isPrimedForSuspension` and `missedRounds`.
 - Add `/v2/accTransactions` endpoint that includes `validatorPrimedForSuspension` and
