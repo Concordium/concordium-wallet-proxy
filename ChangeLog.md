@@ -2,6 +2,12 @@
 
 ## Unreleased changes
 
+## 0.34.1
+
+- Fix a bug in the deserialization of `SpecialTransactionOutcome` that causes the
+  `/v2/accTransactions` endpoint to fail with `validatorPrimedForSuspension` and
+  `validatorSuspended` events.
+
 ## 0.34.0
 
 - `/v*/accBalance` endpoints include `isSuspended` flag in the `bakerPoolInfo`.
