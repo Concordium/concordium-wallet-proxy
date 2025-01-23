@@ -36,6 +36,10 @@ jobs:
         id: meta
         run: |
           export VERSION=$(yq .version package.yaml)
+          if [ $VERSION != ${{ github.ref_name }} ]; then
+             echo "::error The tag: ${{ github.ref_name }} does not match the version extracted from package.yaml: $VERSION"
+             exit 1
+          fi
           export FULL_IMAGE_TAG="${{ env.REGISTRY }}/concordium/$IMAGE_NAME:$VERSION"
           echo "::notice FULL_IMAGE_TAG=${FULL_IMAGE_TAG}"
           # Make sure the image does not exist. Abort if we can retrieve any metadata.
