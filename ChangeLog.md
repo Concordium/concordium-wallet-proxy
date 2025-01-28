@@ -2,6 +2,11 @@
 
 ## Unreleased changes
 
+## 0.34.2
+
+- Fix a bug where account transactions where incorrectly excluded from the
+  `/v0/accTransactions` and `/v1/accTransactions` endpoints.
+
 ## 0.34.1
 
 - Fix a bug in the deserialization of `SpecialTransactionOutcome` that causes the
