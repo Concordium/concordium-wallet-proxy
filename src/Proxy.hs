@@ -1781,9 +1781,11 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents addrText = do
                 IncludeSuspensionEvents -> const $ return ()
                 ExcludeSuspensionEvents -> \s ->
                     E.where_ $
-                        E.not_ $
-                            (extractedTag s E.==. E.val (Just "ValidatorSuspended"))
-                                E.||. (extractedTag s E.==. E.val (Just "ValidatorPrimedForSuspension"))
+                        E.isNothing (extractedTag s)
+                            E.||. E.not_
+                                ( extractedTag s E.==. E.val (Just "ValidatorSuspended")
+                                    E.||. extractedTag s E.==. E.val (Just "ValidatorPrimedForSuspension")
+                                )
 
         rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
         case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter, maybeTypeFilter) of
