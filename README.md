@@ -169,6 +169,7 @@ The `AccountBalance` value is always an object with the following fields
         and the value is the new stake after the cooldown.
   - `"isSuspended"` (required, historically absent): `true` if the validator is supended, `false` otherwise.
     This is always `false` prior to protocol version 8.
+  - `"isPrimedForSuspension"` (optional): this is present if the validator is in the committee for the current reward period, and is `true` if it is currently primed for suspension at the next snapshot, and `false` otherwise. Absent prior to protocol version 8.
 * `"accountDelegation"` (optional) if present indicates that this account is
   registered as a delegator. If present, the value is always an object with fields
   - `"stakedAmount"` (required): the amount that is currently staked
@@ -188,6 +189,8 @@ The `AccountBalance` value is always an object with the following fields
       first payday after the cooldown ends, e.g. `"2022-03-30T16:43:53.5Z"`.
     * `"newStake"` (optional): This field is present if the value of the field `"change"` is `"reduceStake"`,
         and the value is the new stake after the cooldown.
+  - `"isSuspended"` (optional, should always be present after protocol 8): `true` if the target validator is suspended, `false` otherwise.
+  - `"isPrimedForSuspension"` (optional): this is present if the validator is in the committee for the current reward period, and is `true` if it is currently primed for suspension at the next snapshot, and `false` otherwise.
 * `"accountCooldowns"` (v1 only, required): an array (possibly empty) of cooldown amounts in the account's inactive stake.
   Each entry consists of the following fields:
   - `"timestamp"`: the timestamp at which the cooldown is expected to expire

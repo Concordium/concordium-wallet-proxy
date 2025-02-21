@@ -2,6 +2,9 @@
 
 ## Unreleased changes
 
+- Add `isPrimedForSuspension` and `isSuspended` to `accBalance` queries where the account is
+  a delegator or validator.
+
 ## 0.34.2
 
 - Fix a bug where account transactions where incorrectly excluded from the
