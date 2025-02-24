@@ -867,12 +867,12 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                             Just ms -> case readMaybe $ Text.unpack ms of
                                 Nothing -> respond400Error (EMParseError "Could not parse `metadataSize` value.") RequestInvalid
                                 Just v -> return $ Just v
-                    let pSize = bakerConfigurePayloadSize True True True True metasize True True True
+                    let pSize = bakerConfigurePayloadSize True True True True metasize True True True False
                     costResponse $ bakerConfigureEnergyCostWithKeys pSize numSignatures
                 "updateBakerStake" -> do
                     isAmountUpdated <- isJust <$> lookupGetParam "amount"
                     isRestakeUpdated <- isJust <$> lookupGetParam "restake"
-                    let pSize = bakerConfigurePayloadSize isAmountUpdated isRestakeUpdated False False Nothing False False False
+                    let pSize = bakerConfigurePayloadSize isAmountUpdated isRestakeUpdated False False Nothing False False False False
                     costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
                 "updateBakerPool" -> do
                     metasize <-
@@ -885,7 +885,7 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                     isTComUpdated <- isJust <$> lookupGetParam "transactionCommission"
                     isBComUpdated <- isJust <$> lookupGetParam "bakerRewardCommission"
                     isFComUpdated <- isJust <$> lookupGetParam "finalizationRewardCommission"
-                    let pSize = bakerConfigurePayloadSize False False isOpenStatusUpdated False metasize isTComUpdated isBComUpdated isFComUpdated
+                    let pSize = bakerConfigurePayloadSize False False isOpenStatusUpdated False metasize isTComUpdated isBComUpdated isFComUpdated False
                     costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
                 "update" -> do
                     invoker <-
@@ -972,10 +972,10 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                                 InvokeContract.Failure{..} -> (False, rcrUsedEnergy)
                     runGRPC getInvokeCost $ costResponseWithIndication . cost
                 "updateBakerKeys" -> do
-                    let pSize = bakerConfigurePayloadSize False False False True Nothing False False False
+                    let pSize = bakerConfigurePayloadSize False False False True Nothing False False False False
                     costResponse $ bakerConfigureEnergyCostWithKeys pSize numSignatures
                 "removeBaker" -> do
-                    let pSize = bakerConfigurePayloadSize True False False False Nothing False False False
+                    let pSize = bakerConfigurePayloadSize True False False False Nothing False False False False
                     costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
                 "configureBaker" -> do
                     metasize <-
@@ -991,7 +991,18 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                     isTComUpdated <- isJust <$> lookupGetParam "transactionCommission"
                     isBComUpdated <- isJust <$> lookupGetParam "bakerRewardCommission"
                     isFComUpdated <- isJust <$> lookupGetParam "finalizationRewardCommission"
-                    let pSize = bakerConfigurePayloadSize isAmountUpdated isRestakeUpdated isOpenStatusUpdated areKeysUpdated metasize isTComUpdated isBComUpdated isFComUpdated
+                    isSuspendedUpdated <- isJust <$> lookupGetParam "suspended"
+                    let pSize =
+                            bakerConfigurePayloadSize
+                                isAmountUpdated
+                                isRestakeUpdated
+                                isOpenStatusUpdated
+                                areKeysUpdated
+                                metasize
+                                isTComUpdated
+                                isBComUpdated
+                                isFComUpdated
+                                isSuspendedUpdated
                     costResponse $
                         (if areKeysUpdated then bakerConfigureEnergyCostWithKeys else bakerConfigureEnergyCostWithoutKeys)
                             pSize

@@ -276,6 +276,7 @@ The following query parameters are supported
 - `transactionCommission`, whether the transaction fee commission of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
 - `bakerRewardCommission`, whether the baker reward commission of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
 - `finalizationRewardCommission`, whether the finalization reward of a baker pool is updated. Optionally, and only applies when `type` is either `updateBakerPool` or `configureBaker`.
+- `suspended`, whether the suspended status of the validator is updated. Optionally, and only applies when `type` is `configureBaker`.
 - `sender`, only applies when `type` is `update` and is mandatory in this case. Specifies the sender account address of the transaction.
 - `contractIndex`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract index of the contract being updated. Given as an integer.
 - `contractSubindex`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract subindex of the contract being updated. Given as an integer.
