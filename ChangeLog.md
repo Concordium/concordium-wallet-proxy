@@ -2,6 +2,8 @@
 
 ## Unreleased changes
 
+## 0.35.0
+
 - Add `isPrimedForSuspension` and `isSuspended` to `accBalance` queries where the account is
   a delegator or validator.
 - Add the parameter `suspended` for `/v0/transactionCost?type=configureBaker` to calculate the
