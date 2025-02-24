@@ -604,8 +604,8 @@ getAccountBalanceR ver addrText = do
         -- checking the status code for "not found".
         Just (lastFinInfo, bestInfo, nextPayday, epochDuration, lastFinBlock) -> do
             let
-                getBal :: AccountInfo -> Either (Maybe Value) (Maybe RewardPeriodLength -> Value)
-                getBal AccountInfo{..} = do
+                getBal :: (AccountInfo, Maybe BakerPoolStatus) -> Either (Maybe Value) (Maybe RewardPeriodLength -> Value)
+                getBal (AccountInfo{..}, mBPS) = do
                     let extraBalanceInfo
                             | ver >= AccountBalanceV1 =
                                 [ "accountCooldowns" .= aiAccountCooldowns,
@@ -620,6 +620,16 @@ getAccountBalanceR ver addrText = do
                               "accountIndex" .= aiAccountIndex
                             ]
                                 ++ extraBalanceInfo
+                    let primed = maybeToList $ do
+                            bps <- mBPS
+                            CurrentPaydayBakerPoolStatus{..} <- psCurrentPaydayStatus bps
+                            isPrimed <- bpsIsPrimedForSuspension
+                            return ("isPrimedForSuspension" .= isPrimed)
+                    let suspended = maybeToList $ do
+                            bps <- mBPS
+                            ActiveBakerPoolStatus{..} <- psActiveStatus bps
+                            isSuspended <- abpsIsSuspended
+                            return ("isSuspended" .= isSuspended)
                     case aiStakingInfo of
                         AccountStakingNone -> Left . Just $ object balanceInfo
                         AccountStakingBaker{..} -> do
@@ -633,6 +643,7 @@ getAccountBalanceR ver addrText = do
                                       "isSuspended" .= asiIsSuspended
                                     ]
                                         <> maybe [] (\bpi -> ["bakerPoolInfo" .= bpi]) asiPoolInfo
+                                        <> primed
                             case asiPendingChange of
                                 NoChange -> Left . Just $ object $ balanceInfo <> ["accountBaker" .= object infoWithoutPending]
                                 _ ->
@@ -644,6 +655,8 @@ getAccountBalanceR ver addrText = do
                                       "restakeEarnings" .= asiStakeEarnings,
                                       "delegationTarget" .= asiDelegationTarget
                                     ]
+                                        <> primed
+                                        <> suspended
                             case asiDelegationPendingChange of
                                 NoChange -> Left . Just $ object $ balanceInfo <> ["accountDelegation" .= object infoWithoutPending]
                                 _ ->
@@ -670,7 +683,37 @@ getAccountBalanceR ver addrText = do
                 (Right lastFinBalF, Left bestBal) -> runGRPC (getRewardPeriodLength lastFinBlock) $ \rpl -> response (Just (lastFinBalF rpl)) bestBal
                 (Right lastFinBalF, Right bestBalF) -> runGRPC (getRewardPeriodLength lastFinBlock) $ \rpl -> response (Just (lastFinBalF rpl)) (Just (bestBalF rpl))
   where
-    doGetBal :: AccountAddress -> ClientMonad IO (GRPCResult (Either String (Maybe (AccountInfo, Maybe AccountInfo, Maybe UTCTime, Duration, BlockHash))))
+    onResponse resp k =
+        case resp of
+            StatusNotOk (NOT_FOUND, _) -> return $ StatusOk $ GRPCResponse [] (Right Nothing)
+            StatusNotOk err -> return $ StatusNotOk err
+            StatusInvalid -> return StatusInvalid
+            RequestFailed err -> return $ RequestFailed err
+            StatusOk r -> case grpcResponseVal r of
+                Left err -> return $ StatusOk $ GRPCResponse (grpcHeaders r) $ Left err
+                Right info -> k info
+    -- Gets the account info for the given address and, if the account is a validator or delegator
+    -- to a validator pool, the info for that pool.
+    getAccountAndPoolInfo :: AccountAddress -> BlockHashInput -> ClientMonad IO (GRPCResult (Either String (AccountInfo, Maybe BakerPoolStatus)))
+    getAccountAndPoolInfo accAddr blockHashInput = do
+        accInfoRes <- getAccountInfo (AccAddress accAddr) blockHashInput
+        case getResponseValueAndHeaders accInfoRes of
+            Left errRes -> return errRes
+            Right (Left err, hds) -> return $ StatusOk $ GRPCResponse hds $ Left err
+            Right (Right accInfo, hds) -> do
+                let tryGetPoolInfo bid = do
+                        poolInfoRes <- getPoolInfo blockHashInput bid
+                        return $ case getResponseValueAndHeaders poolInfoRes of
+                            Left errRes -> errRes
+                            Right (Left err, hds') -> StatusOk $ GRPCResponse hds' $ Left err
+                            Right (Right poolInfo, _) -> StatusOk $ GRPCResponse hds $ Right (accInfo, Just poolInfo)
+                case aiStakingInfo accInfo of
+                    AccountStakingBaker{..} -> tryGetPoolInfo $ _bakerIdentity asiBakerInfo
+                    AccountStakingDelegated{asiDelegationTarget = DelegateToBaker bid} ->
+                        tryGetPoolInfo bid
+                    _ -> return $ StatusOk $ GRPCResponse hds $ Right (accInfo, Nothing)
+    -- return $ StatusOk $ GRPCResponse hds $ Right (accInfo, mPoolInfo)
+    doGetBal :: AccountAddress -> ClientMonad IO (GRPCResult (Either String (Maybe ((AccountInfo, Maybe BakerPoolStatus), Maybe (AccountInfo, Maybe BakerPoolStatus), Maybe UTCTime, Duration, BlockHash))))
     doGetBal accAddr = do
         -- Get the consensus info, for retrieving the epoch duration.
         cInfoRes <- getConsensusInfo
@@ -680,20 +723,11 @@ getAccountBalanceR ver addrText = do
             Right (Right status, _) -> do
                 -- Get the account info for the account in the last finalized block.
                 let lastFinBlock = csLastFinalizedBlock status
-                lastFinAccInfoRes <- getAccountInfo (AccAddress accAddr) (Given lastFinBlock)
-                let onResponse resp k =
-                        case resp of
-                            StatusNotOk (NOT_FOUND, _) -> return $ StatusOk $ GRPCResponse [] (Right Nothing)
-                            StatusNotOk err -> return $ StatusNotOk err
-                            StatusInvalid -> return $ StatusInvalid
-                            RequestFailed err -> return $ RequestFailed err
-                            StatusOk r -> case grpcResponseVal r of
-                                Left err -> return $ StatusOk $ GRPCResponse (grpcHeaders r) $ Left err
-                                Right info -> k info
+                lastFinAccInfoRes <- getAccountAndPoolInfo accAddr (Given lastFinBlock)
                 let withBestInfo cont = case ver of
                         AccountBalanceV0 -> do
                             -- Get the account info for the account in the best block.
-                            bestAccInfoRes <- getAccountInfo (AccAddress accAddr) Best
+                            bestAccInfoRes <- getAccountAndPoolInfo accAddr Best
                             onResponse bestAccInfoRes (cont . Just)
                         AccountBalanceV1 -> cont Nothing
                 onResponse lastFinAccInfoRes $ \lastFinInfo -> do
