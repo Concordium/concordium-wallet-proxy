@@ -258,7 +258,7 @@ mkYesod
 /v0/submitCredential/ CredentialR PUT
 /v0/submitTransfer/ TransferR PUT
 /v0/testnetGTUDrop/#Text GTUDropR PUT
-/v0/submitTransferBytes/ TransferBytesR PUT
+/v0/submitRawTransaction/ RawTransactionR PUT
 /v0/global GlobalFileR GET
 /v0/health HealthR GET
 /v0/ip_info IpsR GET
@@ -1085,19 +1085,19 @@ putTransferR =
                     Left err -> fail err
                     Right tx -> return tx
 
-putTransferBytesR :: Handler TypedContent
-putTransferBytesR = do
+putRawTransactionR :: Handler TypedContent
+putRawTransactionR = do
     binData <- runConduit $ rawRequestBody .| sinkLbs
-    case S.decodeLazy binData of
+    case S.runGetLazy (getBareBlockItem SP8) binData of
         Left err -> respond400Error (EMParseError err) RequestInvalid
-        Right tx -> do
-            runGRPC (doSendBlockItem (NormalTransaction tx)) $ \case
+        Right bbi -> do
+            runGRPC (doSendBlockItem bbi) $ \case
                 False -> do
                     -- transaction invalid
                     $(logError) "Transaction rejected by the node."
                     respond400Error EMTransactionRejected RequestInvalid
                 True ->
-                    sendResponse (object ["submissionId" .= (getHash (NormalTransaction tx) :: TransactionHash)])
+                    sendResponse (object ["submissionId" .= (getHash bbi :: TransactionHash)])
 
 -- | An error that is the result of converting a transaction status to a "simple"
 --  transaction status.
