@@ -17,6 +17,7 @@ The wallet proxy provides the following endpoints:
   of a transfer or credential deployment
 * `PUT /v0/submitCredential`: deploy a credential/create an account
 * `PUT /v0/submitTransfer`: perform a simple transfer
+* `PUT /v0/submitRawTransaction`: perform a any raw transaction
 * `GET /v0/accTransactions/{account address}`: get the transactions affecting an account
 * `GET /v1/accTransactions/{account address}`: get the transactions affecting an account, including memos
 * `PUT /v0/testnetGTUDrop/{account address}`: request a CCD drop to the specified account
@@ -459,6 +460,14 @@ queried via the `/submissionStatus` endpoint.
 
 When submitting a transfer you should make a PUT request to `/v0/submitTransfer` endpoint.
 The data that should be sent is as the one returned from the library provided as part of the concordium-base repository.
+After submission of the transaction the responses are the same as for the submission of the credential. If successful
+a submission id is returned, which can be used to query the status of the transfer via the `/v0/submissionStatus` endpoint.
+
+
+## Submit raw transaction
+
+When submitting a raw transaction you should make a PUT request to `/v0/submitRawTransaction` endpoint.
+The data that should be sent is the serialization of the transaction (as a bare block item) as raw bytes.
 After submission of the transaction the responses are the same as for the submission of the credential. If successful
 a submission id is returned, which can be used to query the status of the transfer via the `/v0/submissionStatus` endpoint.
 

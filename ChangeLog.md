@@ -2,6 +2,8 @@
 
 ## Unreleased changes
 
+- Add `PUT /v0/submitRawTransaction` endpoint for submitting an account transaction as bytes instead of JSON.
+
 ## 0.35.0
 
 - Add `isPrimedForSuspension` and `isSuspended` to `accBalance` queries where the account is
