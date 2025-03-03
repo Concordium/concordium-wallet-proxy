@@ -37,8 +37,9 @@ import qualified Data.Aeson as AE
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Parser (json')
 import Data.Aeson.Types (Pair, parse)
-import Data.Conduit (connect)
+import Data.Conduit (connect, runConduit, (.|))
 import Data.Conduit.Attoparsec (sinkParserEither)
+import Data.Conduit.Binary (sinkLbs)
 import Data.Foldable
 import Data.Functor
 import qualified Data.Map.Strict as Map
@@ -257,6 +258,7 @@ mkYesod
 /v0/submitCredential/ CredentialR PUT
 /v0/submitTransfer/ TransferR PUT
 /v0/testnetGTUDrop/#Text GTUDropR PUT
+/v0/submitTransferBytes/ TransferBytesR PUT
 /v0/global GlobalFileR GET
 /v0/health HealthR GET
 /v0/ip_info IpsR GET
@@ -1082,6 +1084,20 @@ putTransferR =
                 case S.decode (S.encode sig <> body) of
                     Left err -> fail err
                     Right tx -> return tx
+
+putTransferBytesR :: Handler TypedContent
+putTransferBytesR = do
+    binData <- runConduit $ rawRequestBody .| sinkLbs
+    case S.decodeLazy binData of
+        Left err -> respond400Error (EMParseError err) RequestInvalid
+        Right tx -> do
+            runGRPC (doSendBlockItem (NormalTransaction tx)) $ \case
+                False -> do
+                    -- transaction invalid
+                    $(logError) "Transaction rejected by the node."
+                    respond400Error EMTransactionRejected RequestInvalid
+                True ->
+                    sendResponse (object ["submissionId" .= (getHash (NormalTransaction tx) :: TransactionHash)])
 
 -- | An error that is the result of converting a transaction status to a "simple"
 --  transaction status.
