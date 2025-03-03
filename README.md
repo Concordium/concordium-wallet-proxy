@@ -466,7 +466,7 @@ a submission id is returned, which can be used to query the status of the transf
 
 ## Submit raw transaction
 
-When submitting a raw transsaction you should make a PUT request to `/v0/submitRawTransaction` endpoint.
+When submitting a raw transaction you should make a PUT request to `/v0/submitRawTransaction` endpoint.
 The data that should be sent is the serialization of the transaction (as a bare block item) as raw bytes.
 After submission of the transaction the responses are the same as for the submission of the credential. If successful
 a submission id is returned, which can be used to query the status of the transfer via the `/v0/submissionStatus` endpoint.
