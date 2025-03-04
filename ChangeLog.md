@@ -2,6 +2,8 @@
 
 ## Unreleased changes
 
+## 0.36.0
+
 - Add `PUT /v0/submitRawTransaction` endpoint for submitting an account transaction as bytes instead of JSON.
 
 ## 0.35.0
