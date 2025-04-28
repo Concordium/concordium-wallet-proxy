@@ -83,17 +83,21 @@
         <mxCell id="i6KSr7b9u-3ymFxsB6-P-45" value="Wallet" style="html=1;verticalLabelPosition=top;align=center;labelBackgroundColor=#ffffff;verticalAlign=bottom;strokeWidth=2;strokeColor=#0080F0;shadow=0;dashed=0;shape=mxgraph.ios7.icons.smartphone;labelPosition=center;" vertex="1" parent="1">
           <mxGeometry x="190" y="238" width="40" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="i6KSr7b9u-3ymFxsB6-P-48" value="Read database information" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.75;entryY=0;entryDx=0;entryDy=0;fontSize=10;" edge="1" parent="1" source="i6KSr7b9u-3ymFxsB6-P-47" target="i6KSr7b9u-3ymFxsB6-P-31">
-          <mxGeometry x="-0.4271" y="8" relative="1" as="geometry">
-            <mxPoint as="offset" />
-          </mxGeometry>
-        </mxCell>
         <mxCell id="i6KSr7b9u-3ymFxsB6-P-47" value="Transaction logger exporter" style="aspect=fixed;sketch=0;html=1;dashed=0;whitespace=wrap;verticalLabelPosition=bottom;verticalAlign=top;fillColor=#2875E2;strokeColor=#ffffff;points=[[0.005,0.63,0],[0.1,0.2,0],[0.9,0.2,0],[0.5,0,0],[0.995,0.63,0],[0.72,0.99,0],[0.5,1,0],[0.28,0.99,0]];shape=mxgraph.kubernetes.icon2;prIcon=job" vertex="1" parent="1">
           <mxGeometry x="389" y="123.75" width="50" height="48" as="geometry" />
         </mxCell>
         <mxCell id="i6KSr7b9u-3ymFxsB6-P-49" value="Send metrics" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1.02;entryY=0.505;entryDx=0;entryDy=0;entryPerimeter=0;fontSize=10;" edge="1" parent="1" source="i6KSr7b9u-3ymFxsB6-P-47" target="i6KSr7b9u-3ymFxsB6-P-33">
           <mxGeometry x="0.0317" y="-8" relative="1" as="geometry">
             <Array as="points" />
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="i6KSr7b9u-3ymFxsB6-P-51" value="Read database information" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.995;entryY=0.63;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.75;exitY=0;exitDx=0;exitDy=0;fontSize=10;" edge="1" parent="1" source="i6KSr7b9u-3ymFxsB6-P-31" target="i6KSr7b9u-3ymFxsB6-P-47">
+          <mxGeometry x="0.5424" y="-6" relative="1" as="geometry">
+            <mxPoint x="710" y="370" as="sourcePoint" />
+            <Array as="points">
+              <mxPoint x="703" y="154" />
+            </Array>
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
