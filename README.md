@@ -2,6 +2,10 @@
 
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.0-4baaaa.svg)](https://github.com/Concordium/.github/blob/main/.github/CODE_OF_CONDUCT.md)
 
+## Component Interaction Diagram
+
+![Component Interaction Diagram](docs/diagrams/wallet-proxy.drawio.png)
+
 ## Overview
 
 The wallet proxy provides the following endpoints:
