@@ -37,6 +37,7 @@ import Options.Applicative
 
 data ProxyConfig = ProxyConfig
     { pcGRPC :: GrpcConfig,
+      pcPort :: Int,
       pcDBConnString :: ByteString,
       -- | Account file used for GTU drop. Only used on stagenet and testnet.
       pcGTUAccountFile :: Maybe FilePath,
@@ -63,6 +64,7 @@ parser =
         mkProxyConfig
             <$> backendParser
             <*> optional (option auto (long "grpc-timeout" <> value 15 <> showDefault <> metavar "TIMEOUT" <> help "Timeout of grpc requests."))
+            <*> option auto (long "port" <> metavar "PORT" <> help "Port number to run the server on" <> showDefault <> value 3000)
             <*> strOption (long "db" <> metavar "STR" <> help "database connection string")
             <*> optional (strOption (long "drop-account" <> metavar "FILE" <> help "file with CCD drop account credentials (only used for stagenet and testnet)."))
             <*> option (eitherReader amountFromStringInform) (long "drop-amount" <> metavar "CCD-AMOUNT" <> help "Amount of CCDs to drop upon request." <> value 2_000_000_000)
@@ -171,12 +173,14 @@ main = do
     Right ipInfo <- AE.eitherDecode' <$> LBS.readFile pcIpInfo
     Right ipInfoV1 <- AE.eitherDecode' <$> LBS.readFile pcIpInfoV1
     Right ipInfoV2 <- AE.eitherDecode' <$> LBS.readFile pcIpInfoV2
+    let host = "0.0.0.0"
     runStderrLoggingT . filterL $ do
         $logDebug ("Using iOS V0 update config: " <> fromString (show forcedUpdateConfigIOSV0))
         $logDebug ("Using Android V0 update config: " <> fromString (show forcedUpdateConfigAndroidV0))
         $logDebug ("Using iOS V1 update config: " <> fromString (show forcedUpdateConfigIOSV1))
         $logDebug ("Using Android V1 update config: " <> fromString (show forcedUpdateConfigAndroidV1))
         $logDebug ("Using logLevel: " <> fromString (show logLevel))
+        $logDebug ("Running server on: " <> fromString (show host) <> ":" <> fromString (show pcPort))
     runStderrLoggingT . filterL $ withPostgresqlPool pcDBConnString 10 $ \dbConnectionPool -> liftIO $ do
         -- do not care about the gtu receipients database if gtu drop is not enabled
         when (isJust gtuDropData) $ runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
@@ -190,5 +194,5 @@ main = do
                     Right res -> case getResponseValue res of
                         Right cParams -> do
                             let globalInfo = toJSON $ Versioned (Version 0) cParams
-                            runSite 3000 "0.0.0.0" Proxy{grpcEnvData = cfg, ..}
+                            runSite pcPort host Proxy{grpcEnvData = cfg, ..}
                         Left (_, err) -> die $ "Cannot obtain cryptographic parameters due to error: " ++ err

@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "display": "Alternative display name",
+    "issuanceStart": "https://identity.provider/issuance-start",
+    "recoveryStart": "https://identity.provider/recovery-start",
+    "icon": "base 64 encoded png image",
+    "support": "<support@identity-provider.id>"
+  },
+  "ipInfo": {
+    "ipIdentity": 0,
+    "ipDescription": {
+      "name": "Short name as it appears on the chain.",
+      "url": "http/identity.provider",
+      "description": "Free form description"
+    },
+    "ipVerifyKey": "...",
+    "ipCdiVerifyKey": "74e905294a9377408d87ab4ddc4202731c4f971561eeaf423e82ae9509b8d057"
+  },
+  "arsInfos": {
+    "1": {
+      "arIdentity": 1,
+      "arDescription": {
+        "name": "AR-1",
+        "url": "",
+        "description": ""
+      },
+      "arPublicKey": "93fdc40bb8af4cb75caf8a53928d247be6285784b29578a06df312c28854c1bfac2fd0183967338b578772398d41201886a215138ec53d870e2878bbe731381927e08eaafe97003f6f4831f18e47c9ee8913c5f806064b57341785f0376af"
+    },
+    "2": {
+      "arIdentity": 2,
+      "arDescription": {
+        "name": "AR-2",
+        "url": "",
+        "description": ""
+      },
+      "arPublicKey": "93fdc40bb8af4cb75caf8a53928d247be6285784b29578a06df312c28854c1bfac2fd0183967338b578772398d41201ac7295a21c3c687112f454c1d222d74e0d9cc9249b3c1eef58eb66a8a039c0decf3ea413a656f6f2dbebb497b7a527"
+    }
+  }
+}

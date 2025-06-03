@@ -105,7 +105,7 @@ import Concordium.Client.Types.Transaction (
     updateDelegationPayloadSize,
  )
 import Concordium.Common.Version
-import Concordium.Crypto.ByteStringHelpers (ByteStringHex (..))
+import Concordium.Crypto.ByteStringHelpers (ShortByteStringHex (..))
 import Concordium.Crypto.SHA256 (Hash)
 import Concordium.Crypto.SignatureScheme (KeyPair)
 import Concordium.ID.Types (CredentialIndex, KeyIndex, addressFromText)
@@ -120,27 +120,27 @@ newtype ByteStringSerialized a = ByteStringSerialized {unBSS :: a}
 instance (S.Serialize a) => PersistField (ByteStringSerialized a) where
     toPersistValue = toPersistValue . S.encode
     fromPersistValue =
-        fromPersistValue >=> left (Text.pack) . S.decode
+        fromPersistValue >=> left Text.pack . S.decode
 
 instance (S.Serialize a) => PersistFieldSql (ByteStringSerialized a) where
     sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy BS.ByteString)
 
-newtype TokenId = TokenId {unTokenId :: BSS.ShortByteString}
+newtype LocalTokenId = LocalTokenId {unTokenId :: BSS.ShortByteString}
     deriving (Eq, Show)
-    deriving (AE.ToJSON, AE.FromJSON) via ByteStringHex
+    deriving (AE.ToJSON, AE.FromJSON) via ShortByteStringHex
 
-instance PersistField TokenId where
+instance PersistField LocalTokenId where
     toPersistValue = toPersistValue . BSS.fromShort . unTokenId
-    fromPersistValue = fmap (TokenId . BSS.toShort) . fromPersistValue
+    fromPersistValue = fmap (LocalTokenId . BSS.toShort) . fromPersistValue
 
-instance PersistFieldSql TokenId where
+instance PersistFieldSql LocalTokenId where
     sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy BS.ByteString)
 
-instance S.Serialize TokenId where
-    put (TokenId tid) = S.putWord8 (fromIntegral (BSS.length tid)) <> S.putShortByteString tid
+instance S.Serialize LocalTokenId where
+    put (LocalTokenId tid) = S.putWord8 (fromIntegral (BSS.length tid)) <> S.putShortByteString tid
     get = do
         len <- S.getWord8
-        TokenId <$> S.getShortByteString (fromIntegral len)
+        LocalTokenId <$> S.getShortByteString (fromIntegral len)
 
 -- | Create the database schema and types. This creates a type called @Summary@
 --  with fields @summaryBlock@, @summaryTimestamp@, etc., with stated types.
@@ -171,7 +171,7 @@ share
   CIS2Entry sql=cis2_tokens
     index ContractIndex
     subindex ContractSubindex
-    token_id TokenId
+    token_id LocalTokenId
     total_supply (Ratio Integer)
   |]
 
@@ -245,6 +245,12 @@ instance YesodPersist Proxy where
 defaultNetId :: Int
 defaultNetId = 100
 
+-- TODO
+-- GET /v3/accTransactions/{account address}: get the transactions affecting an account's ccd or plt balances with memo transactions
+-- GET /v2/accBalance/{tokenId}/{account address}: get the info if account is on any allow/deny list of that plt token and ccd/plt balances, including txs with memos.
+-- GET /v0/pltTokens: get the list of all plt tokens.
+-- GET /v0/pltTokensMetadata or pltTokenInfo/{tokenId}: get the metadata and info of a given plt token.
+
 mkYesod
     "Proxy"
     [parseRoutes|
@@ -279,6 +285,7 @@ mkYesod
 /v1/CIS2TokenMetadata/#Word64/#Word64 CIS2TokenMetadataV1 GET
 /v1/CIS2TokenBalance/#Word64/#Word64/#Text CIS2TokenBalanceV1 GET
 /v0/termsAndConditionsVersion TermsAndConditionsVersion GET
+/v0/pltTokens PltTokensR GET
 |]
 
 instance Yesod Proxy where
@@ -2210,6 +2217,8 @@ renderTransactionType TTUpdateCredentials = "updateCredentials"
 renderTransactionType TTRegisterData = "registerData"
 renderTransactionType TTConfigureBaker = "configureBaker"
 renderTransactionType TTConfigureDelegation = "configureDelegation"
+renderTransactionType TTTokenHolder = "tokenHolder"
+renderTransactionType TTTokenGovernance = "tokenGovernance"
 
 renderTransactionSummaryType :: TransactionSummaryType -> Text
 renderTransactionSummaryType (TSTAccountTransaction (Just tt)) = renderTransactionType tt
@@ -2629,6 +2638,14 @@ getAppSettingsWorker fucAndroid fucIOS = do
 
 getEpochLengthR :: Handler TypedContent
 getEpochLengthR =
+    runGRPC getConsensusInfo $ \cInfo -> do
+        let epochLengthObject = object ["epochLength" .= csEpochDuration cInfo]
+        $(logOther "Trace") "Successfully got epoch length."
+        sendResponse $ toJSON epochLengthObject
+
+getPltTokensR :: Handler TypedContent
+getPltTokensR =
+    -- TODO
     runGRPC getConsensusInfo $ \cInfo -> do
         let epochLengthObject = object ["epochLength" .= csEpochDuration cInfo]
         $(logOther "Trace") "Successfully got epoch length."

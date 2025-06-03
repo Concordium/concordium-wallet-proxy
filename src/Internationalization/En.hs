@@ -39,6 +39,7 @@ translation = I18n{..}
     i18nUpdateTransaction UpdateBlockEnergyLimit = "Update block energy limit"
     i18nUpdateTransaction UpdateFinalizationCommitteeParameters = "Update finalization committee parameters"
     i18nUpdateTransaction UpdateValidatorScoreParameters = "Update validator score parameters"
+    i18nUpdateTransaction UpdateCreatePLT = "Update create new PLT token"
 
     i18nRejectReason ModuleNotWF = "Typechecking of module failed"
     i18nRejectReason (ModuleHashAlreadyExists mref) = "A module with the hash " <> descrModule mref <> " already exists"
@@ -94,6 +95,10 @@ translation = I18n{..}
     i18nRejectReason PoolWouldBecomeOverDelegated = "Delegation stake is too high, over-delegation is not allowed."
     i18nRejectReason PoolClosed = "Delegation to a closed pool is not allowed."
     i18nRejectReason InsufficientDelegationStake = "Adding a delegator with 0 stake is not allowed."
+    i18nRejectReason (NonExistentTokenId tokenId) = "Non existing plt token id " <> Text.pack (show tokenId) <> "."
+    i18nRejectReason (TokenHolderTransactionFailed reason) = "Token holder transaction failed with reason: " <> Text.pack (show reason) <> "."
+    i18nRejectReason (TokenGovernanceTransactionFailed reason) = "Token governance transaction failed with reason: " <> Text.pack (show reason) <> "."
+    i18nRejectReason (UnauthorizedTokenGovernance tokenId) = "Unauthorized to execute the token governance transaction of plt token id " <> Text.pack (show tokenId) <> "."
 
     i18nTransactionType TTDeployModule = "Deploy module"
     i18nTransactionType TTInitContract = "Initialize smart contract"
@@ -116,6 +121,8 @@ translation = I18n{..}
     i18nTransactionType TTRegisterData = "Register data on the chain"
     i18nTransactionType TTConfigureBaker = "Configure validator"
     i18nTransactionType TTConfigureDelegation = "Configure delegation"
+    i18nTransactionType TTTokenGovernance = "Token Governance"
+    i18nTransactionType TTTokenHolder = "Token holder"
 
     i18nDeployCredential Initial = "Deploy initial account credential"
     i18nDeployCredential Normal = "Deploy account credential"
@@ -187,6 +194,8 @@ translation = I18n{..}
     i18nEvent DelegationRemoved{..} = "Removed delegator " <> descrDelegator edrDelegatorId edrAccount
     i18nEvent BakerSuspended{..} = "Validator " <> descrBaker ebsBakerId ebsAccount <> " was suspended."
     i18nEvent BakerResumed{..} = "Validator " <> descrBaker ebrBakerId ebrAccount <> " was resumed."
+    -- TODO: update when `concordium-client` event PR (https://github.com/Concordium/concordium-client/pull/370) is merged.
+    i18nEvent (TokenModuleEvent _) = "Token module event."
     i18nSpecialEvent BakingRewards{..} =
         "Block rewards\n"
             <> Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)

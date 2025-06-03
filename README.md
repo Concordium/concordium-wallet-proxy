@@ -13,6 +13,10 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/accBalance/{account address}`: get the balance on an account
 * `GET /v1/accBalance/{account address}`: get the balance on an account, including
   cooldowns and the available balance.
+* `GET /v2/accBalance/{account address}`: get the balance on an account, including
+  cooldowns and the available balance.
+* `GET /v3/accBalance/{account address}`: get the balance on an account, including
+  cooldowns and the available balance.
 * `GET /v0/accNonce/{account address}`: get the next nonce for an account
 * `GET /v0/accEncryptionKey/{account address}`: get the public encryption key of
   the account
@@ -1185,16 +1189,31 @@ An example invocation is
 ```console
 wallet-proxy --grpc-ip 127.0.0.1\
              --grpc-port 10000\
-             --db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=postgres"\
+             --db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=password"\
              --ip-data identity-providers-with-metadata.json\
              --ip-data-v1 identity-providers-with-metadata-v1.json\
              --ip-data-v2 identity-providers-with-metadata-v2.json\
              --drop-account gtu-drop-account-0.json\
              --forced-update-config-v0 forced-update-config-v0.json\
              --forced-update-config-v1 forced-update-config-v1.json\
-             --health-tolerance 30
-             --log-level debug
+             --health-tolerance 30\
+             --log-level debug\
              --grpc-timeout 15
+```
+
+or
+
+```console
+stack run wallet-proxy -- \
+  --grpc-ip 127.0.0.1\
+  --grpc-port 10000\
+  --db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=password"\
+  --ip-data ./examples/identity-providers-with-metadata.json\
+  --ip-data-v1 ./examples/identity-providers-with-metadata-v1.json\
+  --ip-data-v2 ./examples/identity-providers-with-metadata-v2.json\
+  --health-tolerance 30\
+  --log-level debug\
+  --grpc-timeout 15
 ```
 
 where
@@ -1202,8 +1221,8 @@ where
 - `--grpc-port 10000` specifies the GRPC port the node is listening on
 - `--db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=postgres"` is the transaction outcome database connection string
 - `--ip-data identity-providers-with-metadata.json` JSON file with identity providers, anonymity revokers and metadata needed for the version 0 identity flow
-- `--ip-data-v1 identity-providers-with-metadata.json` JSON file with identity providers and anonymity revokers and metadata needed for the version 1 identity flow
-- `--ip-data-v2 identity-providers-with-metadata.json` JSON file with identity providers (including company ID providers) and anonymity revokers and metadata needed for the version 1 identity flow
+- `--ip-data-v1 identity-providers-with-metadata-v1.json` JSON file with identity providers and anonymity revokers and metadata needed for the version 1 identity flow
+- `--ip-data-v2 identity-providers-with-metadata-v2.json` JSON file with identity providers (including company ID providers) and anonymity revokers and metadata needed for the version 1 identity flow
 - `--drop-account gtu-drop-account-0.json` keys of the gtu drop account
 - `--forced-update-config-v0 forced-update-config-v0.json` file with app update configuration for the old mobile wallet
 - `--forced-update-config-v1 forced-update-config-v1.json` file with app update configuration for the new mobile wallet
