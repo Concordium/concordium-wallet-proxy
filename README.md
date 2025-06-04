@@ -10,13 +10,11 @@
 
 The wallet proxy provides the following endpoints:
 
-* `GET /v0/accBalance/{account address}`: get the balance on an account
-* `GET /v1/accBalance/{account address}`: get the balance on an account, including
-  cooldowns and the available balance.
-* `GET /v2/accBalance/{account address}`: get the balance on an account, including
-  cooldowns and the available balance.
-* `GET /v3/accBalance/{account address}`: get the balance on an account, including
-  cooldowns and the available balance.
+* `GET /v0/accBalance/{account address}`: get the ccd balance on an account
+* `GET /v1/accBalance/{account address}`: get the ccd balance on an account (including
+  cooldowns and the available balance).
+* `GET /v2/accBalance/{account address}`: get the ccd and plt (protocol level token) balances on an account (including 
+cooldowns and the available balance) and get the info if an account is on any allow/deny list of any plt.
 * `GET /v0/accNonce/{account address}`: get the next nonce for an account
 * `GET /v0/accEncryptionKey/{account address}`: get the public encryption key of
   the account
@@ -26,8 +24,11 @@ The wallet proxy provides the following endpoints:
 * `PUT /v0/submitCredential`: deploy a credential/create an account
 * `PUT /v0/submitTransfer`: perform a simple transfer
 * `PUT /v0/submitRawTransaction`: perform a any raw transaction
-* `GET /v0/accTransactions/{account address}`: get the transactions affecting an account
-* `GET /v1/accTransactions/{account address}`: get the transactions affecting an account, including memos
+* `GET /v0/accTransactions/{account address}`: get the transactions affecting an account's ccd balance
+* `GET /v1/accTransactions/{account address}`: get the transactions affecting an account's ccd balance (including transactions with memos)
+* `GET /v2/accTransactions/{account address}`: get the transactions affecting an account's ccd balance (including special transaction outcomes for suspended/inactive validators and including transactions with memos)
+* `GET /v3/accTransactions/{account address}`: get the transactions affecting an account's ccd or plt balances (including special transaction outcomes for suspended/inactive validators and including transactions with memos)
+
 * `PUT /v0/testnetGTUDrop/{account address}`: request a CCD drop to the specified account
 * `GET /v0/health`: get a response specifying if the wallet proxy is up to date
 * `GET /v0/global`: get the cryptographic parameters obtained from the node it is connected to
@@ -47,7 +48,9 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/CIS2TokenBalance/{index}/{subindex}/{account address}`: get the balance of tokens on given contract address for a given account address.
 * `GET /v1/CIS2TokenMetadata/{index}/{subindex}`: get the metadata of tokens on given contract address, ignoring failing requests.
 * `GET /v1/CIS2TokenBalance/{index}/{subindex}/{account address}`: get the balance of tokens on given contract address for a given account address, ignoring failing requests.
-
+* `GET /v0/plt/tokens`: get the list of all plt tokens.
+* `GET /v0/plt/tokenInfoRaw/{tokenId}`: get info about a given plt token and its raw module state (CBOR encoded).
+* `GET /v0/plt/tokenInfo/{tokenId}`: get info about a given plt token and its module state (with metadata url).
 
 ### Errors
 
@@ -102,13 +105,42 @@ The balance on an account can be queried as in the following example:
 
 ```console
 $ curl -XGET localhost:3000/v0/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
+```
+
+```json
 {"currentBalance":AccountBalance,"finalizedBalance":AccountBalance}
 ```
 
 Or (v1):
 ```console
 $ curl -XGET localhost:3000/v1/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
+```
+
+```json
 {"finalizedBalance":AccountBalance}
+```
+
+Or (v2):
+```console
+$ curl -XGET localhost:3000/v2/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
+```
+
+```json
+{
+    "accountAmount": "29999999952730",
+    "accountAvailableAmount": "29999999952730",
+    "accountCooldowns": [],
+    "accountTokens": [
+        {
+            "tokenAccountState": {
+                "balance": 9.99999999999401e12,
+                "inAllowList": false,
+                "inDenyList": true
+            },
+            "tokenId": "PLT"
+        }
+    ]
+}
 ```
 
 The result is a JSON object with two __optional__ fields:
@@ -482,10 +514,12 @@ a submission id is returned, which can be used to query the status of the transf
 ## Get transactions
 
 The endpoint `/accTransactions/{account address}` retrieves a partial list of transactions affecting an account.
-There are three versions of the endpoint, `v0`, `v1` and `v2`.
+There are four versions of the endpoint, `v0`, `v1`, `v2` and `v3`.
 Version `v0` treats transactions with memos as the equivalent transaction without a memo.
 Versions `v0` and `v1` exclude the special transaction outcomes for suspending inactive validators,
-which are included in `v2`.
+which are included in `v2` and `v3`.
+
+Versions `v3` includes in addition transactions affecting an account's plt balance.
 
 They support the following parameters.
 - `order`: whether to order the transactions in ascending or descending order of occurrence. A value beginning with `d` or `D` is interpreted as descending; any other (or no) value is interpreted as ascending.
@@ -511,6 +545,13 @@ They support the following parameters.
 - `onlyEncrypted`: whether to only include transactions related to encrypted amounts (i.e. shield, unshield, and transfer shielded). Possible values:
   - `n`: include all transactions. (The default)
   - `y`: only include shield, unshield, and transfer shielded transactions.
+// TODO: check how complex this filtering is to add. It is a wishlist item currently:
+- `plt`: whether to include transactions that change the plt balance. Possible values:
+  - `y`: include transactions. (The default)
+  - `n`: exclude transactions.
+- `ccd`: whether to include transactions that change the ccd balance. Possible values:
+  - `y`: include transactions. (The default)
+  - `n`: exclude transactions.
 - `includeRawRejectReason`: whether to include the raw rejection reason (the
   same JSON as returned by `GetTransactionStatus` gRPC endpoint).
 
@@ -581,9 +622,18 @@ The cost of performing the transaction, if this cost is paid by the account.
 This is only present if the origin type is `"self"` (since otherwise the account is not responsible for the cost).
 When present, this is always a positive value.
 
-#### `total` (required)
-The total change in the account's __public__ balance due to the transaction and associated fees.
+#### `totalCCdBalance` (optional)
+The total change in the account's __public__ ccd balance due to the transaction and associated fees. This field is present if the account's ccd balance was affected by the transaction.
 A negative value indicates a debit from the account, while a positive value indicates a credit to the account.
+
+#### `totalPltBalance` (optional)
+The total change in the account's plt balance due to the transaction.
+This field is present if the account's plt balance was affected by the transaction.
+A negative value indicates a debit from the account, while a positive value indicates a credit to the account.
+
+#### `pltTokenId` (optional)
+The token id of the plt token.
+This field is present if the account's plt balance was affected by the transaction.
 
 #### `energy` (optional)
 The energy cost (in NRG) of executing the transaction.
@@ -630,6 +680,10 @@ It consists of the following fields:
   - in the `v2` endpoint `type` can additionaly be one of
     - `"validatorPrimedForSuspension"`
     - `"validatorSuspended"`
+  - in the `v3` endpoint `type` can additionaly be one of
+      - `"createPLT"`
+      - `"tokenGovernance"`
+      - `"tokenHolder"`
 - `description` (required): a brief localized description of the type of the transaction
 - `outcome` (required):
   - `"success"` if the transaction was executed successfully
@@ -666,6 +720,17 @@ It consists of the following fields:
   - in `v1` version if `type = transferWithScheduleAndMemo` then an additional field `memo` is present. It is a hex-encoded byte array.
 - The following field is present if the transaction is a register data transaction:
   - `registeredData`: hex encoding of the data that was registered
+- The following fields are present if the transaction is a plt transfer or plt transfer with memo:
+  - `from`: The sender address.
+  - `to`: The receiver address.
+  - `amount`: amount of the transfer.
+  - `?memo`: optional memo field.
+- The following fields are present if the transaction is a plt mint:
+  - `target`: The address the tokens are minted to.
+  - `amount`: amount of tokens minted.
+- The following fields are present if the transaction is a plt burn:
+  - `target`: The address the tokens are burned from.
+  - `amount`: amount of tokens burned.
 
 For the purposes of the above, a simple transfer is a transaction of type `"transfer"` which transfers funds from one account to another.
 A transactions of type `"transfer"` is not considered a simple transfer if the destination is a smart contract instance.
@@ -1173,6 +1238,58 @@ Example where the epoch length is 3600 seconds (1 hour):
   "epochLength":3600000
 }
 ```
+
+## PLT tokens
+
+A GET request to `/v0/plt/tokens` returns a list of plt token ids.
+
+Example response:
+
+```json
+["PLT", "EUROe"]
+```
+
+## PLT token info and metadata
+
+A GET request to `/v0/plt/tokenInfoRaw/{tokenId}` returns token info and its raw module state (CBOR encoded).
+
+Example response:
+
+```json
+{
+    "tokenId": "PLT",
+    "tokenState": {
+        "decimals": 2,
+        "issuer": "4t3rnM88rHjyufDX35cYc1FnLPihWpUUVz3Wc9PwxSBCBetxCf",
+        "moduleState": "a6646e616d657450726f746f636f6c2d6c6576656c20746f6b656e686275726e61626c65f56864656e794c697374f4686d657461646174617368747470733a2f2f6578616d706c652e706c74686d696e7461626c65f569616c6c6f774c697374f4",
+        "moduleRef": "af5684e70c1438e442066d017e4410af6da2b53bfa651a07d81efa2aa668db20",
+        "totalSupply": 1.0e13
+    }
+}
+```
+
+A GET request to `/v0/plt/tokenInfo/{tokenId}` returns token info and decoded module state.
+
+Example response:
+
+```json
+{
+    "tokenId": "PLT",
+    "tokenState": {
+        "decimals": 2,
+        "issuer": "4t3rnM88rHjyufDX35cYc1FnLPihWpUUVz3Wc9PwxSBCBetxCf",
+        "moduleState":{
+          "metadataHash":
+            {"url":"http://plt.com",
+              ...
+            }
+           ...
+        },
+        "moduleRef": "af5684e70c1438e442066d017e4410af6da2b53bfa651a07d81efa2aa668db20",
+        "totalSupply": 1.0e13
+    }
+}
+```
 # Deployment
 
 The wallet proxy must have access to
@@ -1211,9 +1328,7 @@ stack run wallet-proxy -- \
   --ip-data ./examples/identity-providers-with-metadata.json\
   --ip-data-v1 ./examples/identity-providers-with-metadata-v1.json\
   --ip-data-v2 ./examples/identity-providers-with-metadata-v2.json\
-  --health-tolerance 30\
-  --log-level debug\
-  --grpc-timeout 15
+  --log-level debug
 ```
 
 where

@@ -245,12 +245,6 @@ instance YesodPersist Proxy where
 defaultNetId :: Int
 defaultNetId = 100
 
--- TODO
--- GET /v3/accTransactions/{account address}: get the transactions affecting an account's ccd or plt balances with memo transactions
--- GET /v2/accBalance/{tokenId}/{account address}: get the info if account is on any allow/deny list of that plt token and ccd/plt balances, including txs with memos.
--- GET /v0/pltTokens: get the list of all plt tokens.
--- GET /v0/pltTokensMetadata or pltTokenInfo/{tokenId}: get the metadata and info of a given plt token.
-
 mkYesod
     "Proxy"
     [parseRoutes|
@@ -285,7 +279,7 @@ mkYesod
 /v1/CIS2TokenMetadata/#Word64/#Word64 CIS2TokenMetadataV1 GET
 /v1/CIS2TokenBalance/#Word64/#Word64/#Text CIS2TokenBalanceV1 GET
 /v0/termsAndConditionsVersion TermsAndConditionsVersion GET
-/v0/pltTokens PltTokensR GET
+/v0/plt/tokens PltTokensR GET
 |]
 
 instance Yesod Proxy where
