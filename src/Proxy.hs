@@ -250,6 +250,7 @@ mkYesod
     [parseRoutes|
 /v0/accBalance/#Text AccountBalanceV0R GET
 /v1/accBalance/#Text AccountBalanceV1R GET
+/v2/accBalance/#Text AccountBalanceV2R GET
 /v0/accNonce/#Text AccountNonceR GET
 /v0/accEncryptionKey/#Text AccountEncryptionKeyR GET
 /v0/accTransactions/#Text AccountTransactionsV0R GET
@@ -266,6 +267,7 @@ mkYesod
 /v2/ip_info IpsV2R GET
 /v1/accTransactions/#Text AccountTransactionsV1R GET
 /v2/accTransactions/#Text AccountTransactionsV2R GET
+/v3/accTransactions/#Text AccountTransactionsV3R GET
 /v0/bakerPool/#Word64 BakerPoolR GET
 /v0/chainParameters ChainParametersR GET
 /v0/nextPayday NextPaydayR GET
@@ -280,6 +282,8 @@ mkYesod
 /v1/CIS2TokenBalance/#Word64/#Word64/#Text CIS2TokenBalanceV1 GET
 /v0/termsAndConditionsVersion TermsAndConditionsVersion GET
 /v0/plt/tokens PltTokensR GET
+/v0/plt/tokenInfoRaw/#Text PltTokenInfoRawR GET
+/v0/plt/tokenInfo/#Text PltTokenInfoR GET
 |]
 
 instance Yesod Proxy where
@@ -581,6 +585,7 @@ getRewardPeriodLength lfb = do
 data AccountBalanceVersion
     = AccountBalanceV0
     | AccountBalanceV1
+    | AccountBalanceV2
     deriving (Eq, Ord)
 
 getAccountBalanceV0R :: Text -> Handler TypedContent
@@ -588,6 +593,9 @@ getAccountBalanceV0R = getAccountBalanceR AccountBalanceV0
 
 getAccountBalanceV1R :: Text -> Handler TypedContent
 getAccountBalanceV1R = getAccountBalanceR AccountBalanceV1
+
+getAccountBalanceV2R :: Text -> Handler TypedContent
+getAccountBalanceV2R = getAccountBalanceR AccountBalanceV2
 
 -- | Get the balance of an account. If successful, the result is a JSON
 --  object consisting of the following optional fields:
@@ -609,10 +617,15 @@ getAccountBalanceR ver addrText = do
             let
                 getBal :: (AccountInfo, Maybe BakerPoolStatus) -> Either (Maybe Value) (Maybe RewardPeriodLength -> Value)
                 getBal (AccountInfo{..}, mBPS) = do
-                    let extraBalanceInfo
+                    let extraBalanceInfoV1
                             | ver >= AccountBalanceV1 =
                                 [ "accountCooldowns" .= aiAccountCooldowns,
                                   "accountAtDisposal" .= aiAccountAvailableAmount
+                                ]
+                            | otherwise = []
+                        extraBalanceInfoV2
+                            | ver >= AccountBalanceV2 =
+                                [ "accountTokens" .= aiAccountTokens
                                 ]
                             | otherwise = []
                         balanceInfo =
@@ -622,7 +635,8 @@ getAccountBalanceR ver addrText = do
                               "accountReleaseSchedule" .= aiAccountReleaseSchedule,
                               "accountIndex" .= aiAccountIndex
                             ]
-                                ++ extraBalanceInfo
+                                ++ extraBalanceInfoV1
+                                ++ extraBalanceInfoV2
                     let primed = maybeToList $ do
                             bps <- mBPS
                             CurrentPaydayBakerPoolStatus{..} <- psCurrentPaydayStatus bps
@@ -733,6 +747,7 @@ getAccountBalanceR ver addrText = do
                             bestAccInfoRes <- getAccountAndPoolInfo accAddr Best
                             onResponse bestAccInfoRes (cont . Just)
                         AccountBalanceV1 -> cont Nothing
+                        AccountBalanceV2 -> cont Nothing
                 onResponse lastFinAccInfoRes $ \lastFinInfo -> do
                     -- Get the account info for the account in the best block (only for v0).
                     withBestInfo $ \bestInfo -> do
@@ -1380,14 +1395,22 @@ data IncludeMemos = IncludeMemo | ExcludeMemo
 data IncludeSuspensionEvents = IncludeSuspensionEvents | ExcludeSuspensionEvents
     deriving (Eq, Show)
 
+-- | Whether PLT events are included in
+--  the account transactions.
+data IncludePltEvents = IncludePltEvents | ExcludePltEvents
+    deriving (Eq, Show)
+
 getAccountTransactionsV0R :: Text -> Handler TypedContent
-getAccountTransactionsV0R = getAccountTransactionsWorker ExcludeMemo ExcludeSuspensionEvents
+getAccountTransactionsV0R = getAccountTransactionsWorker ExcludeMemo ExcludeSuspensionEvents ExcludePltEvents
 
 getAccountTransactionsV1R :: Text -> Handler TypedContent
-getAccountTransactionsV1R = getAccountTransactionsWorker IncludeMemo ExcludeSuspensionEvents
+getAccountTransactionsV1R = getAccountTransactionsWorker IncludeMemo ExcludeSuspensionEvents ExcludePltEvents
 
 getAccountTransactionsV2R :: Text -> Handler TypedContent
-getAccountTransactionsV2R = getAccountTransactionsWorker IncludeMemo IncludeSuspensionEvents
+getAccountTransactionsV2R = getAccountTransactionsWorker IncludeMemo IncludeSuspensionEvents ExcludePltEvents
+
+getAccountTransactionsV3R :: Text -> Handler TypedContent
+getAccountTransactionsV3R = getAccountTransactionsWorker IncludeMemo IncludeSuspensionEvents IncludePltEvents
 
 getCIS2Tokens :: Word64 -> Word64 -> Handler TypedContent
 getCIS2Tokens index subindex = do
@@ -1713,8 +1736,8 @@ getMetadataUrl = do
             return MetadataURL{..}
 
 -- | List transactions for the account.
-getAccountTransactionsWorker :: IncludeMemos -> IncludeSuspensionEvents -> Text -> Handler TypedContent
-getAccountTransactionsWorker includeMemos includeSuspensionEvents addrText = do
+getAccountTransactionsWorker :: IncludeMemos -> IncludeSuspensionEvents -> IncludePltEvents -> Text -> Handler TypedContent
+getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEvents addrText = do
     i <- internationalize
     -- Get the canonical address of the account.
     let getAddress k = do
@@ -1838,7 +1861,7 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents addrText = do
                                 E.||. extractedType E.==. E.val (Just "encryptedAmountTransferWithMemo")
                 Just _ -> Nothing
 
-        -- For older versions of the endpoint, we exclude suspension events.
+        -- For older versions than v2 of the endpoint, we exclude suspension events.
         let suspensionFilter = case includeSuspensionEvents of
                 IncludeSuspensionEvents -> const $ return ()
                 ExcludeSuspensionEvents -> \s ->
@@ -1848,6 +1871,17 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents addrText = do
                                 ( extractedTag s E.==. E.val (Just "ValidatorSuspended")
                                     E.||. extractedTag s E.==. E.val (Just "ValidatorPrimedForSuspension")
                                 )
+
+        -- For older versions than v3 of the endpoint, we exclude plt events.
+        let pltFilter = case includePltEvents of
+                IncludePltEvents -> const $ return ()
+                ExcludePltEvents -> \s ->
+                    let extractedType = coerced s EJ.#>>. ["Left", "type", "contents"] -- the transaction type.
+                    -- check if the transaction is a plt transaction.
+                    in  E.where_ $
+                            extractedType E.==. E.val (Just "updateCreatePLT")
+                                E.||. extractedType E.==. E.val (Just "tokenHolder")
+                                E.||. extractedType E.==. E.val (Just "tokenGovernance")
 
         rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
         case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter, maybeTypeFilter) of
@@ -1879,6 +1913,7 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents addrText = do
                         encryptedFilter s
                         typeFilter s
                         suspensionFilter s
+                        pltFilter s
                         -- sort with the requested method or ascending over EntryId.
                         E.orderBy [ordering (e E.^. EntryId)]
                         -- Limit the number of returned rows
@@ -2639,8 +2674,18 @@ getEpochLengthR =
 
 getPltTokensR :: Handler TypedContent
 getPltTokensR =
-    -- TODO
-    runGRPC getConsensusInfo $ \cInfo -> do
-        let epochLengthObject = object ["epochLength" .= csEpochDuration cInfo]
-        $(logOther "Trace") "Successfully got epoch length."
-        sendResponse $ toJSON epochLengthObject
+    -- TODO: query each token info and return that instead of just the tokenID
+    runGRPC (getTokenList LastFinal) $ \tokens -> do
+        sendResponse $ toJSON tokens
+
+getPltTokenInfoRawR :: Text -> Handler TypedContent
+getPltTokenInfoRawR tokenId =
+    runGRPC (getTokenInfo tokenId LastFinal) $ \tokenInfo -> do
+        sendResponse $ toJSON tokenInfo
+
+getPltTokenInfoR :: Text -> Handler TypedContent
+getPltTokenInfoR tokenId =
+    -- TODO: decode cbor encoded module state.
+    -- TODO: check if `icon` is available.
+    runGRPC (getTokenInfo tokenId LastFinal) $ \tokenInfo -> do
+        sendResponse $ toJSON tokenInfo

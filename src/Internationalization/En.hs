@@ -2,17 +2,18 @@
 
 module Internationalization.En where
 
-import qualified Data.Text as Text
-import Yesod
-
+import Concordium.Client.Config (showPrettyJSON)
+import Concordium.Client.Utils
+import Concordium.ID.Types
 import Concordium.Types.Execution
 import Concordium.Types.Transactions
 import Concordium.Types.Updates
-import qualified Data.Map.Strict as Map
-
-import Concordium.ID.Types
 import Concordium.Wasm (contractAndFunctionName, initContractName)
+
+import qualified Data.Map.Strict as Map
+import qualified Data.Text as Text
 import Internationalization.Base
+import Yesod
 
 translation :: I18n
 translation = I18n{..}
@@ -194,8 +195,11 @@ translation = I18n{..}
     i18nEvent DelegationRemoved{..} = "Removed delegator " <> descrDelegator edrDelegatorId edrAccount
     i18nEvent BakerSuspended{..} = "Validator " <> descrBaker ebsBakerId ebsAccount <> " was suspended."
     i18nEvent BakerResumed{..} = "Validator " <> descrBaker ebrBakerId ebrAccount <> " was resumed."
-    -- TODO: update when `concordium-client` event PR (https://github.com/Concordium/concordium-client/pull/370) is merged.
-    i18nEvent (TokenModuleEvent _) = "Token module event."
+    i18nEvent (TokenModuleEvent _tokenId _type' _details) = "Token module event." -- think about how to re-use code in `concordium-client`
+    i18nEvent (TokenTransfer _tokenId _from _to _amount _memo) = "Token transferred." -- think about how to re-use code in `concordium-client`
+    i18nEvent TokenMint{..} = Text.pack (tokenAmountToString etmAmount) <> " " <> Text.pack (show etmTokenId) <> " minted to " <> Text.pack (show etmTarget)
+    i18nEvent TokenBurn{..} = Text.pack (tokenAmountToString etbAmount) <> " " <> Text.pack (show etbTokenId) <> " burned from " <> Text.pack (show etbTarget)
+    i18nEvent TokenCreated{..} = "Token created:" <> Text.pack (showPrettyJSON etcPayload)
     i18nSpecialEvent BakingRewards{..} =
         "Block rewards\n"
             <> Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)

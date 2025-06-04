@@ -127,19 +127,35 @@ $ curl -XGET localhost:3000/v2/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN
 
 ```json
 {
-    "accountAmount": "29999999952730",
-    "accountAvailableAmount": "29999999952730",
+  "finalizedBalance": {
+    "accountAmount": "999999999785820",
+    "accountAtDisposal": "999999999785820",
     "accountCooldowns": [],
+    "accountEncryptedAmount": {
+      "incomingAmounts": [],
+      "selfAmount": "c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "startIndex": 0
+    },
+    "accountIndex": 9,
+    "accountNonce": 41,
+    "accountReleaseSchedule": {
+      "schedule": [],
+      "total": "0"
+    },
     "accountTokens": [
-        {
-            "tokenAccountState": {
-                "balance": 9.99999999999401e12,
-                "inAllowList": false,
-                "inDenyList": true
-            },
-            "tokenId": "PLT"
-        }
+      {
+        "tokenAccountState": {
+          "balance": {
+            "decimals": 2,
+            "value": "100000"
+          },
+          "inAllowList": true,
+          "inDenyList": false
+        },
+        "tokenId": "PLT"
+      }
     ]
+  }
 }
 ```
 
@@ -1257,14 +1273,17 @@ Example response:
 
 ```json
 {
-    "tokenId": "PLT",
-    "tokenState": {
-        "decimals": 2,
-        "issuer": "4t3rnM88rHjyufDX35cYc1FnLPihWpUUVz3Wc9PwxSBCBetxCf",
-        "moduleState": "a6646e616d657450726f746f636f6c2d6c6576656c20746f6b656e686275726e61626c65f56864656e794c697374f4686d657461646174617368747470733a2f2f6578616d706c652e706c74686d696e7461626c65f569616c6c6f774c697374f4",
-        "moduleRef": "af5684e70c1438e442066d017e4410af6da2b53bfa651a07d81efa2aa668db20",
-        "totalSupply": 1.0e13
+  "tokenId": "PLT",
+  "tokenState": {
+    "decimals": 2,
+    "issuer": "3dpAB1MtU6NYyuSmcZMBt1Rev6vQtj3UDR3j2jqSVJ94fX11ge",
+    "moduleState": "a6646e616d657450726f746f636f6c2d6c6576656c20746f6b656e686275726e61626c65f56864656e794c697374f4686d657461646174617368747470733a2f2f6578616d706c652e706c74686d696e7461626c65f569616c6c6f774c697374f4",
+    "tokenModuleRef": "af5684e70c1438e442066d017e4410af6da2b53bfa651a07d81efa2aa668db20",
+    "totalSupply": {
+      "decimals": 2,
+      "value": "100000"
     }
+  }
 }
 ```
 
