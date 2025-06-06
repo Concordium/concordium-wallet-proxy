@@ -2655,7 +2655,7 @@ getPltTokensR =
     runGRPC (getTokenList LastFinal) $ \tokenIds -> do
         -- Fetch each tokenInfo in a loop
         tokenInfos <- forM tokenIds $ \tokenId ->
-            runGRPCWithCustomError Nothing (getTokenInfo tokenId LastFinal) pure
+            runGRPC (getTokenInfo tokenId LastFinal) pure
         -- Send all token infos as JSON
         sendResponse $ toJSON tokenInfos
 

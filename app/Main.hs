@@ -35,6 +35,9 @@ import Concordium.Types.Queries as Types
 import Data.Range.Parser
 import Options.Applicative
 
+serverHost :: String
+serverHost = "0.0.0.0"
+
 data ProxyConfig = ProxyConfig
     { pcGRPC :: GrpcConfig,
       pcPort :: Int,
@@ -88,13 +91,13 @@ parser =
                 (Just (fromMaybe 15 timeout))
                 (CMDS.grpcUseTls backend)
 
-runSite :: (YesodDispatch site) => Int -> String -> site -> IO ()
-runSite port host site = do
+runSite :: (YesodDispatch site) => Int -> site -> IO ()
+runSite port site = do
     toWaiApp site
         >>= Network.Wai.Handler.Warp.runSettings
             ( Network.Wai.Handler.Warp.setPort port $
                 Network.Wai.Handler.Warp.setServerName "Concordium-wallet-proxy" $
-                    Network.Wai.Handler.Warp.setHost (fromString host) $
+                    Network.Wai.Handler.Warp.setHost (fromString serverHost) $
                         Network.Wai.Handler.Warp.defaultSettings
             )
 
@@ -173,14 +176,13 @@ main = do
     Right ipInfo <- AE.eitherDecode' <$> LBS.readFile pcIpInfo
     Right ipInfoV1 <- AE.eitherDecode' <$> LBS.readFile pcIpInfoV1
     Right ipInfoV2 <- AE.eitherDecode' <$> LBS.readFile pcIpInfoV2
-    let host = "0.0.0.0"
     runStderrLoggingT . filterL $ do
         $logDebug ("Using iOS V0 update config: " <> fromString (show forcedUpdateConfigIOSV0))
         $logDebug ("Using Android V0 update config: " <> fromString (show forcedUpdateConfigAndroidV0))
         $logDebug ("Using iOS V1 update config: " <> fromString (show forcedUpdateConfigIOSV1))
         $logDebug ("Using Android V1 update config: " <> fromString (show forcedUpdateConfigAndroidV1))
         $logDebug ("Using logLevel: " <> fromString (show logLevel))
-        $logDebug ("Running server on: " <> fromString host <> ":" <> fromString (show pcPort))
+        $logDebug ("Running server on: " <> fromString serverHost <> ":" <> fromString (show pcPort))
     runStderrLoggingT . filterL $ withPostgresqlPool pcDBConnString 10 $ \dbConnectionPool -> liftIO $ do
         -- do not care about the gtu receipients database if gtu drop is not enabled
         when (isJust gtuDropData) $ runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
@@ -194,5 +196,5 @@ main = do
                     Right res -> case getResponseValue res of
                         Right cParams -> do
                             let globalInfo = toJSON $ Versioned (Version 0) cParams
-                            runSite pcPort host Proxy{grpcEnvData = cfg, ..}
+                            runSite pcPort Proxy{grpcEnvData = cfg, ..}
                         Left (_, err) -> die $ "Cannot obtain cryptographic parameters due to error: " ++ err
