@@ -267,7 +267,6 @@ mkYesod
 /v2/ip_info IpsV2R GET
 /v1/accTransactions/#Text AccountTransactionsV1R GET
 /v2/accTransactions/#Text AccountTransactionsV2R GET
-/v3/accTransactions/#Text AccountTransactionsV3R GET
 /v0/bakerPool/#Word64 BakerPoolR GET
 /v0/chainParameters ChainParametersR GET
 /v0/nextPayday NextPaydayR GET
@@ -282,7 +281,6 @@ mkYesod
 /v1/CIS2TokenBalance/#Word64/#Word64/#Text CIS2TokenBalanceV1 GET
 /v0/termsAndConditionsVersion TermsAndConditionsVersion GET
 /v0/plt/tokens PltTokensR GET
-/v0/plt/tokenInfoRaw/#Text PltTokenInfoRawR GET
 /v0/plt/tokenInfo/#Text PltTokenInfoR GET
 |]
 
@@ -385,7 +383,7 @@ data ErrorType
 --  - @StatusNotOk (NOT_FOUND, err)@ maps to status @notFound404@ and error code @DataNotFound@.
 --  - @StatusNotOk (a, err)@ maps to status @badGateway502@ and error code @InternalError@.
 --  - @RequestFailed@ maps to status @badGateway502@ and error code @InternalError@.
-runGRPC :: ClientMonad IO (GRPCResult (Either String a)) -> (a -> Handler TypedContent) -> Handler TypedContent
+runGRPC :: ClientMonad IO (GRPCResult (Either String a)) -> (a -> Handler c) -> Handler c
 runGRPC = runGRPCWithCustomError Nothing
 
 -- | Run a GRPC request and optionally provide a @ResponseOnError@ to override the default error responses.
@@ -1395,22 +1393,14 @@ data IncludeMemos = IncludeMemo | ExcludeMemo
 data IncludeSuspensionEvents = IncludeSuspensionEvents | ExcludeSuspensionEvents
     deriving (Eq, Show)
 
--- | Whether PLT events are included in
---  the account transactions.
-data IncludePltEvents = IncludePltEvents | ExcludePltEvents
-    deriving (Eq, Show)
-
 getAccountTransactionsV0R :: Text -> Handler TypedContent
-getAccountTransactionsV0R = getAccountTransactionsWorker ExcludeMemo ExcludeSuspensionEvents ExcludePltEvents
+getAccountTransactionsV0R = getAccountTransactionsWorker ExcludeMemo ExcludeSuspensionEvents
 
 getAccountTransactionsV1R :: Text -> Handler TypedContent
-getAccountTransactionsV1R = getAccountTransactionsWorker IncludeMemo ExcludeSuspensionEvents ExcludePltEvents
+getAccountTransactionsV1R = getAccountTransactionsWorker IncludeMemo ExcludeSuspensionEvents
 
 getAccountTransactionsV2R :: Text -> Handler TypedContent
-getAccountTransactionsV2R = getAccountTransactionsWorker IncludeMemo IncludeSuspensionEvents ExcludePltEvents
-
-getAccountTransactionsV3R :: Text -> Handler TypedContent
-getAccountTransactionsV3R = getAccountTransactionsWorker IncludeMemo IncludeSuspensionEvents IncludePltEvents
+getAccountTransactionsV2R = getAccountTransactionsWorker IncludeMemo IncludeSuspensionEvents
 
 getCIS2Tokens :: Word64 -> Word64 -> Handler TypedContent
 getCIS2Tokens index subindex = do
@@ -1736,8 +1726,8 @@ getMetadataUrl = do
             return MetadataURL{..}
 
 -- | List transactions for the account.
-getAccountTransactionsWorker :: IncludeMemos -> IncludeSuspensionEvents -> IncludePltEvents -> Text -> Handler TypedContent
-getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEvents addrText = do
+getAccountTransactionsWorker :: IncludeMemos -> IncludeSuspensionEvents -> Text -> Handler TypedContent
+getAccountTransactionsWorker includeMemos includeSuspensionEvents addrText = do
     i <- internationalize
     -- Get the canonical address of the account.
     let getAddress k = do
@@ -1872,17 +1862,6 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                                     E.||. extractedTag s E.==. E.val (Just "ValidatorPrimedForSuspension")
                                 )
 
-        -- For older versions than v3 of the endpoint, we exclude plt events.
-        let pltFilter = case includePltEvents of
-                IncludePltEvents -> const $ return ()
-                ExcludePltEvents -> \s ->
-                    let extractedType = coerced s EJ.#>>. ["Left", "type", "contents"] -- the transaction type.
-                    -- check if the transaction is a plt transaction.
-                    in  E.where_ $
-                            extractedType E.==. E.val (Just "updateCreatePLT")
-                                E.||. extractedType E.==. E.val (Just "tokenHolder")
-                                E.||. extractedType E.==. E.val (Just "tokenGovernance")
-
         rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
         case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter, maybeTypeFilter) of
             (Nothing, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
@@ -1913,7 +1892,6 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                         encryptedFilter s
                         typeFilter s
                         suspensionFilter s
-                        pltFilter s
                         -- sort with the requested method or ascending over EntryId.
                         E.orderBy [ordering (e E.^. EntryId)]
                         -- Limit the number of returned rows
@@ -2674,18 +2652,14 @@ getEpochLengthR =
 
 getPltTokensR :: Handler TypedContent
 getPltTokensR =
-    -- TODO: query each token info and return that instead of just the tokenID
-    runGRPC (getTokenList LastFinal) $ \tokens -> do
-        sendResponse $ toJSON tokens
-
-getPltTokenInfoRawR :: Text -> Handler TypedContent
-getPltTokenInfoRawR tokenId =
-    runGRPC (getTokenInfo tokenId LastFinal) $ \tokenInfo -> do
-        sendResponse $ toJSON tokenInfo
+    runGRPC (getTokenList LastFinal) $ \tokenIds -> do
+        -- Fetch each tokenInfo in a loop
+        tokenInfos <- forM tokenIds $ \tokenId ->
+            runGRPCWithCustomError Nothing (getTokenInfo tokenId LastFinal) pure
+        -- Send all token infos as JSON
+        sendResponse $ toJSON tokenInfos
 
 getPltTokenInfoR :: Text -> Handler TypedContent
 getPltTokenInfoR tokenId =
-    -- TODO: decode cbor encoded module state.
-    -- TODO: check if `icon` is available.
-    runGRPC (getTokenInfo tokenId LastFinal) $ \tokenInfo -> do
+    runGRPC (getTokenInfoFromText tokenId LastFinal) $ \tokenInfo -> do
         sendResponse $ toJSON tokenInfo

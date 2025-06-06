@@ -88,13 +88,13 @@ parser =
                 (Just (fromMaybe 15 timeout))
                 (CMDS.grpcUseTls backend)
 
-runSite :: (YesodDispatch site) => Int -> Network.Wai.Handler.Warp.HostPreference -> site -> IO ()
+runSite :: (YesodDispatch site) => Int -> String -> site -> IO ()
 runSite port host site = do
     toWaiApp site
         >>= Network.Wai.Handler.Warp.runSettings
             ( Network.Wai.Handler.Warp.setPort port $
                 Network.Wai.Handler.Warp.setServerName "Concordium-wallet-proxy" $
-                    Network.Wai.Handler.Warp.setHost host $
+                    Network.Wai.Handler.Warp.setHost (fromString host) $
                         Network.Wai.Handler.Warp.defaultSettings
             )
 
@@ -180,7 +180,7 @@ main = do
         $logDebug ("Using iOS V1 update config: " <> fromString (show forcedUpdateConfigIOSV1))
         $logDebug ("Using Android V1 update config: " <> fromString (show forcedUpdateConfigAndroidV1))
         $logDebug ("Using logLevel: " <> fromString (show logLevel))
-        $logDebug ("Running server on: " <> fromString (show host) <> ":" <> fromString (show pcPort))
+        $logDebug ("Running server on: " <> fromString host <> ":" <> fromString (show pcPort))
     runStderrLoggingT . filterL $ withPostgresqlPool pcDBConnString 10 $ \dbConnectionPool -> liftIO $ do
         -- do not care about the gtu receipients database if gtu drop is not enabled
         when (isJust gtuDropData) $ runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
