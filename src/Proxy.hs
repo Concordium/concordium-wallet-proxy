@@ -105,7 +105,7 @@ import Concordium.Client.Types.Transaction (
     updateDelegationPayloadSize,
  )
 import Concordium.Common.Version
-import Concordium.Crypto.ByteStringHelpers (ByteStringHex (..))
+import Concordium.Crypto.ByteStringHelpers (ShortByteStringHex (..))
 import Concordium.Crypto.SHA256 (Hash)
 import Concordium.Crypto.SignatureScheme (KeyPair)
 import Concordium.ID.Types (CredentialIndex, KeyIndex, addressFromText)
@@ -120,27 +120,27 @@ newtype ByteStringSerialized a = ByteStringSerialized {unBSS :: a}
 instance (S.Serialize a) => PersistField (ByteStringSerialized a) where
     toPersistValue = toPersistValue . S.encode
     fromPersistValue =
-        fromPersistValue >=> left (Text.pack) . S.decode
+        fromPersistValue >=> left Text.pack . S.decode
 
 instance (S.Serialize a) => PersistFieldSql (ByteStringSerialized a) where
     sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy BS.ByteString)
 
-newtype TokenId = TokenId {unTokenId :: BSS.ShortByteString}
+newtype LocalTokenId = LocalTokenId {unTokenId :: BSS.ShortByteString}
     deriving (Eq, Show)
-    deriving (AE.ToJSON, AE.FromJSON) via ByteStringHex
+    deriving (AE.ToJSON, AE.FromJSON) via ShortByteStringHex
 
-instance PersistField TokenId where
+instance PersistField LocalTokenId where
     toPersistValue = toPersistValue . BSS.fromShort . unTokenId
-    fromPersistValue = fmap (TokenId . BSS.toShort) . fromPersistValue
+    fromPersistValue = fmap (LocalTokenId . BSS.toShort) . fromPersistValue
 
-instance PersistFieldSql TokenId where
+instance PersistFieldSql LocalTokenId where
     sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy BS.ByteString)
 
-instance S.Serialize TokenId where
-    put (TokenId tid) = S.putWord8 (fromIntegral (BSS.length tid)) <> S.putShortByteString tid
+instance S.Serialize LocalTokenId where
+    put (LocalTokenId tid) = S.putWord8 (fromIntegral (BSS.length tid)) <> S.putShortByteString tid
     get = do
         len <- S.getWord8
-        TokenId <$> S.getShortByteString (fromIntegral len)
+        LocalTokenId <$> S.getShortByteString (fromIntegral len)
 
 -- | Create the database schema and types. This creates a type called @Summary@
 --  with fields @summaryBlock@, @summaryTimestamp@, etc., with stated types.
@@ -171,7 +171,7 @@ share
   CIS2Entry sql=cis2_tokens
     index ContractIndex
     subindex ContractSubindex
-    token_id TokenId
+    token_id LocalTokenId
     total_supply (Ratio Integer)
   |]
 
@@ -250,6 +250,7 @@ mkYesod
     [parseRoutes|
 /v0/accBalance/#Text AccountBalanceV0R GET
 /v1/accBalance/#Text AccountBalanceV1R GET
+/v2/accBalance/#Text AccountBalanceV2R GET
 /v0/accNonce/#Text AccountNonceR GET
 /v0/accEncryptionKey/#Text AccountEncryptionKeyR GET
 /v0/accTransactions/#Text AccountTransactionsV0R GET
@@ -279,6 +280,8 @@ mkYesod
 /v1/CIS2TokenMetadata/#Word64/#Word64 CIS2TokenMetadataV1 GET
 /v1/CIS2TokenBalance/#Word64/#Word64/#Text CIS2TokenBalanceV1 GET
 /v0/termsAndConditionsVersion TermsAndConditionsVersion GET
+/v0/plt/tokens PltTokensR GET
+/v0/plt/tokenInfo/#Text PltTokenInfoR GET
 |]
 
 instance Yesod Proxy where
@@ -380,7 +383,7 @@ data ErrorType
 --  - @StatusNotOk (NOT_FOUND, err)@ maps to status @notFound404@ and error code @DataNotFound@.
 --  - @StatusNotOk (a, err)@ maps to status @badGateway502@ and error code @InternalError@.
 --  - @RequestFailed@ maps to status @badGateway502@ and error code @InternalError@.
-runGRPC :: ClientMonad IO (GRPCResult (Either String a)) -> (a -> Handler TypedContent) -> Handler TypedContent
+runGRPC :: ClientMonad IO (GRPCResult (Either String a)) -> (a -> Handler c) -> Handler c
 runGRPC = runGRPCWithCustomError Nothing
 
 -- | Run a GRPC request and optionally provide a @ResponseOnError@ to override the default error responses.
@@ -580,6 +583,7 @@ getRewardPeriodLength lfb = do
 data AccountBalanceVersion
     = AccountBalanceV0
     | AccountBalanceV1
+    | AccountBalanceV2
     deriving (Eq, Ord)
 
 getAccountBalanceV0R :: Text -> Handler TypedContent
@@ -587,6 +591,9 @@ getAccountBalanceV0R = getAccountBalanceR AccountBalanceV0
 
 getAccountBalanceV1R :: Text -> Handler TypedContent
 getAccountBalanceV1R = getAccountBalanceR AccountBalanceV1
+
+getAccountBalanceV2R :: Text -> Handler TypedContent
+getAccountBalanceV2R = getAccountBalanceR AccountBalanceV2
 
 -- | Get the balance of an account. If successful, the result is a JSON
 --  object consisting of the following optional fields:
@@ -608,10 +615,15 @@ getAccountBalanceR ver addrText = do
             let
                 getBal :: (AccountInfo, Maybe BakerPoolStatus) -> Either (Maybe Value) (Maybe RewardPeriodLength -> Value)
                 getBal (AccountInfo{..}, mBPS) = do
-                    let extraBalanceInfo
+                    let extraBalanceInfoV1
                             | ver >= AccountBalanceV1 =
                                 [ "accountCooldowns" .= aiAccountCooldowns,
                                   "accountAtDisposal" .= aiAccountAvailableAmount
+                                ]
+                            | otherwise = []
+                        extraBalanceInfoV2
+                            | ver >= AccountBalanceV2 =
+                                [ "accountTokens" .= aiAccountTokens
                                 ]
                             | otherwise = []
                         balanceInfo =
@@ -621,7 +633,8 @@ getAccountBalanceR ver addrText = do
                               "accountReleaseSchedule" .= aiAccountReleaseSchedule,
                               "accountIndex" .= aiAccountIndex
                             ]
-                                ++ extraBalanceInfo
+                                ++ extraBalanceInfoV1
+                                ++ extraBalanceInfoV2
                     let primed = maybeToList $ do
                             bps <- mBPS
                             CurrentPaydayBakerPoolStatus{..} <- psCurrentPaydayStatus bps
@@ -732,6 +745,7 @@ getAccountBalanceR ver addrText = do
                             bestAccInfoRes <- getAccountAndPoolInfo accAddr Best
                             onResponse bestAccInfoRes (cont . Just)
                         AccountBalanceV1 -> cont Nothing
+                        AccountBalanceV2 -> cont Nothing
                 onResponse lastFinAccInfoRes $ \lastFinInfo -> do
                     -- Get the account info for the account in the best block (only for v0).
                     withBestInfo $ \bestInfo -> do
@@ -1837,7 +1851,7 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents addrText = do
                                 E.||. extractedType E.==. E.val (Just "encryptedAmountTransferWithMemo")
                 Just _ -> Nothing
 
-        -- For older versions of the endpoint, we exclude suspension events.
+        -- For older versions than v2 of the endpoint, we exclude suspension events.
         let suspensionFilter = case includeSuspensionEvents of
                 IncludeSuspensionEvents -> const $ return ()
                 ExcludeSuspensionEvents -> \s ->
@@ -2210,6 +2224,8 @@ renderTransactionType TTUpdateCredentials = "updateCredentials"
 renderTransactionType TTRegisterData = "registerData"
 renderTransactionType TTConfigureBaker = "configureBaker"
 renderTransactionType TTConfigureDelegation = "configureDelegation"
+renderTransactionType TTTokenHolder = "tokenHolder"
+renderTransactionType TTTokenGovernance = "tokenGovernance"
 
 renderTransactionSummaryType :: TransactionSummaryType -> Text
 renderTransactionSummaryType (TSTAccountTransaction (Just tt)) = renderTransactionType tt
@@ -2633,3 +2649,17 @@ getEpochLengthR =
         let epochLengthObject = object ["epochLength" .= csEpochDuration cInfo]
         $(logOther "Trace") "Successfully got epoch length."
         sendResponse $ toJSON epochLengthObject
+
+getPltTokensR :: Handler TypedContent
+getPltTokensR =
+    runGRPC (getTokenList LastFinal) $ \tokenIds -> do
+        -- Fetch each tokenInfo in a loop
+        tokenInfos <- forM tokenIds $ \tokenId ->
+            runGRPC (getTokenInfo tokenId LastFinal) pure
+        -- Send all token infos as JSON
+        sendResponse $ toJSON tokenInfos
+
+getPltTokenInfoR :: Text -> Handler TypedContent
+getPltTokenInfoR tokenId =
+    runGRPC (getTokenInfoFromText tokenId LastFinal) $ \tokenInfo -> do
+        sendResponse $ toJSON tokenInfo

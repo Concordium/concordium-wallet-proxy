@@ -2,17 +2,18 @@
 
 module Internationalization.En where
 
-import qualified Data.Text as Text
-import Yesod
-
+import Concordium.Client.Config (showPrettyJSON)
+import Concordium.Client.Utils
+import Concordium.ID.Types
 import Concordium.Types.Execution
 import Concordium.Types.Transactions
 import Concordium.Types.Updates
-import qualified Data.Map.Strict as Map
-
-import Concordium.ID.Types
 import Concordium.Wasm (contractAndFunctionName, initContractName)
+
+import qualified Data.Map.Strict as Map
+import qualified Data.Text as Text
 import Internationalization.Base
+import Yesod
 
 translation :: I18n
 translation = I18n{..}
@@ -39,6 +40,7 @@ translation = I18n{..}
     i18nUpdateTransaction UpdateBlockEnergyLimit = "Update block energy limit"
     i18nUpdateTransaction UpdateFinalizationCommitteeParameters = "Update finalization committee parameters"
     i18nUpdateTransaction UpdateValidatorScoreParameters = "Update validator score parameters"
+    i18nUpdateTransaction UpdateCreatePLT = "Update create new PLT token"
 
     i18nRejectReason ModuleNotWF = "Typechecking of module failed"
     i18nRejectReason (ModuleHashAlreadyExists mref) = "A module with the hash " <> descrModule mref <> " already exists"
@@ -94,6 +96,10 @@ translation = I18n{..}
     i18nRejectReason PoolWouldBecomeOverDelegated = "Delegation stake is too high, over-delegation is not allowed."
     i18nRejectReason PoolClosed = "Delegation to a closed pool is not allowed."
     i18nRejectReason InsufficientDelegationStake = "Adding a delegator with 0 stake is not allowed."
+    i18nRejectReason (NonExistentTokenId tokenId) = "Non existing plt token id " <> Text.pack (show tokenId) <> "."
+    i18nRejectReason (TokenHolderTransactionFailed reason) = "Token holder transaction failed with reason: " <> Text.pack (show reason) <> "."
+    i18nRejectReason (TokenGovernanceTransactionFailed reason) = "Token governance transaction failed with reason: " <> Text.pack (show reason) <> "."
+    i18nRejectReason (UnauthorizedTokenGovernance tokenId) = "Unauthorized to execute the token governance transaction of plt token id " <> Text.pack (show tokenId) <> "."
 
     i18nTransactionType TTDeployModule = "Deploy module"
     i18nTransactionType TTInitContract = "Initialize smart contract"
@@ -116,6 +122,8 @@ translation = I18n{..}
     i18nTransactionType TTRegisterData = "Register data on the chain"
     i18nTransactionType TTConfigureBaker = "Configure validator"
     i18nTransactionType TTConfigureDelegation = "Configure delegation"
+    i18nTransactionType TTTokenGovernance = "Token Governance"
+    i18nTransactionType TTTokenHolder = "Token holder"
 
     i18nDeployCredential Initial = "Deploy initial account credential"
     i18nDeployCredential Normal = "Deploy account credential"
@@ -187,6 +195,11 @@ translation = I18n{..}
     i18nEvent DelegationRemoved{..} = "Removed delegator " <> descrDelegator edrDelegatorId edrAccount
     i18nEvent BakerSuspended{..} = "Validator " <> descrBaker ebsBakerId ebsAccount <> " was suspended."
     i18nEvent BakerResumed{..} = "Validator " <> descrBaker ebrBakerId ebrAccount <> " was resumed."
+    i18nEvent (TokenModuleEvent _tokenId _type' _details) = "Token module event." -- think about how to re-use code in `concordium-client`
+    i18nEvent (TokenTransfer _tokenId _from _to _amount _memo) = "Token transferred." -- think about how to re-use code in `concordium-client`
+    i18nEvent TokenMint{..} = Text.pack (tokenAmountToString etmAmount) <> " " <> Text.pack (show etmTokenId) <> " minted to " <> Text.pack (show etmTarget)
+    i18nEvent TokenBurn{..} = Text.pack (tokenAmountToString etbAmount) <> " " <> Text.pack (show etbTokenId) <> " burned from " <> Text.pack (show etbTarget)
+    i18nEvent TokenCreated{..} = "Token created:" <> Text.pack (showPrettyJSON etcPayload)
     i18nSpecialEvent BakingRewards{..} =
         "Block rewards\n"
             <> Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)

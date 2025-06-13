@@ -10,9 +10,11 @@
 
 The wallet proxy provides the following endpoints:
 
-* `GET /v0/accBalance/{account address}`: get the balance on an account
-* `GET /v1/accBalance/{account address}`: get the balance on an account, including
-  cooldowns and the available balance.
+* `GET /v0/accBalance/{account address}`: get the ccd balance on an account
+* `GET /v1/accBalance/{account address}`: get the ccd balance on an account (including
+  cooldowns and the available balance).
+* `GET /v2/accBalance/{account address}`: get the ccd and plt (protocol level token) balances on an account (including 
+cooldowns and the available balance) and get the info if an account is on any allow/deny list of any plt.
 * `GET /v0/accNonce/{account address}`: get the next nonce for an account
 * `GET /v0/accEncryptionKey/{account address}`: get the public encryption key of
   the account
@@ -22,8 +24,8 @@ The wallet proxy provides the following endpoints:
 * `PUT /v0/submitCredential`: deploy a credential/create an account
 * `PUT /v0/submitTransfer`: perform a simple transfer
 * `PUT /v0/submitRawTransaction`: perform a any raw transaction
-* `GET /v0/accTransactions/{account address}`: get the transactions affecting an account
-* `GET /v1/accTransactions/{account address}`: get the transactions affecting an account, including memos
+* `GET /v0/accTransactions/{account address}`: get the transactions affecting an account's ccd balance
+* `GET /v1/accTransactions/{account address}`: get the transactions affecting an account's ccd balance (including transactions with memos)
 * `PUT /v0/testnetGTUDrop/{account address}`: request a CCD drop to the specified account
 * `GET /v0/health`: get a response specifying if the wallet proxy is up to date
 * `GET /v0/global`: get the cryptographic parameters obtained from the node it is connected to
@@ -43,7 +45,8 @@ The wallet proxy provides the following endpoints:
 * `GET /v0/CIS2TokenBalance/{index}/{subindex}/{account address}`: get the balance of tokens on given contract address for a given account address.
 * `GET /v1/CIS2TokenMetadata/{index}/{subindex}`: get the metadata of tokens on given contract address, ignoring failing requests.
 * `GET /v1/CIS2TokenBalance/{index}/{subindex}/{account address}`: get the balance of tokens on given contract address for a given account address, ignoring failing requests.
-
+* `GET /v0/plt/tokens`: get the list of all plt token infos.
+* `GET /v0/plt/tokenInfo/{tokenId}`: get info about a given plt token and its module state (with metadata url).
 
 ### Errors
 
@@ -98,13 +101,58 @@ The balance on an account can be queried as in the following example:
 
 ```console
 $ curl -XGET localhost:3000/v0/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
+```
+
+```json
 {"currentBalance":AccountBalance,"finalizedBalance":AccountBalance}
 ```
 
 Or (v1):
 ```console
 $ curl -XGET localhost:3000/v1/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
+```
+
+```json
 {"finalizedBalance":AccountBalance}
+```
+
+Or (v2):
+```console
+$ curl -XGET localhost:3000/v2/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN32W4FhYNeNu8
+```
+
+```json
+{
+  "finalizedBalance": {
+    "accountAmount": "999999999785820",
+    "accountAtDisposal": "999999999785820",
+    "accountCooldowns": [],
+    "accountEncryptedAmount": {
+      "incomingAmounts": [],
+      "selfAmount": "c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "startIndex": 0
+    },
+    "accountIndex": 9,
+    "accountNonce": 41,
+    "accountReleaseSchedule": {
+      "schedule": [],
+      "total": "0"
+    },
+    "accountTokens": [
+      {
+        "tokenAccountState": {
+          "balance": {
+            "decimals": 2,
+            "value": "100000"
+          },
+          "inAllowList": true,
+          "inDenyList": false
+        },
+        "tokenId": "PLT"
+      }
+    ]
+  }
+}
 ```
 
 The result is a JSON object with two __optional__ fields:
@@ -1169,6 +1217,87 @@ Example where the epoch length is 3600 seconds (1 hour):
   "epochLength":3600000
 }
 ```
+
+## PLT tokens
+
+A GET request to `/v0/plt/tokens` returns a list of plt token infos.
+
+Example response:
+
+```json
+[
+  {
+    "tokenId": "PLT",
+    "tokenState": {
+      "decimals": 2,
+      "issuer": "3dpAB1MtU6NYyuSmcZMBt1Rev6vQtj3UDR3j2jqSVJ94fX11ge",
+      "moduleState": {
+        "allowList": false,
+        "burnable": true,
+        "denyList": true,
+        "metadata": "https://example.plt",
+        "mintable": true,
+        "name": "Protocol-level token"
+      },
+      "tokenModuleRef": "af5684e70c1438e442066d017e4410af6da2b53bfa651a07d81efa2aa668db20",
+      "totalSupply": {
+        "decimals": 2,
+        "value": "1000000000"
+      }
+    }
+  }
+  {
+    "tokenId": "PLT2",
+    "tokenState": {
+      "decimals": 2,
+      "issuer": "3dpAB1MtU6NYyuSmcZMBt1Rev6vQtj3UDR3j2jqSVJ94fX11ge",
+      "moduleState": {
+        "allowList": false,
+        "burnable": true,
+        "denyList": true,
+        "metadata": "https://example.plt",
+        "mintable": true,
+        "name": "Protocol-level token"
+      },
+      "tokenModuleRef": "af5684e70c1438e442066d017e4410af6da2b53bfa651a07d81efa2aa668db20",
+      "totalSupply": {
+        "decimals": 2,
+        "value": "1000000000"
+      }
+    }
+  }
+]
+```
+
+## PLT token info and metadata
+
+A GET request to `/v0/plt/tokenInfo/{tokenId}` returns token info and decoded module state.
+
+Example response:
+
+```json
+{
+  "tokenId": "PLT",
+  "tokenState": {
+    "decimals": 2,
+    "issuer": "3dpAB1MtU6NYyuSmcZMBt1Rev6vQtj3UDR3j2jqSVJ94fX11ge",
+    "moduleState": {
+      "allowList": false,
+      "burnable": true,
+      "denyList": true,
+      "metadata": "https://example.plt",
+      "mintable": true,
+      "name": "Protocol-level token",
+      "_additional":[]
+    },
+    "tokenModuleRef": "af5684e70c1438e442066d017e4410af6da2b53bfa651a07d81efa2aa668db20",
+    "totalSupply": {
+      "decimals": 2,
+      "value": "1000000000"
+    }
+  }
+}
+```
 # Deployment
 
 The wallet proxy must have access to
@@ -1185,16 +1314,30 @@ An example invocation is
 ```console
 wallet-proxy --grpc-ip 127.0.0.1\
              --grpc-port 10000\
-             --db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=postgres"\
+             --db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=password"\
              --ip-data identity-providers-with-metadata.json\
              --ip-data-v1 identity-providers-with-metadata-v1.json\
              --ip-data-v2 identity-providers-with-metadata-v2.json\
              --drop-account gtu-drop-account-0.json\
              --forced-update-config-v0 forced-update-config-v0.json\
              --forced-update-config-v1 forced-update-config-v1.json\
-             --health-tolerance 30
-             --log-level debug
+             --health-tolerance 30\
+             --log-level debug\
              --grpc-timeout 15
+```
+
+or
+
+```console
+stack run wallet-proxy -- \
+  --grpc-ip 127.0.0.1\
+  --grpc-port 10000\
+  --db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=password"\
+  --ip-data ./examples/identity-providers-with-metadata.json\
+  --ip-data-v1 ./examples/identity-providers-with-metadata-v1.json\
+  --ip-data-v2 ./examples/identity-providers-with-metadata-v2.json\
+  --log-level debug\
+  --port 3005
 ```
 
 where
@@ -1202,8 +1345,8 @@ where
 - `--grpc-port 10000` specifies the GRPC port the node is listening on
 - `--db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=postgres"` is the transaction outcome database connection string
 - `--ip-data identity-providers-with-metadata.json` JSON file with identity providers, anonymity revokers and metadata needed for the version 0 identity flow
-- `--ip-data-v1 identity-providers-with-metadata.json` JSON file with identity providers and anonymity revokers and metadata needed for the version 1 identity flow
-- `--ip-data-v2 identity-providers-with-metadata.json` JSON file with identity providers (including company ID providers) and anonymity revokers and metadata needed for the version 1 identity flow
+- `--ip-data-v1 identity-providers-with-metadata-v1.json` JSON file with identity providers and anonymity revokers and metadata needed for the version 1 identity flow
+- `--ip-data-v2 identity-providers-with-metadata-v2.json` JSON file with identity providers (including company ID providers) and anonymity revokers and metadata needed for the version 1 identity flow
 - `--drop-account gtu-drop-account-0.json` keys of the gtu drop account
 - `--forced-update-config-v0 forced-update-config-v0.json` file with app update configuration for the old mobile wallet
 - `--forced-update-config-v1 forced-update-config-v1.json` file with app update configuration for the new mobile wallet

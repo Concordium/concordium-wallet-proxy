@@ -2,6 +2,11 @@
 
 ## Unreleased changes
 
+- Add endpoint `GET /v2/accBalance/{account address}` that includes the plt (protocol level token) balances of an account.
+- Add endpoint `GET /v0/plt/tokens` to get a list of all plt token infos.
+- Add endpoint `GET /v0/plt/tokenInfo/{tokenId}` to get the token info about a given plt token and its module state (with metadata url)
+- Add flag to provide a server port at run-time.
+
 ## 0.36.0
 
 - Add `PUT /v0/submitRawTransaction` endpoint for submitting an account transaction as bytes instead of JSON.
