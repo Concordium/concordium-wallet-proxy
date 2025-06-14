@@ -77,6 +77,7 @@ import Concordium.Types.HashableTo
 import qualified Concordium.Types.InvokeContract as InvokeContract
 import Concordium.Types.Parameters
 import Concordium.Types.Queries hiding (Summary)
+import Concordium.Types.Queries.Tokens
 import Concordium.Types.Transactions
 import Concordium.Utils.Serialization (getMaybe)
 import qualified Concordium.Wasm as Wasm
@@ -613,7 +614,7 @@ getAccountBalanceR ver addrText = do
         -- checking the status code for "not found".
         Just (lastFinInfo, bestInfo, nextPayday, epochDuration, lastFinBlock) -> do
             let
-                getBal :: (AccountInfo, Maybe BakerPoolStatus) -> Either (Maybe Value) (Maybe RewardPeriodLength -> Value)
+                getBal :: (AccountInfo, Maybe BakerPoolStatus) -> Handler (Either (Maybe Value) (Maybe RewardPeriodLength -> Value))
                 getBal (AccountInfo{..}, mBPS) = do
                     let extraBalanceInfoV1
                             | ver >= AccountBalanceV1 =
@@ -621,12 +622,29 @@ getAccountBalanceR ver addrText = do
                                   "accountAtDisposal" .= aiAccountAvailableAmount
                                 ]
                             | otherwise = []
-                        extraBalanceInfoV2
-                            | ver >= AccountBalanceV2 =
-                                [ "accountTokens" .= aiAccountTokens
-                                ]
-                            | otherwise = []
-                        balanceInfo =
+                    extraBalanceInfoV2 <-
+                        if ver >= AccountBalanceV2
+                            then do
+                                tokenInfos <- forM aiAccountTokens $ \token -> do
+                                    let tid = Concordium.Types.Queries.Tokens.tokenId token
+                                    runGRPC (getTokenInfo tid LastFinal) pure
+
+                                -- Enhance the accountTokens by replacing the `tokenId` field with the `tokenInfo`
+                                -- corresponding to the `tokenId`.
+                                let enrichedAccountTokens =
+                                        zipWith
+                                            ( \token info ->
+                                                case toJSON token of
+                                                    Object o -> Object $ KM.insert "token" (toJSON info) $ KM.delete "tokenId" o
+                                                    val -> val
+                                            )
+                                            aiAccountTokens
+                                            tokenInfos
+
+                                pure ["accountTokens" .= enrichedAccountTokens]
+                            else pure []
+
+                    let balanceInfo =
                             [ "accountAmount" .= aiAccountAmount,
                               "accountEncryptedAmount" .= aiAccountEncryptedAmount,
                               "accountNonce" .= aiAccountNonce,
@@ -646,7 +664,7 @@ getAccountBalanceR ver addrText = do
                             isSuspended <- abpsIsSuspended
                             return ("isSuspended" .= isSuspended)
                     case aiStakingInfo of
-                        AccountStakingNone -> Left . Just $ object balanceInfo
+                        AccountStakingNone -> pure $ Left . Just $ object balanceInfo
                         AccountStakingBaker{..} -> do
                             let infoWithoutPending =
                                     [ "stakedAmount" .= asiStakedAmount,
@@ -660,10 +678,10 @@ getAccountBalanceR ver addrText = do
                                         <> maybe [] (\bpi -> ["bakerPoolInfo" .= bpi]) asiPoolInfo
                                         <> primed
                             case asiPendingChange of
-                                NoChange -> Left . Just $ object $ balanceInfo <> ["accountBaker" .= object infoWithoutPending]
+                                NoChange -> pure $ Left . Just $ object $ balanceInfo <> ["accountBaker" .= object infoWithoutPending]
                                 _ ->
                                     let bi rpl = object $ infoWithoutPending <> pendingChangeToJSON nextPayday epochDuration rpl asiPendingChange
-                                    in  Right $ \rpl -> object (balanceInfo <> ["accountBaker" .= bi rpl])
+                                    in  pure $ Right $ \rpl -> object (balanceInfo <> ["accountBaker" .= bi rpl])
                         AccountStakingDelegated{..} -> do
                             let infoWithoutPending =
                                     [ "stakedAmount" .= asiStakedAmount,
@@ -673,25 +691,27 @@ getAccountBalanceR ver addrText = do
                                         <> primed
                                         <> suspended
                             case asiDelegationPendingChange of
-                                NoChange -> Left . Just $ object $ balanceInfo <> ["accountDelegation" .= object infoWithoutPending]
+                                NoChange -> pure $ Left . Just $ object $ balanceInfo <> ["accountDelegation" .= object infoWithoutPending]
                                 _ ->
                                     let di rpl = object $ infoWithoutPending <> pendingChangeToJSON nextPayday epochDuration rpl asiDelegationPendingChange
-                                    in  Right $ \rpl -> object (balanceInfo ++ ["accountDelegation" .= di rpl])
-                lastFinBalComp = getBal lastFinInfo
-                bestBalComp = maybe (Left Nothing) getBal bestInfo
+                                    in  pure $ Right $ \rpl -> object (balanceInfo ++ ["accountDelegation" .= di rpl])
+            lastFinBalComp <- getBal lastFinInfo
+            bestBalComp <- case bestInfo of
+                Nothing -> pure $ Left Nothing
+                Just val -> getBal val
             let response lastFinBal bestBal = do
                     $(logInfo) $
                         "Retrieved account balance for "
                             <> addrText
                             <> ": finalizedBalance="
-                            <> (Text.pack $ show lastFinBal)
+                            <> Text.pack (show lastFinBal)
                             <> case bestBal of
                                 Nothing -> mempty
-                                Just bal -> ", currentBalance=" <> (Text.pack $ show bal)
+                                Just bal -> ", currentBalance=" <> Text.pack (show bal)
                     sendResponse $
                         object $
-                            (maybe [] (\b -> ["finalizedBalance" .= b]) lastFinBal)
-                                <> (maybe [] (\b -> ["currentBalance" .= b]) bestBal)
+                            maybe [] (\b -> ["finalizedBalance" .= b]) lastFinBal
+                                <> maybe [] (\b -> ["currentBalance" .= b]) bestBal
             case (lastFinBalComp, bestBalComp) of
                 (Left lastFinBal, Left bestBal) -> response lastFinBal bestBal
                 (Left lastFinBal, Right bestBalF) -> runGRPC (getRewardPeriodLength lastFinBlock) $ \rpl -> response lastFinBal (Just (bestBalF rpl))
@@ -1913,7 +1933,7 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents addrText = do
                                   "count" .= length fentries,
                                   "transactions" .= fentries
                                 ]
-                                    <> (maybe [] (\sid -> ["from" .= sid]) startId)
+                                    <> maybe [] (\sid -> ["from" .= sid]) startId
 
 -- | Convert a timestamp to seconds since the unix epoch. A timestamp can be a fractional number, e.g., 17.5.
 timestampToFracSeconds :: Timestamp -> Double
@@ -2090,48 +2110,47 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                         _ -> True
                 (resultDetails, subtotal) = case tsResult of
                     TxSuccess evts ->
-                        ( ( ["outcome" .= ("success" :: Text), "events" .= (fmap (i18n i) . filter filterTransferMemo $ evts)]
-                                <> case (tsType, evts) of
-                                    (viewTransfer -> True, Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr) : mmemo) ->
-                                        addMemo
-                                            mmemo
-                                            [ "transferSource" .= fromAddr,
-                                              "transferDestination" .= toAddr,
-                                              "transferAmount" .= amt
-                                            ]
-                                    (viewEncryptedTransfer -> True, EncryptedAmountsRemoved{..} : NewEncryptedAmount{..} : mmemo) ->
-                                        addMemo
-                                            mmemo
-                                            [ "transferSource" .= earAccount,
-                                              "transferDestination" .= neaAccount,
-                                              "encryptedAmount" .= neaEncryptedAmount,
-                                              "aggregatedIndex" .= earUpToIndex,
-                                              "inputEncryptedAmount" .= earInputAmount,
-                                              "newIndex" .= neaNewIndex,
-                                              "newSelfEncryptedAmount" .= earNewAmount
-                                            ]
-                                    (TSTAccountTransaction (Just TTTransferToPublic), [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}]) ->
+                        ( ["outcome" .= ("success" :: Text), "events" .= (fmap (i18n i) . filter filterTransferMemo $ evts)]
+                            <> case (tsType, evts) of
+                                (viewTransfer -> True, Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr) : mmemo) ->
+                                    addMemo
+                                        mmemo
+                                        [ "transferSource" .= fromAddr,
+                                          "transferDestination" .= toAddr,
+                                          "transferAmount" .= amt
+                                        ]
+                                (viewEncryptedTransfer -> True, EncryptedAmountsRemoved{..} : NewEncryptedAmount{..} : mmemo) ->
+                                    addMemo
+                                        mmemo
                                         [ "transferSource" .= earAccount,
-                                          "amountAdded" .= aabdAmount,
+                                          "transferDestination" .= neaAccount,
+                                          "encryptedAmount" .= neaEncryptedAmount,
                                           "aggregatedIndex" .= earUpToIndex,
                                           "inputEncryptedAmount" .= earInputAmount,
+                                          "newIndex" .= neaNewIndex,
                                           "newSelfEncryptedAmount" .= earNewAmount
                                         ]
-                                    (TSTAccountTransaction (Just TTTransferToEncrypted), [EncryptedSelfAmountAdded{..}]) ->
-                                        [ "transferSource" .= eaaAccount,
-                                          "amountSubtracted" .= eaaAmount,
-                                          "newSelfEncryptedAmount" .= eaaNewAmount
+                                (TSTAccountTransaction (Just TTTransferToPublic), [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}]) ->
+                                    [ "transferSource" .= earAccount,
+                                      "amountAdded" .= aabdAmount,
+                                      "aggregatedIndex" .= earUpToIndex,
+                                      "inputEncryptedAmount" .= earInputAmount,
+                                      "newSelfEncryptedAmount" .= earNewAmount
+                                    ]
+                                (TSTAccountTransaction (Just TTTransferToEncrypted), [EncryptedSelfAmountAdded{..}]) ->
+                                    [ "transferSource" .= eaaAccount,
+                                      "amountSubtracted" .= eaaAmount,
+                                      "newSelfEncryptedAmount" .= eaaNewAmount
+                                    ]
+                                (viewScheduledTransfer -> True, TransferredWithSchedule{..} : mmemo) ->
+                                    addMemo
+                                        mmemo
+                                        [ "transferDestination" .= etwsTo,
+                                          "transferAmount" .= foldl' (+) 0 (map snd etwsAmount)
                                         ]
-                                    (viewScheduledTransfer -> True, TransferredWithSchedule{..} : mmemo) ->
-                                        addMemo
-                                            mmemo
-                                            [ "transferDestination" .= etwsTo,
-                                              "transferAmount" .= foldl' (+) 0 (map snd etwsAmount)
-                                            ]
-                                    (TSTAccountTransaction (Just TTRegisterData), [DataRegistered{..}]) ->
-                                        ["registeredData" .= drData]
-                                    _ -> []
-                          ),
+                                (TSTAccountTransaction (Just TTRegisterData), [DataRegistered{..}]) ->
+                                    ["registeredData" .= drData]
+                                _ -> [],
                           eventSubtotal self evts
                         )
                     TxReject reason ->
@@ -2459,9 +2478,9 @@ getHealthR =
                         return val
             currentTime <- liftIO Clock.getCurrentTime
             Proxy{..} <- getYesod
-            if (Clock.diffUTCTime currentTime (biBlockSlotTime lastFinalBlockInfo)) < (Clock.secondsToNominalDiffTime $ fromIntegral healthTolerance)
-                then sendResponse $ object ["healthy" .= True, "lastFinalTime" .= (biBlockSlotTime lastFinalBlockInfo), "version" .= showVersion version]
-                else sendResponse $ object ["healthy" .= False, "reason" .= ("The last final block is too old." :: String), "lastFinalTime" .= (biBlockSlotTime lastFinalBlockInfo), "version" .= showVersion version]
+            if Clock.diffUTCTime currentTime (biBlockSlotTime lastFinalBlockInfo) < Clock.secondsToNominalDiffTime (fromIntegral healthTolerance)
+                then sendResponse $ object ["healthy" .= True, "lastFinalTime" .= biBlockSlotTime lastFinalBlockInfo, "version" .= showVersion version]
+                else sendResponse $ object ["healthy" .= False, "reason" .= ("The last final block is too old." :: String), "lastFinalTime" .= biBlockSlotTime lastFinalBlockInfo, "version" .= showVersion version]
   where
     doGetBlockInfo = do
         res <- getBlockInfo LastFinal
