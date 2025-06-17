@@ -140,15 +140,64 @@ $ curl -XGET localhost:3000/v2/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN
     },
     "accountTokens": [
       {
+        "token": {
+          "tokenId": "PLT",
+          "tokenState": {
+            "decimals": 2,
+            "issuer": "3dpAB1MtU6NYyuSmcZMBt1Rev6vQtj3UDR3j2jqSVJ94fX11ge",
+            "moduleState": {
+              "allowList": false,
+              "burnable": true,
+              "denyList": true,
+              "metadata": "https://example.plt",
+              "mintable": true,
+              "name": "Protocol-level token"
+            },
+            "tokenModuleRef": "af5684e70c1438e442066d017e4410af6da2b53bfa651a07d81efa2aa668db20",
+            "totalSupply": {
+              "decimals": 2,
+              "value": "999999900"
+            }
+          }
+        },
         "tokenAccountState": {
           "balance": {
             "decimals": 2,
-            "value": "100000"
+            "value": "999987685"
           },
-          "inAllowList": true,
+          "inAllowList": null,
           "inDenyList": false
+        }
+      },
+      {
+        "token": {
+          "tokenId": "PLT2",
+          "tokenState": {
+            "decimals": 2,
+            "issuer": "3dpAB1MtU6NYyuSmcZMBt1Rev6vQtj3UDR3j2jqSVJ94fX11ge",
+            "moduleState": {
+              "allowList": false,
+              "burnable": true,
+              "denyList": true,
+              "metadata": "https://example.plt",
+              "mintable": true,
+              "name": "Protocol-level token"
+            },
+            "tokenModuleRef": "af5684e70c1438e442066d017e4410af6da2b53bfa651a07d81efa2aa668db20",
+            "totalSupply": {
+              "decimals": 2,
+              "value": "999999900"
+            }
+          }
         },
-        "tokenId": "PLT"
+        "tokenAccountState": {
+          "balance": {
+            "decimals": 2,
+            "value": "999987685"
+          },
+          "inAllowList": null,
+          "inDenyList": false
+        }
       }
     ]
   }
