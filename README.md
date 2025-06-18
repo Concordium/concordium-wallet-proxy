@@ -25,7 +25,9 @@ cooldowns and the available balance) and get the info if an account is on any al
 * `PUT /v0/submitTransfer`: perform a simple transfer
 * `PUT /v0/submitRawTransaction`: perform a any raw transaction
 * `GET /v0/accTransactions/{account address}`: get the transactions affecting an account's ccd balance
-* `GET /v1/accTransactions/{account address}`: get the transactions affecting an account's ccd balance (including transactions with memos)
+* `GET /v1/accTransactions/{account address}`: get the transactions affecting an account's ccd balance (including CCD transactions with memos)
+* `GET /v2/accTransactions/{account address}`: get the transactions affecting an account's ccd balance (including special transaction outcomes for suspended/inactive validators and including CCD transactions with memos)
+* `GET /v3/accTransactions/{account address}`: get the transactions affecting an account's ccd or plt balances (including special transaction outcomes for suspended/inactive validators and including CCD transactions with memos)
 * `PUT /v0/testnetGTUDrop/{account address}`: request a CCD drop to the specified account
 * `GET /v0/health`: get a response specifying if the wallet proxy is up to date
 * `GET /v0/global`: get the cryptographic parameters obtained from the node it is connected to
@@ -575,10 +577,12 @@ a submission id is returned, which can be used to query the status of the transf
 ## Get transactions
 
 The endpoint `/accTransactions/{account address}` retrieves a partial list of transactions affecting an account.
-There are three versions of the endpoint, `v0`, `v1` and `v2`.
-Version `v0` treats transactions with memos as the equivalent transaction without a memo.
+There are four versions of the endpoint, `v0`, `v1`, `v2` and `v3`.
+Version `v0` treats CCD transactions with memos as the equivalent transaction without a memo.
 Versions `v0` and `v1` exclude the special transaction outcomes for suspending inactive validators,
-which are included in `v2`.
+which are included in `v2` and `v3`.
+
+Versions `v3` includes in addition transactions affecting an account's plt balance.
 
 They support the following parameters.
 - `order`: whether to order the transactions in ascending or descending order of occurrence. A value beginning with `d` or `D` is interpreted as descending; any other (or no) value is interpreted as ascending.
@@ -675,7 +679,7 @@ This is only present if the origin type is `"self"` (since otherwise the account
 When present, this is always a positive value.
 
 #### `total` (required)
-The total change in the account's __public__ balance due to the transaction and associated fees.
+The total change in the account's __public__ CCD balance due to the transaction and associated fees.
 A negative value indicates a debit from the account, while a positive value indicates a credit to the account.
 
 #### `energy` (optional)
@@ -723,6 +727,10 @@ It consists of the following fields:
   - in the `v2` endpoint `type` can additionaly be one of
     - `"validatorPrimedForSuspension"`
     - `"validatorSuspended"`
+  - in the `v3` endpoint `type` can additionaly be one of
+      - `"updateCreatePLT"`
+      - `"tokenGovernance"`
+      - `"tokenHolder"`
 - `description` (required): a brief localized description of the type of the transaction
 - `outcome` (required):
   - `"success"` if the transaction was executed successfully

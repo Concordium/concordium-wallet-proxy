@@ -268,6 +268,7 @@ mkYesod
 /v2/ip_info IpsV2R GET
 /v1/accTransactions/#Text AccountTransactionsV1R GET
 /v2/accTransactions/#Text AccountTransactionsV2R GET
+/v3/accTransactions/#Text AccountTransactionsV3R GET
 /v0/bakerPool/#Word64 BakerPoolR GET
 /v0/chainParameters ChainParametersR GET
 /v0/nextPayday NextPaydayR GET
@@ -1358,8 +1359,8 @@ getSimpleTransactionStatus i trHash = do
     eventsToMaybeValues :: [SupplementedEvent] -> Maybe [Value]
     eventsToMaybeValues events = sequence $ updateEventToMaybeValue <$> events
 
--- helper functions to be used in view patterns to match both transfers and
--- transfers with memo.
+-- helper functions to be used in view patterns to match both CCD transfers and
+-- CCD transfers with memo.
 viewTransfer :: TransactionSummaryType -> Bool
 viewTransfer (TSTAccountTransaction (Just TTTransfer)) = True
 viewTransfer (TSTAccountTransaction (Just TTTransferWithMemo)) = True
@@ -1403,7 +1404,7 @@ getSubmissionStatusR submissionId =
                 Nothing -> respond400Error (EMGRPCErrorResponse "Unsupported transaction type for simple statuses.") RequestInvalid
                 Just v -> sendResponse v
 
--- | Whether to include memos in formatted account transactions or not.
+-- | Whether to include memos in formatted account CCD transfer transactions or not.
 --  If not, transfers with memos are mapped to a corresponding transfer without a memo.
 data IncludeMemos = IncludeMemo | ExcludeMemo
     deriving (Eq, Show)
@@ -1413,14 +1414,22 @@ data IncludeMemos = IncludeMemo | ExcludeMemo
 data IncludeSuspensionEvents = IncludeSuspensionEvents | ExcludeSuspensionEvents
     deriving (Eq, Show)
 
+-- | Whether PLT events are included in
+--  the account transactions.
+data IncludePltEvents = IncludePltEvents | ExcludePltEvents
+    deriving (Eq, Show)
+
 getAccountTransactionsV0R :: Text -> Handler TypedContent
-getAccountTransactionsV0R = getAccountTransactionsWorker ExcludeMemo ExcludeSuspensionEvents
+getAccountTransactionsV0R = getAccountTransactionsWorker ExcludeMemo ExcludeSuspensionEvents ExcludePltEvents
 
 getAccountTransactionsV1R :: Text -> Handler TypedContent
-getAccountTransactionsV1R = getAccountTransactionsWorker IncludeMemo ExcludeSuspensionEvents
+getAccountTransactionsV1R = getAccountTransactionsWorker IncludeMemo ExcludeSuspensionEvents ExcludePltEvents
 
 getAccountTransactionsV2R :: Text -> Handler TypedContent
-getAccountTransactionsV2R = getAccountTransactionsWorker IncludeMemo IncludeSuspensionEvents
+getAccountTransactionsV2R = getAccountTransactionsWorker IncludeMemo IncludeSuspensionEvents ExcludePltEvents
+
+getAccountTransactionsV3R :: Text -> Handler TypedContent
+getAccountTransactionsV3R = getAccountTransactionsWorker IncludeMemo IncludeSuspensionEvents IncludePltEvents
 
 getCIS2Tokens :: Word64 -> Word64 -> Handler TypedContent
 getCIS2Tokens index subindex = do
@@ -1746,8 +1755,8 @@ getMetadataUrl = do
             return MetadataURL{..}
 
 -- | List transactions for the account.
-getAccountTransactionsWorker :: IncludeMemos -> IncludeSuspensionEvents -> Text -> Handler TypedContent
-getAccountTransactionsWorker includeMemos includeSuspensionEvents addrText = do
+getAccountTransactionsWorker :: IncludeMemos -> IncludeSuspensionEvents -> IncludePltEvents -> Text -> Handler TypedContent
+getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEvents addrText = do
     i <- internationalize
     -- Get the canonical address of the account.
     let getAddress k = do
@@ -1882,6 +1891,20 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents addrText = do
                                     E.||. extractedTag s E.==. E.val (Just "ValidatorPrimedForSuspension")
                                 )
 
+        -- For older versions than v3 of the endpoint, we exclude plt events.
+        let pltFilter = case includePltEvents of
+                IncludePltEvents -> const $ return ()
+                ExcludePltEvents -> \s ->
+                    let extractedType = coerced s EJ.#>>. ["Left", "type", "contents"] -- the transaction type.
+                    -- Filter transactions out if they are plt transactions.
+                    in  E.where_ $
+                            E.isNothing extractedType
+                                E.||. E.not_
+                                    ( extractedType E.==. E.val (Just "updateCreatePLT")
+                                        E.||. extractedType E.==. E.val (Just "tokenHolder")
+                                        E.||. extractedType E.==. E.val (Just "tokenGovernance")
+                                    )
+
         rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
         case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter, maybeTypeFilter) of
             (Nothing, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
@@ -1912,6 +1935,7 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents addrText = do
                         encryptedFilter s
                         typeFilter s
                         suspensionFilter s
+                        pltFilter s
                         -- sort with the requested method or ascending over EntryId.
                         E.orderBy [ordering (e E.^. EntryId)]
                         -- Limit the number of returned rows
@@ -1933,7 +1957,7 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents addrText = do
                                   "count" .= length fentries,
                                   "transactions" .= fentries
                                 ]
-                                    <> maybe [] (\sid -> ["from" .= sid]) startId
+                                    <> (maybe [] (\sid -> ["from" .= sid]) startId)
 
 -- | Convert a timestamp to seconds since the unix epoch. A timestamp can be a fractional number, e.g., 17.5.
 timestampToFracSeconds :: Timestamp -> Double
@@ -1941,7 +1965,7 @@ timestampToFracSeconds Timestamp{..} = fromRational (toInteger tsMillis Rational
 
 -- | Format a transaction affecting an account.
 formatEntry ::
-    -- | Whether to include memos in the enties. If not,
+    -- | Whether to include memos from CCD transfer txs in the enties. If not,
     --  then transfers with memos are mapped to
     --  corresponding transfers without memos.
     IncludeMemos ->
@@ -2102,7 +2126,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                         | otherwise -> (object ["type" .= ("account" :: Text), "address" .= sender], False)
                     Nothing -> (object ["type" .= ("none" :: Text)], False)
 
-                -- If ExcludeMemo then we filter out the TransferMemo event from the
+                -- If ExcludeMemo then we filter out the CCD TransferMemo event from the
                 -- list of events in order to maintain backwards compatibility.
                 filterTransferMemo x =
                     includeMemos == IncludeMemo || case x of
@@ -2154,7 +2178,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                           eventSubtotal self evts
                         )
                     TxReject reason ->
-                        let rawReason = if rawRejectReason then ["rawRejectReason" .= reason] else []
+                        let rawReason = (["rawRejectReason" .= reason | rawRejectReason])
                         in  (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason] ++ rawReason, Nothing)
 
                 details = case includeMemos of
