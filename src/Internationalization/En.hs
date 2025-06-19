@@ -197,8 +197,8 @@ translation = I18n{..}
     i18nEvent BakerResumed{..} = "Validator " <> descrBaker ebrBakerId ebrAccount <> " was resumed."
     i18nEvent (TokenModuleEvent tokenId type' _) = Text.pack (show tokenId) <> " token module event occurred of type " <> Text.pack (show type') <> "." -- TODO: It would be ideally to render the `details` in a readable way in the wallets.
     i18nEvent (TokenTransfer tokenId from to amount memo) = Text.pack (tokenAmountToString amount) <> " " <> Text.pack (show tokenId) <> " transferred from " <> Text.pack (show from) <> " to " <> Text.pack (show to) <> maybe "" (\m -> " with memo " <> Text.pack (show m)) memo <> "." -- TODO: It would be ideally to render the `memo` in a readable way in the wallets.
-    i18nEvent TokenMint{..} = Text.pack (tokenAmountToString etmAmount) <> " " <> Text.pack (show etmTokenId) <> " minted to " <> Text.pack (show etmTarget)
-    i18nEvent TokenBurn{..} = Text.pack (tokenAmountToString etbAmount) <> " " <> Text.pack (show etbTokenId) <> " burned from " <> Text.pack (show etbTarget)
+    i18nEvent TokenMint{..} = Text.pack (tokenAmountToString etmAmount) <> " " <> Text.pack (show etmTokenId) <> " minted to " <> Text.pack (show etmTarget) <> "."
+    i18nEvent TokenBurn{..} = Text.pack (tokenAmountToString etbAmount) <> " " <> Text.pack (show etbTokenId) <> " burned from " <> Text.pack (show etbTarget) <> "."
     i18nEvent TokenCreated{..} = "Token created: " <> Text.pack (showPrettyJSON etcPayload)
     i18nSpecialEvent BakingRewards{..} =
         "Block rewards\n"
