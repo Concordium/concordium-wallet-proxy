@@ -1941,9 +1941,9 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                         -- Limit the number of returned rows
                         E.limit limit
                         return (e, s)
-                case mapM (formatEntry includeMemos rawReason i addr) entries of
-                    Left err -> do
-                        $(logError) $ "Error decoding transaction: " <> Text.pack err
+                result <- formatEntries includeMemos rawReason i addr entries
+                case result of
+                    Left _ -> do
                         sendResponseStatus badGateway502 $
                             object
                                 [ "errorMessage" .= i18n i EMDatabaseError,
@@ -1958,6 +1958,31 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                                   "transactions" .= fentries
                                 ]
                                     <> (maybe [] (\sid -> ["from" .= sid]) startId)
+
+-- | Format transactions affecting an account.
+formatEntries ::
+    -- | Whether to include memos from CCD transfer txs in the enties. If not,
+    --  then transfers with memos are mapped to
+    --  corresponding transfers without memos.
+    IncludeMemos ->
+    -- | Whether to include a raw reject reason for account transactions or not.
+    Bool ->
+    -- | Internationalization of messages.
+    I18n ->
+    -- | Address of the account whose transactions we are formatting.
+    AccountAddress ->
+    [(Entity Entry, Entity Summary)] ->
+    Handler (Either String [Value])
+formatEntries includeMemos rawRejectReason i addr entries = do
+    results <- forM entries $ \entry ->
+        case formatEntry includeMemos rawRejectReason i addr entry of
+            Left err -> do
+                $(logError) $ "Error decoding transaction: " <> Text.pack err
+                $(logError) $ "Error occurred while decoding database entry: " <> Text.pack (show entry)
+                return $ Left err
+            Right val ->
+                return $ Right val
+    return $ sequence results
 
 -- | Convert a timestamp to seconds since the unix epoch. A timestamp can be a fractional number, e.g., 17.5.
 timestampToFracSeconds :: Timestamp -> Double
