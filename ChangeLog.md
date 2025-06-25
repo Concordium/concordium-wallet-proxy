@@ -2,6 +2,8 @@
 
 ## Unreleased changes
 
+## [0.37.0] - 2025-06-25
+
 - Add endpoint `GET /v3/accTransactions/{account address}` that gets the transactions affecting an account's ccd or plt balances (including special transaction outcomes for suspended/inactive validators and including CCD transactions with memos).
 - Add endpoint `GET /v2/accBalance/{account address}` that includes the plt (protocol level token) balances of an account.
 - Add endpoint `GET /v0/plt/tokens` to get a list of all plt token infos.
