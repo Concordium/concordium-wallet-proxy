@@ -2292,8 +2292,7 @@ renderTransactionType TTUpdateCredentials = "updateCredentials"
 renderTransactionType TTRegisterData = "registerData"
 renderTransactionType TTConfigureBaker = "configureBaker"
 renderTransactionType TTConfigureDelegation = "configureDelegation"
-renderTransactionType TTTokenHolder = "tokenHolder"
-renderTransactionType TTTokenGovernance = "tokenGovernance"
+renderTransactionType TTTokenUpdate = "tokenUpdate"
 
 renderTransactionSummaryType :: TransactionSummaryType -> Text
 renderTransactionSummaryType (TSTAccountTransaction (Just tt)) = renderTransactionType tt
