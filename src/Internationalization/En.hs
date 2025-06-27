@@ -120,7 +120,7 @@ translation = I18n{..}
     i18nTransactionType TTRegisterData = "Register data on the chain"
     i18nTransactionType TTConfigureBaker = "Configure validator"
     i18nTransactionType TTConfigureDelegation = "Configure delegation"
-    i18nTransactionType TTTokenUpdate = "Token Update"
+    i18nTransactionType TTTokenUpdate = "Token update"
 
     i18nDeployCredential Initial = "Deploy initial account credential"
     i18nDeployCredential Normal = "Deploy account credential"
