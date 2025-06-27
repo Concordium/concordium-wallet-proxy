@@ -97,9 +97,7 @@ translation = I18n{..}
     i18nRejectReason PoolClosed = "Delegation to a closed pool is not allowed."
     i18nRejectReason InsufficientDelegationStake = "Adding a delegator with 0 stake is not allowed."
     i18nRejectReason (NonExistentTokenId tokenId) = "Non existing plt token id " <> Text.pack (show tokenId) <> "."
-    i18nRejectReason (TokenHolderTransactionFailed reason) = "Token holder transaction failed with reason: " <> Text.pack (show reason) <> "."
-    i18nRejectReason (TokenGovernanceTransactionFailed reason) = "Token governance transaction failed with reason: " <> Text.pack (show reason) <> "."
-    i18nRejectReason (UnauthorizedTokenGovernance tokenId) = "Unauthorized to execute the token governance transaction of plt token id " <> Text.pack (show tokenId) <> "."
+    i18nRejectReason (TokenUpdateTransactionFailed reason) = "Token update transaction failed with reason: " <> Text.pack (show reason) <> "."
 
     i18nTransactionType TTDeployModule = "Deploy module"
     i18nTransactionType TTInitContract = "Initialize smart contract"
@@ -122,8 +120,7 @@ translation = I18n{..}
     i18nTransactionType TTRegisterData = "Register data on the chain"
     i18nTransactionType TTConfigureBaker = "Configure validator"
     i18nTransactionType TTConfigureDelegation = "Configure delegation"
-    i18nTransactionType TTTokenGovernance = "Token Governance"
-    i18nTransactionType TTTokenHolder = "Token holder"
+    i18nTransactionType TTTokenUpdate = "Token Update"
 
     i18nDeployCredential Initial = "Deploy initial account credential"
     i18nDeployCredential Normal = "Deploy account credential"
