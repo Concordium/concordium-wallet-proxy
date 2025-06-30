@@ -2,6 +2,11 @@
 
 ## Unreleased changes
 
+## [0.38.0] - 2025-06-30
+
+- Rejected PLT txs are parsed in the `GET /v3/accTransactions/{account address}` response.
+- PLT transaction types have been consolidated to only one type `tokenUpdate` (previously `tokenGovernance`/`tokenHolder` types existed).
+
 ## [0.37.0] - 2025-06-25
 
 - Add endpoint `GET /v3/accTransactions/{account address}` that gets the transactions affecting an account's ccd or plt balances (including special transaction outcomes for suspended/inactive validators and including CCD transactions with memos).
