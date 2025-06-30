@@ -146,12 +146,17 @@ $ curl -XGET localhost:3000/v2/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN
           "tokenId": "PLT",
           "tokenState": {
             "decimals": 2,
-            "issuer": "3dpAB1MtU6NYyuSmcZMBt1Rev6vQtj3UDR3j2jqSVJ94fX11ge",
             "moduleState": {
               "allowList": false,
               "burnable": true,
-              "denyList": true,
-              "metadata": "https://example.plt",
+              "denyList": false,
+              "governanceAccount": {
+                "address": "4ZfYA56XxjDarY7avsg1FMqdkqCt1pv9EFHeWAkqpvdZPS7yLb",
+                "type": "account"
+              },
+              "metadata": {
+                "url": "https://myUrl.com"
+              },
               "mintable": true,
               "name": "Protocol-level token"
             },
@@ -167,38 +172,44 @@ $ curl -XGET localhost:3000/v2/accBalance/4WHFD3crVQekY5KTJ653LHhNLmTpbby1A7WWbN
             "decimals": 2,
             "value": "999987685"
           },
-          "inAllowList": null,
-          "inDenyList": false
+          "state": {}
         }
       },
       {
         "token": {
           "tokenId": "PLT2",
           "tokenState": {
-            "decimals": 2,
-            "issuer": "3dpAB1MtU6NYyuSmcZMBt1Rev6vQtj3UDR3j2jqSVJ94fX11ge",
+            "decimals": 6,
             "moduleState": {
-              "allowList": false,
+              "allowList": true,
               "burnable": true,
               "denyList": true,
-              "metadata": "https://example.plt",
+              "governanceAccount": {
+                "address": "4ZfYA56XxjDarY7avsg1FMqdkqCt1pv9EFHeWAkqpvdZPS7yLb",
+                "type": "account"
+              },
+              "metadata": {
+                "url": "https://myUrl.com"
+              },
               "mintable": true,
-              "name": "Protocol-level token"
+              "name": "Token 6"
             },
-            "tokenModuleRef": "af5684e70c1438e442066d017e4410af6da2b53bfa651a07d81efa2aa668db20",
+            "tokenModuleRef": "6b7eef36dc48bb59ef9290cdbf123dad7e85efa76caf7df1ae8775735f8f59d3",
             "totalSupply": {
-              "decimals": 2,
-              "value": "999999900"
+              "decimals": 6,
+              "value": "10000000"
             }
           }
         },
         "tokenAccountState": {
           "balance": {
-            "decimals": 2,
-            "value": "999987685"
+            "decimals": 6,
+            "value": "10000000"
           },
-          "inAllowList": null,
-          "inDenyList": false
+          "state": {
+            "allowList": true,
+            "denyList": false
+          }
         }
       }
     ]
@@ -1287,12 +1298,17 @@ Example response:
     "tokenId": "PLT",
     "tokenState": {
       "decimals": 2,
-      "issuer": "3dpAB1MtU6NYyuSmcZMBt1Rev6vQtj3UDR3j2jqSVJ94fX11ge",
       "moduleState": {
         "allowList": false,
         "burnable": true,
         "denyList": true,
-        "metadata": "https://example.plt",
+        "governanceAccount": {
+          "address": "4ZfYA56XxjDarY7avsg1FMqdkqCt1pv9EFHeWAkqpvdZPS7yLb",
+          "type": "account"
+        },
+        "metadata": {
+          "url": "https://myUrl.com"
+        },
         "mintable": true,
         "name": "Protocol-level token"
       },
@@ -1307,12 +1323,17 @@ Example response:
     "tokenId": "PLT2",
     "tokenState": {
       "decimals": 2,
-      "issuer": "3dpAB1MtU6NYyuSmcZMBt1Rev6vQtj3UDR3j2jqSVJ94fX11ge",
       "moduleState": {
         "allowList": false,
         "burnable": true,
         "denyList": true,
-        "metadata": "https://example.plt",
+        "governanceAccount": {
+          "address": "4ZfYA56XxjDarY7avsg1FMqdkqCt1pv9EFHeWAkqpvdZPS7yLb",
+          "type": "account"
+        },
+        "metadata": {
+          "url": "https://myUrl.com"
+        },
         "mintable": true,
         "name": "Protocol-level token"
       },
@@ -1337,15 +1358,19 @@ Example response:
   "tokenId": "PLT",
   "tokenState": {
     "decimals": 2,
-    "issuer": "3dpAB1MtU6NYyuSmcZMBt1Rev6vQtj3UDR3j2jqSVJ94fX11ge",
     "moduleState": {
       "allowList": false,
       "burnable": true,
       "denyList": true,
-      "metadata": "https://example.plt",
+      "governanceAccount": {
+        "address": "4ZfYA56XxjDarY7avsg1FMqdkqCt1pv9EFHeWAkqpvdZPS7yLb",
+        "type": "account"
+      },
+      "metadata": {
+        "url": "https://myUrl.com"
+      },
       "mintable": true,
-      "name": "Protocol-level token",
-      "_additional":[]
+      "name": "Protocol-level token"
     },
     "tokenModuleRef": "af5684e70c1438e442066d017e4410af6da2b53bfa651a07d81efa2aa668db20",
     "totalSupply": {
