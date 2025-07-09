@@ -30,6 +30,9 @@ resolver: lts-22.39
 #   - wai
 packages:
 - .
+- ./deps/concordium-client/deps/concordium-base/
+- ./deps/concordium-client/
+
 # Dependency packages to be pulled from upstream that are not in the resolver.
 # These entries can reference officially published versions as well as
 # forks / in-progress versions pinned to a git hash. For example:
@@ -40,10 +43,6 @@ packages:
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
 # extra-deps: []
-
-extra-deps:
-- ./deps/concordium-client/deps/concordium-base/
-- ./deps/concordium-client/
 
 - github: Concordium/http2-client
   commit: af0edc5fba5265ba9a4b2f91cfc3c466e4c82197
