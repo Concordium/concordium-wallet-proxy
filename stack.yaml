@@ -44,6 +44,8 @@ packages:
 #
 # extra-deps: []
 
+extra-deps:
+
 - github: Concordium/http2-client
   commit: af0edc5fba5265ba9a4b2f91cfc3c466e4c82197
 
