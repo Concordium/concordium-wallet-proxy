@@ -58,6 +58,7 @@ import Data.Word
 import qualified Database.Esqueleto.Internal.Internal as EInternal
 import qualified Database.Esqueleto.Legacy as E
 import qualified Database.Esqueleto.PostgreSQL.JSON as EJ
+import Debug.Trace (traceM)
 import Lens.Micro.Platform hiding ((.=))
 import Network.GRPC.HTTP2.Types (GRPCStatusCode (..))
 import Network.HTTP.Types (Status, badGateway502, badRequest400, internalServerError500, notFound404, serviceUnavailable503)
@@ -69,6 +70,7 @@ import qualified Yesod
 
 import Data.Time.Clock as Clock
 
+import qualified Concordium.Cost as Cost
 import Concordium.Types
 import Concordium.Types.Accounts
 import Concordium.Types.Block
@@ -76,6 +78,7 @@ import Concordium.Types.Execution
 import Concordium.Types.HashableTo
 import qualified Concordium.Types.InvokeContract as InvokeContract
 import Concordium.Types.Parameters
+import qualified Concordium.Types.ProtocolLevelTokens.CBOR as CBOR
 import Concordium.Types.Queries hiding (Summary)
 import Concordium.Types.Queries.Tokens
 import Concordium.Types.Transactions
@@ -101,10 +104,12 @@ import Concordium.Client.Types.Transaction (
     removeDelegationPayloadSize,
     simpleTransferEnergyCost,
     simpleTransferPayloadSize,
+    tokenUpdateTransactionEnergyCost,
     transferWithScheduleEnergyCost,
     transferWithSchedulePayloadSize,
     updateDelegationPayloadSize,
  )
+import Concordium.Client.Utils (tokenAmountFromString)
 import Concordium.Common.Version
 import Concordium.Crypto.ByteStringHelpers (ShortByteStringHex (..))
 import Concordium.Crypto.SHA256 (Hash)
@@ -832,7 +837,7 @@ getAccountEncryptionKeyR addrText = do
 --  - "type", the type of the transaction. This is mandatory.
 --  - "numSignatures", the number of signatures on the transaction, defaults to 1 if not present.
 --  - "memoSize", the size of the transfer memo. Only supported if the node is running protocol version 2 or higher, and
---    only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
+--    only applies when `type` is either `simpleTransfer`, `encryptedTransfer`, or `simplePltTransfer`.
 getTransactionCostR :: Handler TypedContent
 getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
     numSignatures <- fromMaybe "1" <$> lookupGetParam "numSignatures"
@@ -872,10 +877,84 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                           "success" .= success
                         ]
         case transactionType of
-            Nothing -> respond400Error EMMissingParameter RequestInvalid
+            Nothing -> respond400Error (EMParseError "Missing `type` value.") RequestInvalid
             Just tty -> case Text.unpack tty of
                 "simpleTransfer" ->
                     costResponse $ simpleTransferEnergyCost (simpleTransferPayloadSize + memoPayloadSize) numSignatures
+                "simplePltTransfer" -> do
+                    amount <-
+                        lookupGetParam "amount" >>= \case
+                            Nothing -> respond400Error (EMParseError "Missing `amount` value.") RequestInvalid
+                            Just a -> case readMaybe $ Text.unpack a of
+                                Nothing -> respond400Error (EMParseError "Could not parse `amount` value.") RequestInvalid
+                                Just b -> return b
+                    tokenId <-
+                        lookupGetParam "tokenId" >>= \case
+                            Nothing -> respond400Error (EMParseError "Missing `tokenId` value.") RequestInvalid
+                            Just a -> case readMaybe $ Text.unpack a of
+                                Nothing -> respond400Error (EMParseError "Could not parse `tokenId` value.") RequestInvalid
+                                Just b -> return b
+
+                    let tokenAmount = tokenAmountFromString amount
+                    tokenAmountSize <- case tokenAmount of
+                        Just value -> pure (BS.length $ CBOR.tokenAmountToBytes value)
+                        Nothing -> respond400Error (EMParseError "Invalid `tokenAmount` value.") RequestInvalid
+
+                    -- Depending on if the wallets will submit the value with/without `coininfo` we should adjust below calcuation.
+                    -- Currently, it assumed to be submitted with `coininfo`.
+
+                    -- CBOR byte sequence of `TokenHolder` as follows:
+                    -- - d99d73 a2: A tagged (40307) item containing a map with 2 key-value pairs
+                    --  - 01 d99d71 a1: Key 1 => d99d71: A tagged (40305) item containing a map with 1 key-value pair:
+                    --    - 01 190397: Key 1 => 190397: Uint16(919) (the coininfo value)
+                    --  - 03 5820 ...: Key 3 => A byte string of length 32, representing a 32-byte identifier followed by the account address
+
+                    --   d99d73 a2 (4 bytes)
+                    --     01 d99d71 a1 (5 bytes)
+                    --       01 190397 (4 bytes)
+                    --     03 5820 1515151515151515151515151515151515151515151515151515151515151515 (35 bytes)
+                    let tokenHolderSize = 48
+
+                    -- Payload of a tokenUpdate transaction encoding exactly one plt transfer operation (without memo).
+                    let simplePltTransferObjectPayloadSize =
+                            -- 1 byte for Map header
+                            1
+                                -- `key string: `amount`: 1 (tag) + 6 = 7 bytes
+                                + 7
+                                + tokenAmountSize
+                                -- `key string: `recipient`: 1 (tag) + 9 = 10 bytes
+                                + 10
+                                + tokenHolderSize
+
+                    -- TODO: account for CBOR encoded memos
+
+                    let simplePltTransferMapPayloadSize =
+                            -- 1 byte for Map header
+                            1
+                                -- `key string: `transfer`:1 (tag) + 8 = 9 bytes
+                                + 9
+                                + simplePltTransferObjectPayloadSize
+
+                    let arrayOperationSize =
+                            -- 1 byte (Tag 81) for size of Array
+                            1 + simplePltTransferMapPayloadSize
+
+                    let tokenParameterSize =
+                            -- 1 bytes?? for length
+                            1 + arrayOperationSize
+
+                    let tokenIdSize =
+                            -- 1 bytes for length
+                            1 + BS.length tokenId
+
+                    let tokenUpdateTransactionSize =
+                            -- 1 byte (tag) to specify the `TransactionType`.
+                            1
+                                + tokenIdSize
+                                + tokenParameterSize
+
+                    traceM $ "tokenUpdateSize: " ++ show tokenUpdateTransactionSize
+                    costResponse $ tokenUpdateTransactionEnergyCost (fromIntegral tokenUpdateTransactionSize) Cost.tokenTransferCost numSignatures
                 "encryptedTransfer" ->
                     costResponse $ encryptedTransferEnergyCost (encryptedTransferPayloadSize + memoPayloadSize) numSignatures
                 "transferToSecret" ->
@@ -1474,7 +1553,7 @@ parseCIS2TokenIds :: Handler [TokenId]
 parseCIS2TokenIds = do
     param <-
         lookupGetParam "tokenId" >>= \case
-            Nothing -> respond400Error EMMissingParameter RequestInvalid
+            Nothing -> respond400Error (EMParseError "Missing `tokenId` value.") RequestInvalid
             Just p -> return p
     case mapM (AE.fromJSON . AE.String) . Text.split (== ',') $ param of
         AE.Error err -> respond400Error (EMParseError err) RequestInvalid
