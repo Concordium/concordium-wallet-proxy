@@ -1412,14 +1412,15 @@ or
 
 ```console
 stack run wallet-proxy -- \
-  --grpc-ip 127.0.0.1\
-  --grpc-port 10000\
+  --grpc-ip https://grpc.devnet-plt-beta.concordium.com\
+  --grpc-port 20000\
   --db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=password"\
   --ip-data ./examples/identity-providers-with-metadata.json\
   --ip-data-v1 ./examples/identity-providers-with-metadata-v1.json\
   --ip-data-v2 ./examples/identity-providers-with-metadata-v2.json\
   --log-level debug\
-  --port 3005
+  --port 3005 \
+  --secure
 ```
 
 where
