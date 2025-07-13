@@ -58,7 +58,7 @@ import Data.Word
 import qualified Database.Esqueleto.Internal.Internal as EInternal
 import qualified Database.Esqueleto.Legacy as E
 import qualified Database.Esqueleto.PostgreSQL.JSON as EJ
-import Debug.Trace (traceM)
+import Debug.Trace (traceM) -- temporarly
 import Lens.Micro.Platform hiding ((.=))
 import Network.GRPC.HTTP2.Types (GRPCStatusCode (..))
 import Network.HTTP.Types (Status, badGateway502, badRequest400, internalServerError500, notFound404, serviceUnavailable503)
@@ -900,51 +900,62 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                         Just value -> pure (BS.length $ CBOR.tokenAmountToBytes value)
                         Nothing -> respond400Error (EMParseError "Invalid `tokenAmount` value.") RequestInvalid
 
-                    -- Depending on if the wallets will submit the value with/without `coininfo` we should adjust below calcuation.
-                    -- Currently, it assumed to be submitted with `coininfo`.
+                    -- The wallets currently submit the `tokenHolder` value without `coinInfo`. 
+                    -- If the wallets submit the value with `coinInfo` one day, use the following calculation below instead:
 
-                    -- CBOR byte sequence of `TokenHolder` as follows:
+                    -- CBOR byte sequence of `tokenHolder` as follows (with coinInfo):
                     -- - d99d73 a2: A tagged (40307) item containing a map with 2 key-value pairs
                     --  - 01 d99d71 a1: Key 1 => d99d71: A tagged (40305) item containing a map with 1 key-value pair:
-                    --    - 01 190397: Key 1 => 190397: Uint16(919) (the coininfo value)
+                    --    - 01 190397: Key 1 => 190397: Uint16(919) (the coinInfo value)
                     --  - 03 5820 ...: Key 3 => A byte string of length 32, representing a 32-byte identifier followed by the account address
 
                     --   d99d73 a2 (4 bytes)
                     --     01 d99d71 a1 (5 bytes)
                     --       01 190397 (4 bytes)
                     --     03 5820 1515151515151515151515151515151515151515151515151515151515151515 (35 bytes)
-                    let tokenHolderSize = 48
+                    -- let tokenHolderSize = 48
+
+
+                    -- The wallets currently submit the `tokenHolder` value without `coinInfo`. 
+                    
+                    -- CBOR byte sequence of `tokenHolder` as follows (without coinInfo):
+                    -- - d99d73 a1: A tagged (40307) item containing a map with 1 key-value pair
+                    --  - 03 5820 ...: Key 3 => A byte string of length 32, representing a 32-byte identifier followed by the account address
+
+                    --   d99d73 a2 (4 bytes)
+                    --     03 5820 1515151515151515151515151515151515151515151515151515151515151515 (35 bytes)
+                    let tokenHolderSize = 39
 
                     -- Payload of a tokenUpdate transaction encoding exactly one plt transfer operation (without memo).
-                    let simplePltTransferObjectPayloadSize =
+                    let mapSimplePltTransferSize =
                             -- 1 byte for Map header
                             1
-                                -- `key string: `amount`: 1 (tag) + 6 = 7 bytes
+                                -- key string `amount`: 1 (tag) + 6 = 7 bytes
                                 + 7
                                 + tokenAmountSize
-                                -- `key string: `recipient`: 1 (tag) + 9 = 10 bytes
+                                -- key string `recipient`: 1 (tag) + 9 = 10 bytes
                                 + 10
                                 + tokenHolderSize
 
                     -- TODO: account for CBOR encoded memos
 
-                    let simplePltTransferMapPayloadSize =
+                    let mapSimplePltTransferPayloadSize =
                             -- 1 byte for Map header
                             1
-                                -- `key string: `transfer`:1 (tag) + 8 = 9 bytes
+                                -- key string `transfer`: 1 (tag) + 8 = 9 bytes
                                 + 9
-                                + simplePltTransferObjectPayloadSize
+                                + mapSimplePltTransferSize
 
-                    let arrayOperationSize =
-                            -- 1 byte (Tag 81) for size of Array
-                            1 + simplePltTransferMapPayloadSize
+                    let arrayTokenUpdateOperationSize =
+                            -- 1 byte (Tag 81) for size of array
+                            1 + mapSimplePltTransferPayloadSize
 
                     let tokenParameterSize =
-                            -- 1 bytes?? for length
-                            1 + arrayOperationSize
+                            -- 4 bytes for length of parameter.
+                            4 + arrayTokenUpdateOperationSize
 
                     let tokenIdSize =
-                            -- 1 bytes for length
+                            -- 1 byte for length
                             1 + BS.length tokenId
 
                     let tokenUpdateTransactionSize =
