@@ -2,6 +2,8 @@
 
 ## Unreleased changes
 
+- Bump GHC version to 9.8.4 (lts-23.27).
+
 ## [0.38.0] - 2025-06-30
 
 - Rejected PLT txs are parsed in the `GET /v3/accTransactions/{account address}` response.
