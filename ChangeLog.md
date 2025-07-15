@@ -2,6 +2,10 @@
 
 ## Unreleased changes
 
+## [0.39.0] - 2025-07-15
+
+- Update base submodule in order to support PLT pause
+
 ## [0.38.0] - 2025-06-30
 
 - Rejected PLT txs are parsed in the `GET /v3/accTransactions/{account address}` response.
