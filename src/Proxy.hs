@@ -888,6 +888,15 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                             Just a -> case readMaybe $ Text.unpack a of
                                 Nothing -> respond400Error (EMParseError "Could not parse `amount` value.") RequestInvalid
                                 Just b -> return b
+
+                    maybeTextMemo <- do
+                        lookupGetParam "textMemo" >>= \case
+                            Nothing -> return Nothing
+                            Just a -> case readMaybe $ Text.unpack a of
+                                Nothing -> respond400Error (EMParseError "Could not parse `memo` value.") RequestInvalid
+                                -- The wallets currently submit the `TaggableMemo` type using the `UntaggedMemo` variant.
+                                Just b -> return $ Just (CBOR.UntaggedMemo (Memo (BSS.toShort (Text.encodeUtf8 b))))
+
                     tokenId <-
                         lookupGetParam "tokenId" >>= \case
                             Nothing -> respond400Error (EMParseError "Missing `tokenId` value.") RequestInvalid
@@ -900,7 +909,9 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                         Just value -> pure (BS.length $ CBOR.tokenAmountToBytes value)
                         Nothing -> respond400Error (EMParseError "Invalid `tokenAmount` value.") RequestInvalid
 
-                    -- The wallets currently submit the `tokenHolder` value without `coinInfo`. 
+                    let maybeMemoSize = fmap (BS.length . CBOR.taggableMemoToBytes) maybeTextMemo
+
+                    -- The wallets currently submit the `tokenHolder` value without `coinInfo`.
                     -- If the wallets submit the value with `coinInfo` one day, use the following calculation below instead:
 
                     -- CBOR byte sequence of `tokenHolder` as follows (with coinInfo):
@@ -915,9 +926,8 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                     --     03 5820 1515151515151515151515151515151515151515151515151515151515151515 (35 bytes)
                     -- let tokenHolderSize = 48
 
+                    -- The wallets currently submit the `tokenHolder` value without `coinInfo`.
 
-                    -- The wallets currently submit the `tokenHolder` value without `coinInfo`. 
-                    
                     -- CBOR byte sequence of `tokenHolder` as follows (without coinInfo):
                     -- - d99d73 a1: A tagged (40307) item containing a map with 1 key-value pair
                     --  - 03 5820 ...: Key 3 => A byte string of length 32, representing a 32-byte identifier followed by the account address
@@ -927,7 +937,7 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                     let tokenHolderSize = 39
 
                     -- Payload of a tokenUpdate transaction encoding exactly one plt transfer operation (without memo).
-                    let mapSimplePltTransferSize =
+                    let baseSize =
                             -- 1 byte for Map header
                             1
                                 -- key string `amount`: 1 (tag) + 6 = 7 bytes
@@ -937,7 +947,16 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                                 + 10
                                 + tokenHolderSize
 
-                    -- TODO: account for CBOR encoded memos
+                    let mapSimplePltTransferSize =
+                            case maybeMemoSize of
+                                Nothing -> baseSize
+                                Just memoSize ->
+                                    baseSize
+                                        -- key string `memo`: 1 (tag) + 4 bytes
+                                        + 5
+                                        -- `UntaggedMemo` variant tag of the type `TaggableMemo`
+                                        + 1
+                                        + memoSize
 
                     let mapSimplePltTransferPayloadSize =
                             -- 1 byte for Map header
