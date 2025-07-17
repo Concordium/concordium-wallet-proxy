@@ -378,8 +378,9 @@ The following query parameters are supported
   - `updateBakerPool`,
   - `update`,
   - `updateBakerKeys`,
-  - `removeBaker`, or
-  - `configureBaker`.
+  - `removeBaker`,
+  - `configureBaker` or
+  - `simplePltTransfer`.
 - `numSignatures`, the number of signatures on the transaction, defaults to 1 if not present.
 - `memoSize`, the size of the transfer memo. Optionaly, and only supported if the node is running protocol version 2 or higher, and only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
 - `amount`, optionally when `type` is either `updateDelegation`, `updateBakerStake` and `configureBaker`, in which it specifies whether the staked amount is updated. When `type` is `update` it is mandatory and specifies the amount that is sent to the smart contract.
@@ -398,6 +399,9 @@ The following query parameters are supported
 - `receiveName`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract receive name of the smart contract receive function being called.
 - `parameter`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract parameter passed to the receive function. Given as a hex string.
 - `executionNRGBuffer`, optionally and only applies when `type` is `update`. Specifies a buffer in percentage of how much of the energy for invoking the contract should be added to the returned cost. Given as an   integer. If not provided, a default of 20% is used.
+- `tokenId`, the tokenId of the plt token in a simple plt transfer. It is mandatory when `type` is `simplePltTransfer` and otherwise ignored.
+- `tokenAmount`, the amount of plt tokens in a simple plt transfer. It is mandatory when `type` is `simplePltTransfer` and otherwise ignored.
+- `textMemo`, the memo in text format in a simple plt transfer. It is mandatory when `type` is `simplePltTransfer` and otherwise ignored.
 
 Notice that when `type` is `configureBaker`, the cost of all possible "configure baker" transactions can be calculated. This means for instance that `/v0/transactionCost?type=updateBakerKeys` and `/v0/transactionCost?type=configureBaker&keys` would yield the same JSON output.
 
