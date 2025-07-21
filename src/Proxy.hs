@@ -2463,7 +2463,7 @@ putGTUDropR addrText = do
                                         then fromIntegral (remainder + releaseAmount)
                                         else fromIntegral releaseAmount
                                   )
-                                  | i <- [1 .. numRels]
+                                | i <- [1 .. numRels]
                                 ]
                         return (TransferWithSchedule addr releases, transferWithScheduleEnergyCost (transferWithSchedulePayloadSize (fromIntegral numRels)) (fromIntegral numRels) numKeys)
                 let
