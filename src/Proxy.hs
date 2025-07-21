@@ -37,6 +37,7 @@ import qualified Data.Aeson as AE
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Parser (json')
 import Data.Aeson.Types (Pair, parse)
+import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Conduit (connect, runConduit, (.|))
 import Data.Conduit.Attoparsec (sinkParserEither)
 import Data.Conduit.Binary (sinkLbs)
@@ -61,6 +62,7 @@ import qualified Database.Esqueleto.PostgreSQL.JSON as EJ
 import Lens.Micro.Platform hiding ((.=))
 import Network.GRPC.HTTP2.Types (GRPCStatusCode (..))
 import Network.HTTP.Types (Status, badGateway502, badRequest400, internalServerError500, notFound404, serviceUnavailable503)
+import Paths_wallet_proxy (version)
 import System.Random
 import Text.Read hiding (String)
 import Web.Cookie
@@ -82,8 +84,6 @@ import Concordium.Types.Queries.Tokens
 import Concordium.Types.Transactions
 import Concordium.Utils.Serialization (getMaybe)
 import qualified Concordium.Wasm as Wasm
-import qualified Data.ByteString.Lazy.Char8 as BL
-import Paths_wallet_proxy (version)
 
 import Concordium.Client.GRPC2
 import Concordium.Client.Runner.Helper
@@ -929,13 +929,9 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                                 Nothing -> respond400Error (EMParseError "Could not parse `tokenId` value.") RequestInvalid
                                 Just b -> return b
 
-                    let arrayTokenUpdateOperationSize =
-                            -- 1 byte (Tag 81) for size of array
-                            1 + listOperationSize
-
                     let tokenParameterSize =
                             -- 4 bytes for length of parameter.
-                            4 + arrayTokenUpdateOperationSize
+                            4 + listOperationSize
 
                     let tokenIdSize =
                             -- 1 byte for length
