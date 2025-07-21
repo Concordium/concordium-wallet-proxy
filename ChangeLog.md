@@ -2,7 +2,7 @@
 
 ## Unreleased changes
 
-- Bump GHC version to 9.8.4 (lts-23.27).
+- Bump GHC version to 9.10.2 (lts-24.0).
 
 ## [0.38.0] - 2025-06-30
 
