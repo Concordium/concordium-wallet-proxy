@@ -77,16 +77,15 @@ import Concordium.Types.Execution
 import Concordium.Types.HashableTo
 import qualified Concordium.Types.InvokeContract as InvokeContract
 import Concordium.Types.Parameters
-import qualified Concordium.Types.ProtocolLevelTokens.CBOR as CBOR
 import Concordium.Types.Queries hiding (Summary)
 import Concordium.Types.Queries.Tokens
 import Concordium.Types.Transactions
 import Concordium.Utils.Serialization (getMaybe)
 import qualified Concordium.Wasm as Wasm
+import qualified Data.ByteString.Lazy.Char8 as BL
 import Paths_wallet_proxy (version)
 
 import Concordium.Client.GRPC2
-import Concordium.Client.Runner (normalizeTokenAmountOrDie)
 import Concordium.Client.Runner.Helper
 import Concordium.Client.Types.Transaction (
     accountDecryptEnergyCost,
@@ -109,7 +108,6 @@ import Concordium.Client.Types.Transaction (
     transferWithSchedulePayloadSize,
     updateDelegationPayloadSize,
  )
-import Concordium.Client.Utils (preTokenAmountFromStringInform)
 import Concordium.Common.Version
 import Concordium.Crypto.ByteStringHelpers (ShortByteStringHex (..))
 import Concordium.Crypto.SHA256 (Hash)
@@ -833,6 +831,28 @@ getAccountEncryptionKeyR addrText = do
                     <> Text.pack (show encryptionKey)
             sendResponse (object ["accountEncryptionKey" .= encryptionKey])
 
+-- Known token operation associated to their specific cost
+knownTokenOperationSpecificCostMap :: Map.Map Text Energy
+knownTokenOperationSpecificCostMap =
+    Map.fromList
+        [ ("transfer", Cost.tokenTransferCost),
+          ("mint", Cost.tokenMintCost),
+          ("burn", Cost.tokenBurnCost),
+          ("listOperation", Cost.tokenListOperationCost),
+          ("pauseOrUnpause", Cost.tokenPauseUnpauseCost)
+        ]
+
+-- Computes the sum of the token operation specific cost from a supplied map containing the occurrence of each operation type.
+-- Currently the cost of the specified keys in `knownTokenOperationSpecificCostMap` are known.
+-- This function will return an error if any other key not in `knownTokenOperationSpecificCostMap` is specified.
+computeTokenOperationSpecificCost :: Map.Map Text Energy -> Either Text Energy
+computeTokenOperationSpecificCost tokenOperationTypeCountMap = do
+    fmap sum . traverse applyCost $ Map.toList tokenOperationTypeCountMap
+  where
+    applyCost (key, cost) = case Map.lookup key knownTokenOperationSpecificCostMap of
+        Nothing -> Left $ "Token operation specific cost for operation `" <> key <> "` is unknown."
+        Just num -> Right $ cost * fromIntegral num
+
 -- The function looks up the `memoSize` query parameter and computes the additional size of the transaction based on the memo.
 -- This `memoSize` paramater can only be applied to transfer and encrypted transfer transaction types and is
 -- only supported if the node is running protocol version 2 or higher.
@@ -885,21 +905,22 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                 "simpleTransfer" -> do
                     memoPayloadSize <- getMemoPayloadSize pv
                     costResponse $ simpleTransferEnergyCost (simpleTransferPayloadSize + memoPayloadSize) numSignatures
-                "simplePltTransfer" -> do
-                    amount <-
-                        lookupGetParam "tokenAmount" >>= \case
-                            Nothing -> respond400Error (EMParseError "Missing `tokenAmount` value.") RequestInvalid
+                "tokenUpdate" -> do
+                    listOperationSize <-
+                        lookupGetParam "listOperationsSize" >>= \case
+                            Nothing -> respond400Error (EMParseError "Missing `listOperationsSize` value.") RequestInvalid
                             Just a -> case readMaybe $ Text.unpack a of
-                                Nothing -> respond400Error (EMParseError "Could not parse `tokenAmount` value.") RequestInvalid
+                                Nothing -> respond400Error (EMParseError "Could not parse `listOperationsSize` value.") RequestInvalid
                                 Just b -> return b
-                    maybeTextMemo <- do
-                        lookupGetParam "textMemo" >>= \case
-                            Nothing -> return Nothing
-                            Just a -> case readMaybe $ Text.unpack a of
-                                Nothing -> respond400Error (EMParseError "Could not parse `textMemo` value.") RequestInvalid
-                                -- The wallets currently submit the `TaggableMemo` type using the `UntaggedMemo` variant.
-                                Just b -> return $ Just (CBOR.UntaggedMemo (Memo (BSS.toShort (Text.encodeUtf8 b))))
-                    let maybeMemoSize = fmap (BS.length . CBOR.taggableMemoToBytes) maybeTextMemo
+
+                    tokenOperationTypeCount <-
+                        lookupGetParam "tokenOperationTypeCount" >>= \case
+                            Nothing -> respond400Error (EMParseError "Missing `tokenOperationTypeCount` value.") RequestInvalid
+                            Just raw -> do
+                                let jsonStr = BL.fromStrict $ Text.encodeUtf8 raw
+                                case AE.eitherDecode jsonStr of
+                                    Left err -> respond400Error (EMParseError $ "Could not parse `tokenOperationTypeCount` JSON: " <> show (Text.pack err)) RequestInvalid
+                                    Right parsed -> return parsed
 
                     tokenId <-
                         lookupGetParam "tokenId" >>= \case
@@ -908,80 +929,9 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                                 Nothing -> respond400Error (EMParseError "Could not parse `tokenId` value.") RequestInvalid
                                 Just b -> return b
 
-                    let tokenAmount = preTokenAmountFromStringInform amount
-                    tAmount <- case tokenAmount of
-                        Left err ->
-                            respond400Error (EMParseError ("Couldn't parse `tokenAmount`: " <> err)) RequestInvalid
-                        Right b -> pure b
-                    tokenInfo <- runGRPC (getTokenInfoFromText tokenId LastFinal) pure
-                    normAmount <- normalizeTokenAmountOrDie tokenInfo tAmount
-                    let tokenAmountSize = BS.length $ CBOR.tokenAmountToBytes normAmount
-
-                    -- ============================
-                    -- BEGIN ADDITIONAL COMMENTS
-                    -- ============================
-                    --
-                    -- The wallets currently submit the `tokenHolder` value without `coinInfo`.
-                    -- If the wallets submit the value with `coinInfo` one day, use the following calculation below instead:
-                    --
-                    -- CBOR byte sequence of `tokenHolder` as follows (with coinInfo):
-                    -- - d99d73 a2: A tagged (40307) item containing a map with 2 key-value pairs
-                    --  - 01 d99d71 a1: Key 1 => d99d71: A tagged (40305) item containing a map with 1 key-value pair:
-                    --    - 01 190397: Key 1 => 190397: Uint16(919) (the coinInfo value)
-                    --  - 03 5820 ...: Key 3 => A byte string of length 32, representing a 32-byte identifier followed by the account address
-
-                    --   d99d73 a2 (4 bytes)
-                    --     01 d99d71 a1 (5 bytes)
-                    --       01 190397 (4 bytes)
-                    --     03 5820 1515151515151515151515151515151515151515151515151515151515151515 (35 bytes)
-                    -- let tokenHolderSize = 48
-                    --
-                    -- ==========================
-                    -- END ADDITIONAL COMMENTS
-                    -- ==========================
-
-                    -- The wallets currently submit the `tokenHolder` value without `coinInfo`.
-
-                    -- CBOR byte sequence of `tokenHolder` as follows (without coinInfo):
-                    -- - d99d73 a1: A tagged (40307) item containing a map with 1 key-value pair
-                    --  - 03 5820 ...: Key 3 => A byte string of length 32, representing a 32-byte identifier followed by the account address
-
-                    --   d99d73 a2 (4 bytes)
-                    --     03 5820 1515151515151515151515151515151515151515151515151515151515151515 (35 bytes)
-                    let tokenHolderSize = 39
-
-                    -- Payload of a tokenUpdate transaction encoding exactly one plt transfer operation.
-                    let baseSize =
-                            -- 1 byte for Map header
-                            1
-                                -- key string `amount`: 1 (tag) + 6 = 7 bytes
-                                + 7
-                                + tokenAmountSize
-                                -- key string `recipient`: 1 (tag) + 9 = 10 bytes
-                                + 10
-                                + tokenHolderSize
-
-                    let mapSimplePltTransferSize =
-                            case maybeMemoSize of
-                                Nothing -> baseSize
-                                Just memoSize ->
-                                    baseSize
-                                        -- key string `memo`: 1 (tag) + 4 bytes
-                                        + 5
-                                        -- `UntaggedMemo` variant tag of the type `TaggableMemo`
-                                        + 1
-                                        + memoSize
-
-                    let mapSimplePltTransferPayloadSize =
-                            -- 1 byte for Map header
-                            1
-                                -- key string `transfer`: 1 (tag) + 8 = 9 bytes
-                                + 9
-                                + mapSimplePltTransferSize
-
                     let arrayTokenUpdateOperationSize =
                             -- 1 byte (Tag 81) for size of array
-                            1 + mapSimplePltTransferPayloadSize
+                            1 + listOperationSize
 
                     let tokenParameterSize =
                             -- 4 bytes for length of parameter.
@@ -997,7 +947,12 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                                 + tokenIdSize
                                 + tokenParameterSize
 
-                    costResponse $ tokenUpdateTransactionEnergyCost (fromIntegral tokenUpdateTransactionSize) Cost.tokenTransferCost numSignatures
+                    tokenOperationSpecificCost <- case computeTokenOperationSpecificCost tokenOperationTypeCount of
+                        Left err ->
+                            respond400Error (EMParseError $ "Token operation specific cost error: " <> show err) RequestInvalid
+                        Right cost -> pure cost
+
+                    costResponse $ tokenUpdateTransactionEnergyCost (fromIntegral tokenUpdateTransactionSize) tokenOperationSpecificCost numSignatures
                 "encryptedTransfer" -> do
                     memoPayloadSize <- getMemoPayloadSize pv
                     costResponse $ encryptedTransferEnergyCost (encryptedTransferPayloadSize + memoPayloadSize) numSignatures
