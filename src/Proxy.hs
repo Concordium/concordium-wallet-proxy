@@ -347,7 +347,7 @@ parseSetCookie' c =
         let (x, y) = BS.break (== w) s
         in  (x, BS.drop 1 y)
     pairs = map (parsePair . dropSpace) $ BS.split 59 c ++ [BS8.empty] -- 59 = semicolon
-    flags = map (first (BS8.map CH.toLower)) $ tail pairs
+    flags = map (first (BS8.map CH.toLower)) $ drop 1 pairs
     parsePair = breakDiscard 61 -- equals sign
     dropSpace = BS.dropWhile (== 32) -- space
 
@@ -550,7 +550,7 @@ firstPaydayAfter nextPayday epochDuration (RewardPeriodLength ep) cooldownEnd =
                 mult :: Word = ceiling (timeDiff / paydayLength)
             in  Clock.addUTCTime (fromIntegral mult * paydayLength) nextPayday
 
-pendingChangeToJSON :: (AE.KeyValue kv) => Maybe UTCTime -> Duration -> Maybe RewardPeriodLength -> StakePendingChange' UTCTime -> [kv]
+pendingChangeToJSON :: (AE.KeyValue e kv) => Maybe UTCTime -> Duration -> Maybe RewardPeriodLength -> StakePendingChange' UTCTime -> [kv]
 pendingChangeToJSON _ _ _ NoChange = []
 pendingChangeToJSON mnextPaydayTime epochDuration mrewardEpochs (ReduceStake amt eff) =
     [ "pendingChange"
@@ -2541,7 +2541,7 @@ putGTUDropR addrText = do
                                         then fromIntegral (remainder + releaseAmount)
                                         else fromIntegral releaseAmount
                                   )
-                                  | i <- [1 .. numRels]
+                                | i <- [1 .. numRels]
                                 ]
                         return (TransferWithSchedule addr releases, transferWithScheduleEnergyCost (transferWithSchedulePayloadSize (fromIntegral numRels)) (fromIntegral numRels) numKeys)
                 let
