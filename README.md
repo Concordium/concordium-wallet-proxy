@@ -378,8 +378,9 @@ The following query parameters are supported
   - `updateBakerPool`,
   - `update`,
   - `updateBakerKeys`,
-  - `removeBaker`, or
-  - `configureBaker`.
+  - `removeBaker`,
+  - `configureBaker` or
+  - `tokenUpdate`.
 - `numSignatures`, the number of signatures on the transaction, defaults to 1 if not present.
 - `memoSize`, the size of the transfer memo. Optionaly, and only supported if the node is running protocol version 2 or higher, and only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
 - `amount`, optionally when `type` is either `updateDelegation`, `updateBakerStake` and `configureBaker`, in which it specifies whether the staked amount is updated. When `type` is `update` it is mandatory and specifies the amount that is sent to the smart contract.
@@ -398,6 +399,9 @@ The following query parameters are supported
 - `receiveName`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract receive name of the smart contract receive function being called.
 - `parameter`, only applies when `type` is `update` and is mandatory in this case. Specifies the smart contract parameter passed to the receive function. Given as a hex string.
 - `executionNRGBuffer`, optionally and only applies when `type` is `update`. Specifies a buffer in percentage of how much of the energy for invoking the contract should be added to the returned cost. Given as an   integer. If not provided, a default of 20% is used.
+- `tokenId`, the tokenId of the PLT in a PLT update transaction. The query parameter `tokenId` is mandatory when `type` is `tokenUpdate` and otherwise ignored.
+- `listOperationsSize`, the size of the CBOR-encoded list of PLT operations in a PLT update transaction. The query parameter `listOperationsSize` is mandatory when `type` is `tokenUpdate` and otherwise ignored.
+- `tokenOperationTypeCount`, is a URL-encoded JSON object counting the occurrence of each operation type in a PLT update transaction. Currently, the encoded object can include any of the following keys `transfer`, `mint`, `burn`, `addAllowList`, `removeAllowList`, `addDenyList`, `removeDenyList`, `pause`, and/or `unpause`. As each token operation type has a specific cost associated to it, it is necessary to know how often each type occurs in the CBOR-encoded list of PLT operations. The query parameter `tokenOperationTypeCount` is mandatory when `type` is `tokenUpdate` and otherwise ignored.
 
 Notice that when `type` is `configureBaker`, the cost of all possible "configure baker" transactions can be calculated. This means for instance that `/v0/transactionCost?type=updateBakerKeys` and `/v0/transactionCost?type=configureBaker&keys` would yield the same JSON output.
 
@@ -1412,14 +1416,15 @@ or
 
 ```console
 stack run wallet-proxy -- \
-  --grpc-ip 127.0.0.1\
-  --grpc-port 10000\
+  --grpc-ip grpc.devnet-plt-beta.concordium.com \
+  --grpc-port 20000\
   --db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=password"\
   --ip-data ./examples/identity-providers-with-metadata.json\
   --ip-data-v1 ./examples/identity-providers-with-metadata-v1.json\
   --ip-data-v2 ./examples/identity-providers-with-metadata-v2.json\
   --log-level debug\
-  --port 3005
+  --port 3005 \
+  --secure
 ```
 
 where

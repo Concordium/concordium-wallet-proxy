@@ -37,6 +37,7 @@ import qualified Data.Aeson as AE
 import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Parser (json')
 import Data.Aeson.Types (Pair, parse)
+import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Conduit (connect, runConduit, (.|))
 import Data.Conduit.Attoparsec (sinkParserEither)
 import Data.Conduit.Binary (sinkLbs)
@@ -61,6 +62,7 @@ import qualified Database.Esqueleto.PostgreSQL.JSON as EJ
 import Lens.Micro.Platform hiding ((.=))
 import Network.GRPC.HTTP2.Types (GRPCStatusCode (..))
 import Network.HTTP.Types (Status, badGateway502, badRequest400, internalServerError500, notFound404, serviceUnavailable503)
+import Paths_wallet_proxy (version)
 import System.Random
 import Text.Read hiding (String)
 import Web.Cookie
@@ -69,6 +71,7 @@ import qualified Yesod
 
 import Data.Time.Clock as Clock
 
+import qualified Concordium.Cost as Cost
 import Concordium.Types
 import Concordium.Types.Accounts
 import Concordium.Types.Block
@@ -81,7 +84,6 @@ import Concordium.Types.Queries.Tokens
 import Concordium.Types.Transactions
 import Concordium.Utils.Serialization (getMaybe)
 import qualified Concordium.Wasm as Wasm
-import Paths_wallet_proxy (version)
 
 import Concordium.Client.GRPC2
 import Concordium.Client.Runner.Helper
@@ -101,6 +103,7 @@ import Concordium.Client.Types.Transaction (
     removeDelegationPayloadSize,
     simpleTransferEnergyCost,
     simpleTransferPayloadSize,
+    tokenUpdateTransactionEnergyCost,
     transferWithScheduleEnergyCost,
     transferWithSchedulePayloadSize,
     updateDelegationPayloadSize,
@@ -828,11 +831,55 @@ getAccountEncryptionKeyR addrText = do
                     <> Text.pack (show encryptionKey)
             sendResponse (object ["accountEncryptionKey" .= encryptionKey])
 
+-- | Known token operations mapped to their specific costs
+knownTokenOperationSpecificCostMap :: Map.Map Text Energy
+knownTokenOperationSpecificCostMap =
+    Map.fromList
+        [ ("transfer", Cost.tokenTransferCost),
+          ("mint", Cost.tokenMintCost),
+          ("burn", Cost.tokenBurnCost),
+          ("addAllowList", Cost.tokenListOperationCost),
+          ("removeAllowList", Cost.tokenListOperationCost),
+          ("addDenyList", Cost.tokenListOperationCost),
+          ("removeDenyList", Cost.tokenListOperationCost),
+          ("pause", Cost.tokenPauseUnpauseCost),
+          ("unpause", Cost.tokenPauseUnpauseCost)
+        ]
+
+-- | Computes the sum of the token operation specific costs from a supplied map containing the number of occurrences of each operation type.
+-- Currently the costs of the specified keys in `knownTokenOperationSpecificCostMap` are known.
+-- This function will return an error if any other key not in `knownTokenOperationSpecificCostMap` is specified.
+computeTokenOperationSpecificCost :: Map.Map Text Int -> Either Text Energy
+computeTokenOperationSpecificCost tokenOperationTypeCountMap = do
+    fmap sum . traverse applyCost $ Map.toList tokenOperationTypeCountMap
+  where
+    applyCost (key, num) = case Map.lookup key knownTokenOperationSpecificCostMap of
+        Nothing -> Left $ "Token operation specific cost for operation `" <> key <> "` is unknown."
+        Just cost -> Right $ cost * fromIntegral num
+
+-- | This function looks up the `memoSize` query parameter and computes the additional size of the transaction based on the memo.
+-- This `memoSize` paramater can only be applied to transfer and encrypted transfer transaction types and is
+-- only supported if the node is running protocol version 2 or higher.
+getMemoPayloadSize :: ProtocolVersion -> Handler PayloadSize
+getMemoPayloadSize pv = do
+    lookupGetParam "memoSize" >>= \case
+        Nothing -> return 0
+        Just memoText ->
+            case readMaybe (Text.unpack memoText) :: Maybe Word32 of
+                Nothing -> respond400Error (EMParseError "Could not parse `memoSize` value.") RequestInvalid
+                -- NB: In protocol version 1 the memo is not supported. This
+                -- implementation assumes that the transaction memo will be
+                -- supported in all future versions of the node.
+                -- The memo is charged for purely on its size. The "2 +" is there because the memo
+                -- is serialized by prepending 2 bytes for its length.
+                Just msize
+                    | pv /= P1 -> return $ fromIntegral (2 + msize)
+                    | otherwise -> respond404Error EMActionNotCurrentlySupported
+
 -- | Get the cost of a transaction, based on its type. The following query parameters are supported
 --  - "type", the type of the transaction. This is mandatory.
 --  - "numSignatures", the number of signatures on the transaction, defaults to 1 if not present.
---  - "memoSize", the size of the transfer memo. Only supported if the node is running protocol version 2 or higher, and
---    only applies when `type` is either `simpleTransfer` and `encryptedTransfer`.
+--  - additional transaction type specific query parameters
 getTransactionCostR :: Handler TypedContent
 getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
     numSignatures <- fromMaybe "1" <$> lookupGetParam "numSignatures"
@@ -842,22 +889,7 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
   where
     handleTransactionCost pv rate numSignatures = do
         transactionType <- lookupGetParam "type"
-        -- compute the additional size of the transaction based on the memo
-        -- this only applies to transfer and encrypted transfer transaction types.
-        memoPayloadSize <- do
-            lookupGetParam "memoSize" >>= \case
-                Nothing -> return 0
-                Just memoText ->
-                    case readMaybe (Text.unpack memoText) :: Maybe Word32 of
-                        Nothing -> respond400Error (EMParseError "Could not parse `memoSize` value.") RequestInvalid
-                        -- NB: In protocol version 1 the memo is not supported. This
-                        -- implementation assumes that the transaction memo will be
-                        -- supported in all future versions of the node.
-                        -- The memo is charged for purely on its size. The "2 +" is there because the memo
-                        -- is serialized by prepending 2 bytes for its length.
-                        Just msize
-                            | pv /= P1 -> return $ fromIntegral (2 + msize)
-                            | otherwise -> respond404Error EMActionNotCurrentlySupported
+
         let costResponse energyCost =
                 sendResponse $
                     object
@@ -872,11 +904,57 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                           "success" .= success
                         ]
         case transactionType of
-            Nothing -> respond400Error EMMissingParameter RequestInvalid
+            Nothing -> respond400Error (EMParseError "Missing `type` value.") RequestInvalid
             Just tty -> case Text.unpack tty of
-                "simpleTransfer" ->
+                "simpleTransfer" -> do
+                    memoPayloadSize <- getMemoPayloadSize pv
                     costResponse $ simpleTransferEnergyCost (simpleTransferPayloadSize + memoPayloadSize) numSignatures
-                "encryptedTransfer" ->
+                "tokenUpdate" -> do
+                    listOperationSize <-
+                        lookupGetParam "listOperationsSize" >>= \case
+                            Nothing -> respond400Error (EMParseError "Missing `listOperationsSize` value.") RequestInvalid
+                            Just a -> case readMaybe $ Text.unpack a of
+                                Nothing -> respond400Error (EMParseError "Could not parse `listOperationsSize` value.") RequestInvalid
+                                Just b -> return b
+
+                    tokenOperationTypeCount <-
+                        lookupGetParam "tokenOperationTypeCount" >>= \case
+                            Nothing -> respond400Error (EMParseError "Missing `tokenOperationTypeCount` value.") RequestInvalid
+                            Just raw -> do
+                                let jsonStr = BL.fromStrict $ Text.encodeUtf8 raw
+                                case AE.eitherDecode jsonStr of
+                                    Left err -> respond400Error (EMParseError $ "Could not parse `tokenOperationTypeCount` JSON: " <> show (Text.pack err)) RequestInvalid
+                                    Right parsed -> return parsed
+
+                    tokenId <-
+                        lookupGetParam "tokenId" >>= \case
+                            Nothing -> respond400Error (EMParseError "Missing `tokenId` value.") RequestInvalid
+                            Just a -> case readMaybe $ Text.unpack a of
+                                Nothing -> respond400Error (EMParseError "Could not parse `tokenId` value.") RequestInvalid
+                                Just b -> return b
+
+                    let tokenParameterSize =
+                            -- 4 bytes for length of parameter.
+                            4 + listOperationSize
+
+                    let tokenIdSize =
+                            -- 1 byte for length
+                            1 + BS.length (Text.encodeUtf8 tokenId)
+
+                    let tokenUpdateTransactionSize =
+                            -- 1 byte (tag) to specify the `TransactionType`.
+                            1
+                                + tokenIdSize
+                                + tokenParameterSize
+
+                    tokenOperationSpecificCost <- case computeTokenOperationSpecificCost tokenOperationTypeCount of
+                        Left err ->
+                            respond400Error (EMParseError $ "Token operation specific cost error: " <> show err) RequestInvalid
+                        Right cost -> pure cost
+
+                    costResponse $ tokenUpdateTransactionEnergyCost (fromIntegral tokenUpdateTransactionSize) tokenOperationSpecificCost numSignatures
+                "encryptedTransfer" -> do
+                    memoPayloadSize <- getMemoPayloadSize pv
                     costResponse $ encryptedTransferEnergyCost (encryptedTransferPayloadSize + memoPayloadSize) numSignatures
                 "transferToSecret" ->
                     costResponse $ accountEncryptEnergyCost accountEncryptPayloadSize numSignatures
@@ -1474,7 +1552,7 @@ parseCIS2TokenIds :: Handler [TokenId]
 parseCIS2TokenIds = do
     param <-
         lookupGetParam "tokenId" >>= \case
-            Nothing -> respond400Error EMMissingParameter RequestInvalid
+            Nothing -> respond400Error (EMParseError "Missing `tokenId` value.") RequestInvalid
             Just p -> return p
     case mapM (AE.fromJSON . AE.String) . Text.split (== ',') $ param of
         AE.Error err -> respond400Error (EMParseError err) RequestInvalid
