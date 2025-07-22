@@ -831,19 +831,23 @@ getAccountEncryptionKeyR addrText = do
                     <> Text.pack (show encryptionKey)
             sendResponse (object ["accountEncryptionKey" .= encryptionKey])
 
--- Known token operation associated to their specific cost
+-- | Known token operations mapped to their specific costs
 knownTokenOperationSpecificCostMap :: Map.Map Text Energy
 knownTokenOperationSpecificCostMap =
     Map.fromList
         [ ("transfer", Cost.tokenTransferCost),
           ("mint", Cost.tokenMintCost),
           ("burn", Cost.tokenBurnCost),
-          ("listOperation", Cost.tokenListOperationCost),
-          ("pauseOrUnpause", Cost.tokenPauseUnpauseCost)
+          ("addAllowList", Cost.tokenListOperationCost),
+          ("removeAllowList", Cost.tokenListOperationCost),
+          ("addDenyList", Cost.tokenListOperationCost),
+          ("removeDenyList", Cost.tokenListOperationCost),
+          ("pause", Cost.tokenPauseUnpauseCost),
+          ("unpause", Cost.tokenPauseUnpauseCost)
         ]
 
--- Computes the sum of the token operation specific cost from a supplied map containing the occurrence of each operation type.
--- Currently the cost of the specified keys in `knownTokenOperationSpecificCostMap` are known.
+-- | Computes the sum of the token operation specific costs from a supplied map containing the number of occurrences of each operation type.
+-- Currently the costs of the specified keys in `knownTokenOperationSpecificCostMap` are known.
 -- This function will return an error if any other key not in `knownTokenOperationSpecificCostMap` is specified.
 computeTokenOperationSpecificCost :: Map.Map Text Energy -> Either Text Energy
 computeTokenOperationSpecificCost tokenOperationTypeCountMap = do
@@ -853,7 +857,7 @@ computeTokenOperationSpecificCost tokenOperationTypeCountMap = do
         Nothing -> Left $ "Token operation specific cost for operation `" <> key <> "` is unknown."
         Just num -> Right $ cost * fromIntegral num
 
--- The function looks up the `memoSize` query parameter and computes the additional size of the transaction based on the memo.
+-- | This function looks up the `memoSize` query parameter and computes the additional size of the transaction based on the memo.
 -- This `memoSize` paramater can only be applied to transfer and encrypted transfer transaction types and is
 -- only supported if the node is running protocol version 2 or higher.
 getMemoPayloadSize :: ProtocolVersion -> Handler PayloadSize
