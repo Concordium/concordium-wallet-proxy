@@ -849,13 +849,13 @@ knownTokenOperationSpecificCostMap =
 -- | Computes the sum of the token operation specific costs from a supplied map containing the number of occurrences of each operation type.
 -- Currently the costs of the specified keys in `knownTokenOperationSpecificCostMap` are known.
 -- This function will return an error if any other key not in `knownTokenOperationSpecificCostMap` is specified.
-computeTokenOperationSpecificCost :: Map.Map Text Energy -> Either Text Energy
+computeTokenOperationSpecificCost :: Map.Map Text Int -> Either Text Energy
 computeTokenOperationSpecificCost tokenOperationTypeCountMap = do
     fmap sum . traverse applyCost $ Map.toList tokenOperationTypeCountMap
   where
-    applyCost (key, cost) = case Map.lookup key knownTokenOperationSpecificCostMap of
+    applyCost (key, num) = case Map.lookup key knownTokenOperationSpecificCostMap of
         Nothing -> Left $ "Token operation specific cost for operation `" <> key <> "` is unknown."
-        Just num -> Right $ cost * fromIntegral num
+        Just cost -> Right $ cost * fromIntegral num
 
 -- | This function looks up the `memoSize` query parameter and computes the additional size of the transaction based on the memo.
 -- This `memoSize` paramater can only be applied to transfer and encrypted transfer transaction types and is
