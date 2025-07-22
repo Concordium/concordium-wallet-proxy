@@ -2,6 +2,8 @@
 
 ## Unreleased changes
 
+## [0.40.0] - 2025-07-22
+
 - Extend the `GET /v0/transactionCost` endpoint to support `type=tokenUpdate`, which takes `tokenId`, `listOperationsSize`, and `tokenOperationTypeCount` as query parameters to compute the cost of token update transactions.
 
 ## [0.39.0] - 2025-07-15
