@@ -929,9 +929,7 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                     tokenId <-
                         lookupGetParam "tokenId" >>= \case
                             Nothing -> respond400Error (EMParseError "Missing `tokenId` value.") RequestInvalid
-                            Just a -> case readMaybe $ Text.unpack a of
-                                Nothing -> respond400Error (EMParseError "Could not parse `tokenId` value.") RequestInvalid
-                                Just b -> return b
+                            Just tokenId -> return tokenId
 
                     let tokenParameterSize =
                             -- 4 bytes for length of parameter.
