@@ -1977,8 +1977,7 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                             E.isNothing extractedType
                                 E.||. E.not_
                                     ( extractedType E.==. E.val (Just "updateCreatePLT")
-                                        E.||. extractedType E.==. E.val (Just "tokenHolder")
-                                        E.||. extractedType E.==. E.val (Just "tokenGovernance")
+                                        E.||. extractedType E.==. E.val (Just "tokenUpdate")
                                     )
 
         rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
