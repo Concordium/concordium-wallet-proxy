@@ -1977,8 +1977,7 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                             E.isNothing extractedType
                                 E.||. E.not_
                                     ( extractedType E.==. E.val (Just "updateCreatePLT")
-                                        E.||. extractedType E.==. E.val (Just "tokenHolder")
-                                        E.||. extractedType E.==. E.val (Just "tokenGovernance")
+                                        E.||. extractedType E.==. E.val (Just "tokenUpdate")
                                     )
 
         rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
@@ -2275,6 +2274,11 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                                         ]
                                 (TSTAccountTransaction (Just TTRegisterData), [DataRegistered{..}]) ->
                                     ["registeredData" .= drData]
+                                (TSTAccountTransaction (Just TTTokenUpdate), [TokenTransfer{ettFrom = HolderAccount{haAccount = transferSource}, ettTo = HolderAccount{haAccount = transferDestination}, ..}]) ->
+                                    [ "transferSource" .= transferSource,
+                                      "transferDestination" .= transferDestination
+                                    ]
+                                        ++ ["memo" AE..= memo | memo <- toList ettMemo]
                                 _ -> [],
                           eventSubtotal self evts
                         )
