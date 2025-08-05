@@ -2278,7 +2278,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                                     [ "transferSource" .= transferSource,
                                       "transferDestination" .= transferDestination,
                                       "tokenId" .= ettTokenId,
-                                      "transferAmount" .= ettAmount
+                                      "tokenTransferAmount" .= ettAmount
                                     ]
                                         ++ ["memo" AE..= memo | memo <- toList ettMemo]
                                 _ -> [],
