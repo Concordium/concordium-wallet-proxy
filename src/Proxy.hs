@@ -2274,6 +2274,13 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                                         ]
                                 (TSTAccountTransaction (Just TTRegisterData), [DataRegistered{..}]) ->
                                     ["registeredData" .= drData]
+                                (TSTAccountTransaction (Just TTTokenUpdate), [TokenTransfer{ettFrom = HolderAccount{haAccount = transferSource}, ettTo = HolderAccount{haAccount = transferDestination}, ..}]) ->
+                                    [ "transferSource" .= transferSource,
+                                      "transferDestination" .= transferDestination,
+                                      "tokenId" .= ettTokenId,
+                                      "transferAmount" .= ettAmount
+                                    ]
+                                        ++ ["memo" AE..= memo | memo <- toList ettMemo]
                                 _ -> [],
                           eventSubtotal self evts
                         )
