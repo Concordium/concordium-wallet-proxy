@@ -1366,6 +1366,17 @@ getSimpleTransactionStatus i trHash = do
                         TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
                         es ->
                             Left . OCEError $ "Unexpected outcome of initialized module: " ++ show es
+                TSTAccountTransaction (Just TTUpdate) ->
+                    case tsResult of
+                        TxSuccess events ->
+                            case eventsToMaybeValues events of
+                                Just vals ->
+                                    return
+                                        [ "outcome" .= String "success",
+                                          "trace" .= vals
+                                        ]
+                                Nothing -> Left . OCEError $ "Unexpected outcome of updating module: " ++ show tsResult
+                        TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
                 TSTAccountTransaction (Just TTTokenUpdate) ->
                     case tsResult of
                         TxSuccess [TokenTransfer{ettTo = HolderAccount{haAccount = transferDestination}, ..}] ->
@@ -1378,17 +1389,6 @@ getSimpleTransactionStatus i trHash = do
                                     ++ ["memo" AE..= memo | memo <- toList ettMemo]
                                 )
                         TxSuccess _ -> return []
-                        TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
-                TSTAccountTransaction (Just TTUpdate) ->
-                    case tsResult of
-                        TxSuccess events ->
-                            case eventsToMaybeValues events of
-                                Just vals ->
-                                    return
-                                        [ "outcome" .= String "success",
-                                          "trace" .= vals
-                                        ]
-                                Nothing -> Left . OCEError $ "Unexpected outcome of updating module: " ++ show tsResult
                         TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
                 _ -> case tsResult of
                     TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
@@ -2291,7 +2291,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                                     [ "transferSource" .= transferSource,
                                       "transferDestination" .= transferDestination,
                                       "tokenId" .= ettTokenId,
-                                      "tokenransferAmount" .= ettAmount
+                                      "tokenTransferAmount" .= ettAmount
                                     ]
                                         ++ ["memo" AE..= memo | memo <- toList ettMemo]
                                 _ -> [],
