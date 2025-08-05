@@ -1,6 +1,6 @@
 # Changelog for wallet-proxy
 
-## Unreleased changes
+## [0.41.0] - 2025-08-05
 
 - Fix parsing of the `tokenId` query parameter to work without quotes in the url when using the `GET /v0/transactionCost` endpoint in a `tokenUpdate` transaction type.
 - Bump GHC version to 9.10.2 (lts-24.0).
