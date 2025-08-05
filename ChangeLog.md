@@ -6,8 +6,10 @@
 - Bump GHC version to 9.10.2 (lts-24.0).
 - Fix such that `v0/accTransactions`, `v1/accTransactions` and `v2/accTransactions` does not return PLT update transaction. Only
   `v3/accTransactions` does now.
-- On the endpoint `v3/accTransactions`, the fields `memo`, `tokenId`, `transferAmount`, `transferDestination`, and `transferSource` have been added to `tokenUpdate`     
+- On the endpoint `v3/accTransactions`, the fields `memo`, `tokenId`, `tokenTransferAmount`, `transferDestination`, and `transferSource` have been added to `tokenUpdate`
   transactions that just contain a single PLT transfer operation.
+- Added support for PLT transactions to `v0/submissionStatus`. The fields `to`, `tokenId`, `tokenAmount`, and `memo` are present
+  if the transction just contains a single PLT transfer operation.
 
 ## [0.40.0] - 2025-07-22
 
