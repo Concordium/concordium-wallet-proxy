@@ -7,7 +7,7 @@ WORKDIR /build
 RUN STACK_ROOT=/build/.stack stack build --copy-bins --ghc-options="-j4" --local-bin-path=target
 
 # Collect build artifacts in fresh image.
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 RUN apt-get update && \
     apt-get -y install \
       less \
