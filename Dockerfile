@@ -14,7 +14,7 @@ RUN apt-get update && \
       jq \
       curl \
       unbound \
-      postgresql-server-dev-12 \
+      postgresql-server-dev-14 \
       liblmdb0 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /build/target/wallet-proxy /wallet-proxy
