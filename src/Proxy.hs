@@ -111,7 +111,7 @@ import Concordium.Client.Types.Transaction (
 import Concordium.Common.Version
 import Concordium.Crypto.ByteStringHelpers (ShortByteStringHex (..))
 import Concordium.Crypto.SHA256 (Hash)
-import Concordium.Crypto.SignatureScheme (KeyPair)
+import Concordium.Crypto.SignatureScheme (KeyPair, VerifyKey)
 import Concordium.ID.Types (CredentialIndex, KeyIndex, addressFromText)
 import qualified Logging
 
@@ -146,6 +146,28 @@ instance S.Serialize LocalTokenId where
         len <- S.getWord8
         LocalTokenId <$> S.getShortByteString (fromIntegral len)
 
+instance PersistFieldSql VerifyKey where
+    -- TODO (drsk) implement
+    sqlType = undefined
+instance PersistField VerifyKey where
+    -- TODO (drsk) implement
+    toPersistValue = undefined
+    fromPersistValue = undefined
+instance PersistFieldSql CredentialIndex where
+    -- TODO (drsk) implement
+    sqlType = undefined
+instance PersistField CredentialIndex where
+    -- TODO (drsk) implement
+    toPersistValue = undefined
+    fromPersistValue = undefined
+instance PersistFieldSql KeyIndex where
+    -- TODO (drsk) implement
+    sqlType = undefined
+instance PersistField KeyIndex where
+    -- TODO (drsk) implement
+    toPersistValue = undefined
+    fromPersistValue = undefined
+
 -- | Create the database schema and types. This creates a type called @Summary@
 --  with fields @summaryBlock@, @summaryTimestamp@, etc., with stated types.
 --  Analogously for @Entry@ and @ContractEntry@.
@@ -177,6 +199,15 @@ share
     subindex ContractSubindex
     token_id LocalTokenId
     total_supply (Ratio Integer)
+
+  AccountPublicKeyBinding sql=account_public_key_bindings
+    idx Int 
+    public_key VerifyKey
+    address (ByteStringSerialized AccountAddress)
+    credential_index CredentialIndex
+    key_index KeyIndex
+    is_simple_account Bool
+    deriving Eq Show
   |]
 
 data ErrorCode = InternalError | RequestInvalid | DataNotFound | Unavailable
@@ -287,6 +318,7 @@ mkYesod
 /v0/termsAndConditionsVersion TermsAndConditionsVersion GET
 /v0/plt/tokens PltTokensR GET
 /v0/plt/tokenInfo/#Text PltTokenInfoR GET
+/v0/accounts/#Text/#Bool Accounts GET
 |]
 
 instance Yesod Proxy where
@@ -583,6 +615,31 @@ getRewardPeriodLength lfb = do
                 Right (EChainParametersAndKeys (ecpParams :: ChainParameters' cpv) _) -> do
                     let rpLength = ecpParams ^? cpTimeParameters . traversed . tpRewardPeriodLength
                     return $ StatusOk $ GRPCResponse hds $ Right rpLength
+
+getAccounts :: Text -> Bool -> Handler TypedContent
+getAccounts addrText filterSimple = do
+    addr <- doParseAccountAddress "getAccounts" addrText
+    queryResult :: [Entity AccountPublicKeyBinding] <- runDB $ do
+        E.select $ E.from $ \apkb -> do
+            -- Filter by address
+            E.where_ (apkb E.^. AccountPublicKeyBindingAddress E.==. E.val (ByteStringSerialized addr))
+            -- Optionally filter by simple accounts
+            when filterSimple $
+                E.where_ (apkb E.^. AccountPublicKeyBindingIs_simple_account)
+            -- Sort by credential index
+            E.orderBy [E.asc (apkb E.^. AccountPublicKeyBindingCredential_index)]
+            return apkb
+    sendResponse $
+        toJSONList
+            [ object
+                [ "public_key" .= accountPublicKeyBindingPublic_key,
+                  "address" .= unBSS accountPublicKeyBindingAddress,
+                  "credential_index" .= accountPublicKeyBindingCredential_index,
+                  "key_index" .= accountPublicKeyBindingKey_index,
+                  "is_simple_account" .= accountPublicKeyBindingIs_simple_account
+                ]
+            | Entity _key AccountPublicKeyBinding{..} <- queryResult
+            ]
 
 --  |Version of the AccountBalance endpoint.
 data AccountBalanceVersion
