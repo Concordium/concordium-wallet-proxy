@@ -1624,6 +1624,9 @@ getCIS2TokenMetadataV1 index subindex = do
         let serializedParam = Wasm.Parameter . BSS.toShort . S.runPut $ do
                 S.putWord16le 1
                 S.put tid
+
+         print $ BSS.unpack $ serializedParam  -- this will print the raw bytes
+
         cis2InvokeHelperError lf contractAddr iInfo (Wasm.EntrypointName "tokenMetadata") serializedParam nrg $
             \case
                 (_, InvokeContract.Success{..})
