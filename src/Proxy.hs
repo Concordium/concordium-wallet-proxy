@@ -111,8 +111,8 @@ import Concordium.Client.Types.Transaction (
 import Concordium.Common.Version
 import Concordium.Crypto.ByteStringHelpers (ShortByteStringHex (..))
 import Concordium.Crypto.SHA256 (Hash)
-import Concordium.Crypto.SignatureScheme (KeyPair, VerifyKey)
-import Concordium.ID.Types (CredentialIndex, KeyIndex, addressFromText)
+import Concordium.Crypto.SignatureScheme (KeyPair, VerifyKey (..))
+import Concordium.ID.Types (CredentialIndex (..), KeyIndex (..), addressFromText)
 import qualified Logging
 
 import Internationalization
@@ -146,27 +146,16 @@ instance S.Serialize LocalTokenId where
         len <- S.getWord8
         LocalTokenId <$> S.getShortByteString (fromIntegral len)
 
-instance PersistFieldSql VerifyKey where
-    -- TODO (drsk) implement
-    sqlType = undefined
-instance PersistField VerifyKey where
-    -- TODO (drsk) implement
-    toPersistValue = undefined
-    fromPersistValue = undefined
 instance PersistFieldSql CredentialIndex where
-    -- TODO (drsk) implement
-    sqlType = undefined
+    sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy Word8)
 instance PersistField CredentialIndex where
-    -- TODO (drsk) implement
-    toPersistValue = undefined
-    fromPersistValue = undefined
+    toPersistValue (CredentialIndex i) = toPersistValue i
+    fromPersistValue = fmap CredentialIndex . fromPersistValue
 instance PersistFieldSql KeyIndex where
-    -- TODO (drsk) implement
-    sqlType = undefined
+    sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy Word8)
 instance PersistField KeyIndex where
-    -- TODO (drsk) implement
-    toPersistValue = undefined
-    fromPersistValue = undefined
+    toPersistValue (KeyIndex i) = toPersistValue i
+    fromPersistValue = fmap KeyIndex . fromPersistValue
 
 -- | Create the database schema and types. This creates a type called @Summary@
 --  with fields @summaryBlock@, @summaryTimestamp@, etc., with stated types.
@@ -201,12 +190,13 @@ share
     total_supply (Ratio Integer)
 
   AccountPublicKeyBinding sql=account_public_key_bindings
-    idx Int 
-    public_key VerifyKey
+    idx Word64
     address (ByteStringSerialized AccountAddress)
+    public_key (ByteStringSerialized VerifyKey)
     credential_index CredentialIndex
     key_index KeyIndex
     is_simple_account Bool
+    active Bool
     deriving Eq Show
   |]
 
@@ -318,7 +308,7 @@ mkYesod
 /v0/termsAndConditionsVersion TermsAndConditionsVersion GET
 /v0/plt/tokens PltTokensR GET
 /v0/plt/tokenInfo/#Text PltTokenInfoR GET
-/v0/accounts/#Text/#Bool Accounts GET
+/v0/accounts/#Text/#Bool/#Bool Accounts GET
 |]
 
 instance Yesod Proxy where
@@ -616,8 +606,8 @@ getRewardPeriodLength lfb = do
                     let rpLength = ecpParams ^? cpTimeParameters . traversed . tpRewardPeriodLength
                     return $ StatusOk $ GRPCResponse hds $ Right rpLength
 
-getAccounts :: Text -> Bool -> Handler TypedContent
-getAccounts addrText filterSimple = do
+getAccounts :: Text -> Bool -> Bool -> Handler TypedContent
+getAccounts addrText filterSimple filterActive = do
     addr <- doParseAccountAddress "getAccounts" addrText
     queryResult :: [Entity AccountPublicKeyBinding] <- runDB $ do
         E.select $ E.from $ \apkb -> do
@@ -626,13 +616,15 @@ getAccounts addrText filterSimple = do
             -- Optionally filter by simple accounts
             when filterSimple $
                 E.where_ (apkb E.^. AccountPublicKeyBindingIs_simple_account)
+            when filterActive $
+                E.where_ (apkb E.^. AccountPublicKeyBindingActive)
             -- Sort by credential index
             E.orderBy [E.asc (apkb E.^. AccountPublicKeyBindingCredential_index)]
             return apkb
     sendResponse $
         toJSONList
             [ object
-                [ "public_key" .= accountPublicKeyBindingPublic_key,
+                [ "public_key" .= unBSS accountPublicKeyBindingPublic_key,
                   "address" .= unBSS accountPublicKeyBindingAddress,
                   "credential_index" .= accountPublicKeyBindingCredential_index,
                   "key_index" .= accountPublicKeyBindingKey_index,
