@@ -1,5 +1,8 @@
 # Changelog for wallet-proxy
 
+## [0.41.1] - 2025-08-28
+- Changed the query parameter type of the `parseCIS2TokenIds` endpoint from `LocalTokenId` to `TokenId`. The `TokenId` type is related to PLT tokens, whereas the `LocalTokenId` type is related to CIS2 tokens.
+
 ## [0.41.0] - 2025-08-05
 
 - Fix parsing of the `tokenId` query parameter to work without quotes in the url when using the `GET /v0/transactionCost` endpoint in a `tokenUpdate` transaction type.

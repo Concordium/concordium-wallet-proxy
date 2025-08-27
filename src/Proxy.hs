@@ -129,22 +129,22 @@ instance (S.Serialize a) => PersistField (ByteStringSerialized a) where
 instance (S.Serialize a) => PersistFieldSql (ByteStringSerialized a) where
     sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy BS.ByteString)
 
-newtype LocalTokenId = LocalTokenId {unTokenId :: BSS.ShortByteString}
+newtype CIS2TokenId = CIS2TokenId {unTokenId :: BSS.ShortByteString}
     deriving (Eq, Show)
     deriving (AE.ToJSON, AE.FromJSON) via ShortByteStringHex
 
-instance PersistField LocalTokenId where
+instance PersistField CIS2TokenId where
     toPersistValue = toPersistValue . BSS.fromShort . unTokenId
-    fromPersistValue = fmap (LocalTokenId . BSS.toShort) . fromPersistValue
+    fromPersistValue = fmap (CIS2TokenId . BSS.toShort) . fromPersistValue
 
-instance PersistFieldSql LocalTokenId where
+instance PersistFieldSql CIS2TokenId where
     sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy BS.ByteString)
 
-instance S.Serialize LocalTokenId where
-    put (LocalTokenId tid) = S.putWord8 (fromIntegral (BSS.length tid)) <> S.putShortByteString tid
+instance S.Serialize CIS2TokenId where
+    put (CIS2TokenId tid) = S.putWord8 (fromIntegral (BSS.length tid)) <> S.putShortByteString tid
     get = do
         len <- S.getWord8
-        LocalTokenId <$> S.getShortByteString (fromIntegral len)
+        CIS2TokenId <$> S.getShortByteString (fromIntegral len)
 
 -- | Create the database schema and types. This creates a type called @Summary@
 --  with fields @summaryBlock@, @summaryTimestamp@, etc., with stated types.
@@ -175,7 +175,7 @@ share
   CIS2Entry sql=cis2_tokens
     index ContractIndex
     subindex ContractSubindex
-    token_id LocalTokenId
+    token_id CIS2TokenId
     total_supply (Ratio Integer)
   |]
 
@@ -1559,7 +1559,7 @@ getCIS2Tokens index subindex = do
 -- | Lookup token ids from the tokenId query parameter, and attempt to parse
 --  them as a comma-separated list. Responds with an invalid request error
 --  in case parsing is unsuccessful.
-parseCIS2TokenIds :: Handler [TokenId]
+parseCIS2TokenIds :: Handler [CIS2TokenId]
 parseCIS2TokenIds = do
     param <-
         lookupGetParam "tokenId" >>= \case
@@ -1624,6 +1624,7 @@ getCIS2TokenMetadataV1 index subindex = do
         let serializedParam = Wasm.Parameter . BSS.toShort . S.runPut $ do
                 S.putWord16le 1
                 S.put tid
+
         cis2InvokeHelperError lf contractAddr iInfo (Wasm.EntrypointName "tokenMetadata") serializedParam nrg $
             \case
                 (_, InvokeContract.Success{..})
@@ -1636,6 +1637,7 @@ getCIS2TokenMetadataV1 index subindex = do
                                   "metadataChecksum" .= muChecksum md
                                 ]
                 (_, _notSuccess) -> return Nothing
+
     sendResponse $
         object
             [ "contractName" .= (Wasm.initContractName (Wasm.iiName iInfo)),
