@@ -1,5 +1,8 @@
 # Changelog for wallet-proxy
 
+## [0.41.1] - 2025-08-28
+- Fixed a bug where CIS2 endpoints would fail to parse token IDs correctly, due to parsing them as PLT Token IDs.
+
 ## [0.41.0] - 2025-08-05
 
 - Fix parsing of the `tokenId` query parameter to work without quotes in the url when using the `GET /v0/transactionCost` endpoint in a `tokenUpdate` transaction type.
