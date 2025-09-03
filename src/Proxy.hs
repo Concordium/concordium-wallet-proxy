@@ -190,7 +190,6 @@ share
     total_supply (Ratio Integer)
 
   AccountPublicKeyBinding sql=account_public_key_bindings
-    idx Word64
     address (ByteStringSerialized AccountAddress)
     public_key (ByteStringSerialized VerifyKey)
     credential_index CredentialIndex
@@ -606,18 +605,30 @@ getRewardPeriodLength lfb = do
                     let rpLength = ecpParams ^? cpTimeParameters . traversed . tpRewardPeriodLength
                     return $ StatusOk $ GRPCResponse hds $ Right rpLength
 
-getAccounts :: Text -> Bool -> Bool -> Handler TypedContent
-getAccounts addrText filterSimple filterActive = do
-    addr <- doParseAccountAddress "getAccounts" addrText
+-- | Handler function for
+--
+-- /v0/accounts/#Text/#Bool/#Bool Accounts GET
+--
+-- endpoint
+getAccounts ::
+    -- | The public key (JSON encoded)
+    Text ->
+    -- | Return only simple/non-simple accounts
+    Bool ->
+    -- | Return only active/non-active accounts
+    Bool ->
+    Handler TypedContent
+getAccounts pubKeyRaw isSimple isActive = do
+    let jsonStr = BL.fromStrict $ Text.encodeUtf8 pubKeyRaw
+    pubKey <- case AE.eitherDecode jsonStr of
+        Left err -> respond400Error (EMParseError $ "Could not parse public key: " <> show (Text.pack err)) RequestInvalid
+        Right parsed -> return parsed
     queryResult :: [Entity AccountPublicKeyBinding] <- runDB $ do
         E.select $ E.from $ \apkb -> do
             -- Filter by address
-            E.where_ (apkb E.^. AccountPublicKeyBindingAddress E.==. E.val (ByteStringSerialized addr))
-            -- Optionally filter by simple accounts
-            when filterSimple $
-                E.where_ (apkb E.^. AccountPublicKeyBindingIs_simple_account)
-            when filterActive $
-                E.where_ (apkb E.^. AccountPublicKeyBindingActive)
+            E.where_ (apkb E.^. AccountPublicKeyBindingPublic_key E.==. E.val (ByteStringSerialized pubKey))
+            E.where_ (apkb E.^. AccountPublicKeyBindingIs_simple_account E.==. E.val isSimple)
+            E.where_ (apkb E.^. AccountPublicKeyBindingActive E.==. E.val isActive)
             -- Sort by credential index
             E.orderBy [E.asc (apkb E.^. AccountPublicKeyBindingCredential_index)]
             return apkb
