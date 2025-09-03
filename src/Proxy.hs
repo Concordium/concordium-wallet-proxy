@@ -628,7 +628,8 @@ getAccounts addrText filterSimple filterActive = do
                   "address" .= unBSS accountPublicKeyBindingAddress,
                   "credential_index" .= accountPublicKeyBindingCredential_index,
                   "key_index" .= accountPublicKeyBindingKey_index,
-                  "is_simple_account" .= accountPublicKeyBindingIs_simple_account
+                  "is_simple_account" .= accountPublicKeyBindingIs_simple_account,
+                  "active" .= accountPublicKeyBindingActive
                 ]
             | Entity _key AccountPublicKeyBinding{..} <- queryResult
             ]
