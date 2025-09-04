@@ -307,7 +307,7 @@ mkYesod
 /v0/termsAndConditionsVersion TermsAndConditionsVersion GET
 /v0/plt/tokens PltTokensR GET
 /v0/plt/tokenInfo/#Text PltTokenInfoR GET
-/v0/accounts/#Text/#Bool/#Bool Accounts GET
+/v0/accountsByPublicKey/#Bool/#Bool AccountsByPublicKey GET
 |]
 
 instance Yesod Proxy where
@@ -607,12 +607,10 @@ getRewardPeriodLength lfb = do
 
 -- | Handler function for
 --
--- /v0/accounts/#Text/#Bool/#Bool Accounts GET
+-- /v0/accounts/#Bool/#Bool Accounts GET
 --
 -- endpoint
-getAccounts ::
-    -- | The public key (JSON encoded)
-    Text ->
+getAccountsByPublicKey ::
     -- | Return only simple/non-simple accounts
     Bool ->
     -- | Return only active/non-active accounts
