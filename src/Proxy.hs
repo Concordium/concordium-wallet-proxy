@@ -307,7 +307,7 @@ mkYesod
 /v0/termsAndConditionsVersion TermsAndConditionsVersion GET
 /v0/plt/tokens PltTokensR GET
 /v0/plt/tokenInfo/#Text PltTokenInfoR GET
-/v0/accountsByPublicKey/#Bool/#Bool AccountsByPublicKey GET
+/v0/accountsByPublicKey/ AccountsByPublicKey GET
 |]
 
 instance Yesod Proxy where
@@ -607,26 +607,50 @@ getRewardPeriodLength lfb = do
 
 -- | Handler function for
 --
--- /v0/accounts/#Bool/#Bool Accounts GET
+-- /v0/accounts Accounts GET
+--
+-- The endpoint expects the following GET parameters:
+--
+-- publicKey: The JSON serialized Ed52219 key.
+-- filterSimple: (Optional) Whether to filter for simple/non-simple accounts
+-- filterActive: (Optional) Whether to filter for active/non-active accounts
+--
+-- If the filters are omitted, all results are returned regardless of active/simple status.
 --
 -- endpoint
-getAccountsByPublicKey ::
-    -- | Return only simple/non-simple accounts
-    Bool ->
-    -- | Return only active/non-active accounts
-    Bool ->
-    Handler TypedContent
-getAccounts pubKeyRaw isSimple isActive = do
-    let jsonStr = BL.fromStrict $ Text.encodeUtf8 pubKeyRaw
-    pubKey <- case AE.eitherDecode jsonStr of
-        Left err -> respond400Error (EMParseError $ "Could not parse public key: " <> show (Text.pack err)) RequestInvalid
-        Right parsed -> return parsed
+getAccountsByPublicKey :: Handler TypedContent
+getAccountsByPublicKey = do
+    pubKey :: VerifyKey <-
+        lookupGetParam "publicKey" >>= \case
+            Nothing -> respond400Error (EMParseError "Missing `publicKey` value.") RequestInvalid
+            Just pubKeyJSON ->
+                case AE.eitherDecodeStrictText pubKeyJSON of
+                    Right pk -> return pk
+                    Left err -> respond400Error (EMParseError $ "Could not parse public key: " <> show (Text.pack err)) RequestInvalid
+    filterSimple  <- lookupGetParam "filterSimple" >>= \case
+        Nothing -> return Nothing
+        Just fSimple ->
+            case AE.eitherDecodeStrictText fSimple of
+                Right isSimple -> return $ Just isSimple 
+                Left err -> respond400Error (EMParseError $ "Could not parse filter for simple accounts: " <> show (Text.pack err)) RequestInvalid
+    filterActive  <- lookupGetParam "filterActive" >>= \case
+        Nothing -> return Nothing
+        Just fActive ->
+            case AE.eitherDecodeStrictText fActive of
+                Right isActive -> return $ Just isActive
+                Left err -> respond400Error (EMParseError $ "Could not parse filter for active accounts: " <> show (Text.pack err)) RequestInvalid
     queryResult :: [Entity AccountPublicKeyBinding] <- runDB $ do
         E.select $ E.from $ \apkb -> do
             -- Filter by address
             E.where_ (apkb E.^. AccountPublicKeyBindingPublic_key E.==. E.val (ByteStringSerialized pubKey))
-            E.where_ (apkb E.^. AccountPublicKeyBindingIs_simple_account E.==. E.val isSimple)
-            E.where_ (apkb E.^. AccountPublicKeyBindingActive E.==. E.val isActive)
+            case filterSimple of
+                Nothing -> return ()
+                Just isSimple -> 
+                    E.where_ (apkb E.^. AccountPublicKeyBindingIs_simple_account E.==. E.val isSimple)
+            case filterActive of
+                Nothing -> return ()
+                Just isActive -> 
+                    E.where_ (apkb E.^. AccountPublicKeyBindingActive E.==. E.val isActive)
             -- Sort by credential index
             E.orderBy [E.asc (apkb E.^. AccountPublicKeyBindingCredential_index)]
             return apkb
