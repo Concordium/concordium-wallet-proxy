@@ -1,4 +1,4 @@
-use axum::{extract::State, routing::get, Router};
+use axum::{Router, extract::State, routing::get};
 use prometheus_client::registry::Registry;
 use std::sync::Arc;
 use tokio::net::TcpListener;

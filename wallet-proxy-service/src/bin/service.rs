@@ -6,11 +6,11 @@ use prometheus_client::{
     metrics::{family::Family, gauge::Gauge},
     registry::Registry,
 };
-use reqwest::Client;
+
 use serde_json::json;
 
 use concordium_rust_sdk::v2;
-use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
+use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -20,19 +20,14 @@ use wallet_proxy::router;
 #[derive(Parser)]
 struct Cli {
     /// The URL used for the database, something of the form:
-    /// "postgres://postgres:example@localhost/ccd-scan".
+    /// "postgres://postgres:example@localhost/walletproxy".
     /// Use an environment variable when the connection contains a password, as
     /// command line arguments are visible across OS processes.
     #[arg(long, env = "WALLET_PROXY_DATABASE_URL")]
     database_url: String,
     /// gRPC interface of the node. Several can be provided.
-    #[arg(
-        long,
-        env = "WALLET_PROXY_GRPC_ENDPOINTS",
-        value_delimiter = ',',
-        num_args = 1..
-    )]
-    node: Vec<v2::Endpoint>,
+    #[arg(long, env = "WALLET_PROXY_NODE_GRPC_ENDPOINT")]
+    node: v2::Endpoint,
     /// Minimum number of connections in the pool.
     #[arg(
         long,
@@ -69,22 +64,6 @@ struct Cli {
     /// `warn`, and `error`.
     #[arg(long, default_value = "info", env = "LOG_LEVEL")]
     log_level: tracing_subscriber::filter::LevelFilter,
-}
-
-/// CLI argument parser first used for parsing only the --dotenv option.
-/// Allowing loading the provided file before parsing the remaining arguments
-/// and producing errors.
-#[derive(Parser)]
-#[command(
-    ignore_errors = true,
-    disable_help_flag = true,
-    disable_version_flag = true
-)]
-struct PreCli {
-    #[arg(long)]
-    dotenv: Option<PathBuf>,
-    #[arg(long)]
-    schema_out: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -124,7 +103,6 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let mut queries_task = {
-        // let rest_service = rest_api::Service::new(pool.clone(), config, &mut registry);
         let tcp_listener = TcpListener::bind(cli.listen)
             .await
             .context("Parsing TCP listener address failed")?;
@@ -133,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
         tokio::spawn(async move {
             axum::serve(
                 tcp_listener,
-                axum::Router::new(), // .merge(rest_service.as_router()),
+                axum::Router::new(), // TODO implement as part of COR-1810
             )
             .with_graceful_shutdown(stop_signal.cancelled_owned())
             .await
@@ -141,8 +119,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let mut monitoring_task = {
-        let state = HealthState {
-        };
+        let state = HealthState {};
         let health_routes = axum::Router::new()
             .route("/", axum::routing::get(health))
             .with_state(state);
@@ -185,10 +162,7 @@ async fn main() -> anyhow::Result<()> {
     }
     info!("Shutting down");
     // Ensure all tasks have stopped
-    let _ = tokio::join!(
-        monitoring_task,
-        queries_task,
-    );
+    let _ = tokio::join!(monitoring_task, queries_task,);
     Ok(())
 }
 
@@ -202,8 +176,11 @@ struct HealthState {}
 /// GET Handler for route `/health`.
 /// Verifying the API service state is as expected.
 async fn health(
-    axum::extract::State(state): axum::extract::State<HealthState>,
+    axum::extract::State(_state): axum::extract::State<HealthState>,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    // TODO: database check as part of COR-1809
+    // TODO: node check as part of COR-1810
+
     let is_healthy = true;
 
     let status_code = if is_healthy {
