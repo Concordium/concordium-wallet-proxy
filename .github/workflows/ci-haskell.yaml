@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-    - 'ci-haskell.yaml'
+    - '.github/workflows/ci.yaml'
     - '**.hs'
     - 'stack*.yaml'
     - 'package.yaml'
@@ -16,7 +16,7 @@ on:
     branches:
       - main
     paths:
-    - 'ci-haskell.yaml'
+    - '.github/workflows/ci.yaml'
     - '**.hs'
     - 'stack*.yaml'
     - 'package.yaml'
