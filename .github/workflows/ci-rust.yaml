@@ -46,10 +46,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Setup dependencies
-        run: |
-          cd notification-server
-          make setup-db && make
       - name: Run tests
         run: |
           cargo test --locked --all-features --release
