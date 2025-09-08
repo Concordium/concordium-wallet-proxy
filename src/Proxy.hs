@@ -195,7 +195,6 @@ share
     credential_index CredentialIndex
     key_index KeyIndex
     is_simple_account Bool
-    active Bool
     deriving Eq Show
   |]
 
@@ -613,9 +612,8 @@ getRewardPeriodLength lfb = do
 --
 -- publicKey: The JSON serialized Ed52219 key.
 -- filterSimple: (Optional) Whether to filter for simple/non-simple accounts
--- filterActive: (Optional) Whether to filter for active/non-active accounts
 --
--- If the filters are omitted, all results are returned regardless of active/simple status.
+-- If the filter is omitted, all results are returned regardless of its simple status.
 --
 -- endpoint
 getAccountsByPublicKey :: Handler TypedContent
@@ -633,24 +631,15 @@ getAccountsByPublicKey = do
             case AE.eitherDecodeStrictText fSimple of
                 Right isSimple -> return $ Just isSimple 
                 Left err -> respond400Error (EMParseError $ "Could not parse filter for simple accounts: " <> show (Text.pack err)) RequestInvalid
-    filterActive  <- lookupGetParam "filterActive" >>= \case
-        Nothing -> return Nothing
-        Just fActive ->
-            case AE.eitherDecodeStrictText fActive of
-                Right isActive -> return $ Just isActive
-                Left err -> respond400Error (EMParseError $ "Could not parse filter for active accounts: " <> show (Text.pack err)) RequestInvalid
     queryResult :: [Entity AccountPublicKeyBinding] <- runDB $ do
         E.select $ E.from $ \apkb -> do
-            -- Filter by address
+            -- Filter by public key
             E.where_ (apkb E.^. AccountPublicKeyBindingPublic_key E.==. E.val (ByteStringSerialized pubKey))
+            -- Filter by simple field
             case filterSimple of
                 Nothing -> return ()
                 Just isSimple -> 
                     E.where_ (apkb E.^. AccountPublicKeyBindingIs_simple_account E.==. E.val isSimple)
-            case filterActive of
-                Nothing -> return ()
-                Just isActive -> 
-                    E.where_ (apkb E.^. AccountPublicKeyBindingActive E.==. E.val isActive)
             -- Sort by credential index
             E.orderBy [E.asc (apkb E.^. AccountPublicKeyBindingCredential_index)]
             return apkb
@@ -661,8 +650,7 @@ getAccountsByPublicKey = do
                   "address" .= unBSS accountPublicKeyBindingAddress,
                   "credential_index" .= accountPublicKeyBindingCredential_index,
                   "key_index" .= accountPublicKeyBindingKey_index,
-                  "is_simple_account" .= accountPublicKeyBindingIs_simple_account,
-                  "active" .= accountPublicKeyBindingActive
+                  "is_simple_account" .= accountPublicKeyBindingIs_simple_account
                 ]
             | Entity _key AccountPublicKeyBinding{..} <- queryResult
             ]
