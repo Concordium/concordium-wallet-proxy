@@ -1,0 +1,55 @@
+name: "Rust: Build and test"
+
+on:
+  push:
+    branches: main
+
+  pull_request:
+
+  workflow_dispatch: # allows manual trigger
+
+jobs:
+
+  rustfmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Run cargo fmt
+        run: |
+          rustup component add rustfmt
+          cargo fmt --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Clippy
+        run: |
+          rustup component add clippy
+      - name: Run Clippy
+        run: |
+          cargo clippy --locked --all-targets --all-features --no-deps -- -D warnings
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Setup dependencies
+        run: |
+          cd notification-server
+          make setup-db && make
+      - name: Run tests
+        run: |
+          cargo test --locked --all-features --release

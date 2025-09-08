@@ -20,3 +20,5 @@ stack.yaml.lock
 
 *.cabal
 *.aes
+
+target
