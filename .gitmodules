@@ -1,3 +1,6 @@
 [submodule "deps/concordium-client"]
 	path = deps/concordium-client
 	url = ../concordium-client.git
+[submodule "deps/concordium-rust-sdk"]
+	path = deps/concordium-rust-sdk
+	url = https://github.com/Concordium/concordium-rust-sdk.git
