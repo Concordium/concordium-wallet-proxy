@@ -15,7 +15,7 @@ use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
-use wallet_proxy::router;
+use wallet_proxy::monitoring_api;
 
 #[derive(Parser)]
 struct Cli {
@@ -119,10 +119,6 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let mut monitoring_task = {
-        let state = HealthState {};
-        let health_routes = axum::Router::new()
-            .route("/", axum::routing::get(health))
-            .with_state(state);
         let tcp_listener = TcpListener::bind(cli.monitoring_listen)
             .await
             .context("Parsing TCP listener address failed")?;
@@ -131,11 +127,10 @@ async fn main() -> anyhow::Result<()> {
             "Monitoring server is running at {:?}",
             cli.monitoring_listen
         );
-        tokio::spawn(router::serve(
+        tokio::spawn(monitoring_api::serve(
             registry,
             tcp_listener,
             stop_signal,
-            health_routes,
         ))
     };
 
@@ -166,27 +161,3 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Represents the state required by the health endpoint router.
-///
-/// This struct provides access to essential resources needed to determine
-/// system health and readiness.
-#[derive(Clone)]
-struct HealthState {}
-
-/// GET Handler for route `/health`.
-/// Verifying the API service state is as expected.
-async fn health(
-    axum::extract::State(_state): axum::extract::State<HealthState>,
-) -> (StatusCode, Json<serde_json::Value>) {
-    // TODO: database check as part of COR-1809
-    // TODO: node check as part of COR-1810
-
-    let is_healthy = true;
-
-    let status_code = if is_healthy {
-        StatusCode::OK
-    } else {
-        StatusCode::INTERNAL_SERVER_ERROR
-    };
-    (status_code, Json(json!({})))
-}

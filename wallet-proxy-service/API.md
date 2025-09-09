@@ -41,4 +41,4 @@ Error messages and textual descriptions will be localized by the proxy based on 
 (Currently, only `en` is available.)
 Languages can also be specified with the `_LANG` GET-parameter and/or a `_LANG` cookie; these have higher precedence than `Accept-Language`.
 
-TBD: update this section as part of COR-1814
+TODO: update this section as part of COR-1814

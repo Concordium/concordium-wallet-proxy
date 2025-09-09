@@ -5,7 +5,13 @@ in [API.md](API.md)
 
 ## Running the service
 
-TBD
+To run the service (with minimal needed configuration):
+
+```sh
+service --node http://localhost:20000 --database-url postgres://postgres:password@localhost/wallet-proxy
+```
+
+To build from souce and run the service, replace `service` with `cargo run --bin service --`
 
 ## Configuration
 
@@ -20,10 +26,19 @@ The required configurations are:
 For full list of configuration options for the indexer service run:
 
 ```
-ccdscan-indexer --help
+wallet-proxy --help
 ```
-
 
 ## Querying the service
 
-TBD
+### Monitoring
+
+Health and prometheus metrics are exposed as HTTP endpoints and can be queried like:
+```sh
+curl -XGET http://localhost:8003/health
+curl -XGET http://localhost:8003/metrics
+```
+
+### REST API
+
+The REST API is documented in [API.md](API.md)
