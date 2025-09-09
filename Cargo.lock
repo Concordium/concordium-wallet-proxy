@@ -2960,6 +2960,7 @@ dependencies = [
  "clap",
  "concordium-rust-sdk",
  "futures-util",
+ "parking_lot",
  "prometheus-client",
  "serde",
  "serde_json",

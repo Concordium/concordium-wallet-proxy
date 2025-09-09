@@ -12,6 +12,7 @@ chrono.workspace = true
 clap.workspace = true
 concordium-rust-sdk.workspace = true
 futures-util.workspace = true
+parking_lot.workspace = true
 prometheus-client.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -4,14 +4,13 @@
 ![Build and test](https://github.com/Concordium/concordium-node/actions/workflows/build-test.yaml/badge.svg)
 
 This repository contains the Wallet Proxy, which works as middleware for the wallets maintained by 
-Concordium. The Wallet Proxy acts as a proxy accessing the node and provides access to indexed chain data. 
-Part of the Wallet Proxy is an indexer that indexes
-chain data that is relevant for the wallets. 
+Concordium. The Wallet Proxy acts as a proxy for accessing the node and additionally provides access to indexed chain data. 
+Part of the Wallet Proxy is an indexer that indexes the chain data that is relevant for the wallets. 
 
 Currently, there are both Haskell and Rust implementations. The Haskell implementation is fully functional but will be removed long term. 
 The Rust implementation is still WIP.
 
-- [wallet-proxy-indexer](./wallet-proxy-indexer/) (Rust, to be moved from <https://github.com/Concordium/concordium-transaction-logger>)
+- [wallet-proxy-indexer](./wallet-proxy-indexer/) (Rust)
   Indexer of chain data. The indexed data is written to a Postgres database.
 - [wallet-proxy-service](./wallet-proxy-service/) (Rust, WIP)
   Service that exposes the Wallet Proxy API. Reads data from the Postgres database

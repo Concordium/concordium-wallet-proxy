@@ -6,13 +6,13 @@ This document describes the API exposed by the Wallet Proxy
 
 The wallet proxy provides the following endpoints:
 
-* `GET /v0/health`: get a response specifying if the wallet proxy is up to date
+* TBD
 
 WIP: Add endpoints as implemented including a section below that describes the endpoint 
 
 ## Errors
 
-In case a request cannot be processed, the service will respond with the proper HTTP status code. 
+In case a request cannot be processed successfully, the service will respond with the proper HTTP status code. 
 In addition, the response body will be a JSON object with the error message and a (custom) error code
 ```json
 {
