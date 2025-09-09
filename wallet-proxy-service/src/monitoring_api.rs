@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use axum::http::StatusCode;
 use axum::{Json, Router, extract::State, routing};
 use prometheus_client::registry::Registry;
 use serde_json::json;
+use std::sync::Arc;
 
 /// Router exposing the Prometheus metrics and health endpoint.
 pub fn monitoring_router(metrics_registry: Registry) -> anyhow::Result<Router> {
