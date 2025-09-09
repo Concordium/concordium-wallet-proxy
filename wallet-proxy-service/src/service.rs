@@ -1,19 +1,21 @@
 use crate::configuration::Cli;
-use crate::{metrics_registry, monitoring_api};
+use crate::{monitoring_api};
 use anyhow::Context;
 use prometheus_client::metrics;
+use prometheus_client::registry::Registry;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 pub async fn run_service(cli: Cli) -> anyhow::Result<()> {
     let service_info = metrics::info::Info::new([("version", clap::crate_version!().to_string())]);
-    metrics_registry::REGISTRY.lock().register(
+    let mut metrics_registry= Registry::default();
+    metrics_registry.register(
         "service",
         "Information about the software",
         service_info,
     );
-    metrics_registry::REGISTRY.lock().register(
+    metrics_registry.register(
         "service_startup_timestamp_millis",
         "Timestamp of starting up the API service (Unix time in milliseconds)",
         metrics::gauge::ConstGauge::new(chrono::Utc::now().timestamp_millis()),
@@ -45,7 +47,7 @@ pub async fn run_service(cli: Cli) -> anyhow::Result<()> {
             "Monitoring server is running at {:?}",
             cli.monitoring_listen
         );
-        let monitoring_router = monitoring_api::monitoring_router()?;
+        let monitoring_router = monitoring_api::monitoring_router(metrics_registry)?;
         tokio::spawn(async move {
             axum::serve(tcp_listener, monitoring_router)
                 .with_graceful_shutdown(stop_signal.cancelled_owned())

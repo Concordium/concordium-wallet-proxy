@@ -1,11 +1,14 @@
-use crate::metrics_registry;
+use std::sync::Arc;
 use axum::http::StatusCode;
 use axum::{Json, Router, extract::State, routing};
+use prometheus_client::registry::Registry;
 use serde_json::json;
 
 /// Router exposing the Prometheus metrics and health endpoint.
-pub fn monitoring_router() -> anyhow::Result<Router> {
-    let metric_routes = Router::new().route("/", routing::get(metrics));
+pub fn monitoring_router(metrics_registry: Registry) -> anyhow::Result<Router> {
+    let metric_routes = Router::new()
+        .route("/", routing::get(metrics))
+        .with_state(Arc::new(metrics_registry));
     let health_state = HealthState {};
     let health_routes = Router::new()
         .route("/", routing::get(health))
@@ -17,9 +20,9 @@ pub fn monitoring_router() -> anyhow::Result<Router> {
 
 /// GET Handler for route `/metrics`.
 /// Exposes the metrics in the registry in the Prometheus format.
-async fn metrics() -> Result<String, String> {
+async fn metrics(State(metrics_registry): State<Arc<Registry>>) -> Result<String, String> {
     let mut buffer = String::new();
-    prometheus_client::encoding::text::encode(&mut buffer, &metrics_registry::REGISTRY.lock())
+    prometheus_client::encoding::text::encode(&mut buffer, &metrics_registry)
         .map_err(|err| err.to_string())?;
     Ok(buffer)
 }
