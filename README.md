@@ -49,6 +49,7 @@ cooldowns and the available balance) and get the info if an account is on any al
 * `GET /v1/CIS2TokenBalance/{index}/{subindex}/{account address}`: get the balance of tokens on given contract address for a given account address, ignoring failing requests.
 * `GET /v0/plt/tokens`: get the list of all plt token infos.
 * `GET /v0/plt/tokenInfo/{tokenId}`: get info about a given plt token and its module state (with metadata url).
+* `GET /v0/accountsByPublicKey`: get accounts assoiated with a given public key. Optionally filter the result for simple accounts.
 
 ### Errors
 
@@ -1384,6 +1385,28 @@ Example response:
   }
 }
 ```
+
+## Accounts by public key
+
+A GET request to `/v0/accountsByPublicKey` returns accounts associated to a
+given public key. The public key is specified in the GET parameter `publicKey`.
+The result can be filtered by simple accounts via the GET parameter
+`filterSimple`.
+
+Example response:
+
+```json
+[
+  { "address":"4svcQyxiroNhWSHsrejP6ifwMMMXZZgi7fhrbBPqYFZw3E8V6H",
+    "credential_index":0,
+    "is_simple_account":true,
+    "key_index":0,
+    "public_key":{"schemeId":"Ed25519",
+                  "verifyKey":"e3ee39d42e9f4ca2e99a706f5962571da55ac79cdd65d9772261895139bba496"}
+  }
+]
+```
+
 # Deployment
 
 The wallet proxy must have access to

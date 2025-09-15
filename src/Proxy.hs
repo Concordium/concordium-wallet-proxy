@@ -111,8 +111,8 @@ import Concordium.Client.Types.Transaction (
 import Concordium.Common.Version
 import Concordium.Crypto.ByteStringHelpers (ShortByteStringHex (..))
 import Concordium.Crypto.SHA256 (Hash)
-import Concordium.Crypto.SignatureScheme (KeyPair)
-import Concordium.ID.Types (CredentialIndex, KeyIndex, addressFromText)
+import Concordium.Crypto.SignatureScheme (KeyPair, VerifyKey (..))
+import Concordium.ID.Types (CredentialIndex (..), KeyIndex (..), addressFromText)
 import qualified Logging
 
 import Internationalization
@@ -146,6 +146,17 @@ instance S.Serialize CIS2TokenId where
         len <- S.getWord8
         CIS2TokenId <$> S.getShortByteString (fromIntegral len)
 
+instance PersistFieldSql CredentialIndex where
+    sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy Word8)
+instance PersistField CredentialIndex where
+    toPersistValue (CredentialIndex i) = toPersistValue i
+    fromPersistValue = fmap CredentialIndex . fromPersistValue
+instance PersistFieldSql KeyIndex where
+    sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy Word8)
+instance PersistField KeyIndex where
+    toPersistValue (KeyIndex i) = toPersistValue i
+    fromPersistValue = fmap KeyIndex . fromPersistValue
+
 -- | Create the database schema and types. This creates a type called @Summary@
 --  with fields @summaryBlock@, @summaryTimestamp@, etc., with stated types.
 --  Analogously for @Entry@ and @ContractEntry@.
@@ -177,6 +188,14 @@ share
     subindex ContractSubindex
     token_id CIS2TokenId
     total_supply (Ratio Integer)
+
+  AccountPublicKeyBinding sql=account_public_key_bindings
+    address (ByteStringSerialized AccountAddress)
+    public_key (ByteStringSerialized VerifyKey)
+    credential_index CredentialIndex
+    key_index KeyIndex
+    is_simple_account Bool
+    deriving Eq Show
   |]
 
 data ErrorCode = InternalError | RequestInvalid | DataNotFound | Unavailable
@@ -287,6 +306,7 @@ mkYesod
 /v0/termsAndConditionsVersion TermsAndConditionsVersion GET
 /v0/plt/tokens PltTokensR GET
 /v0/plt/tokenInfo/#Text PltTokenInfoR GET
+/v0/accountsByPublicKey/ AccountsByPublicKey GET
 |]
 
 instance Yesod Proxy where
@@ -583,6 +603,58 @@ getRewardPeriodLength lfb = do
                 Right (EChainParametersAndKeys (ecpParams :: ChainParameters' cpv) _) -> do
                     let rpLength = ecpParams ^? cpTimeParameters . traversed . tpRewardPeriodLength
                     return $ StatusOk $ GRPCResponse hds $ Right rpLength
+
+-- | Handler function for
+--
+-- /v0/accounts Accounts GET
+--
+-- The endpoint expects the following GET parameters:
+--
+-- publicKey: The JSON serialized Ed52219 key.
+-- filterSimple: (Optional) Whether to filter for simple/non-simple accounts
+--
+-- If the filter is omitted, all results are returned regardless of its simple status.
+--
+-- endpoint
+getAccountsByPublicKey :: Handler TypedContent
+getAccountsByPublicKey = do
+    pubKey :: VerifyKey <-
+        lookupGetParam "publicKey" >>= \case
+            Nothing -> respond400Error (EMParseError "Missing `publicKey` value.") RequestInvalid
+            Just pubKeyJSON ->
+                case AE.eitherDecodeStrictText pubKeyJSON of
+                    Right pk -> return pk
+                    Left err -> respond400Error (EMParseError $ "Could not parse public key: " <> show (Text.pack err)) RequestInvalid
+    filterSimple <-
+        lookupGetParam "filterSimple" >>= \case
+            Nothing -> return Nothing
+            Just fSimple ->
+                case AE.eitherDecodeStrictText fSimple of
+                    Right isSimple -> return $ Just isSimple
+                    Left err -> respond400Error (EMParseError $ "Could not parse filter for simple accounts: " <> show (Text.pack err)) RequestInvalid
+    queryResult :: [Entity AccountPublicKeyBinding] <- runDB $ do
+        E.select $ E.from $ \apkb -> do
+            -- Filter by public key
+            E.where_ (apkb E.^. AccountPublicKeyBindingPublic_key E.==. E.val (ByteStringSerialized pubKey))
+            -- Filter by simple field
+            case filterSimple of
+                Nothing -> return ()
+                Just isSimple ->
+                    E.where_ (apkb E.^. AccountPublicKeyBindingIs_simple_account E.==. E.val isSimple)
+            -- Sort by credential index
+            E.orderBy [E.asc (apkb E.^. AccountPublicKeyBindingCredential_index)]
+            return apkb
+    sendResponse $
+        toJSONList
+            [ object
+                [ "public_key" .= unBSS accountPublicKeyBindingPublic_key,
+                  "address" .= unBSS accountPublicKeyBindingAddress,
+                  "credential_index" .= accountPublicKeyBindingCredential_index,
+                  "key_index" .= accountPublicKeyBindingKey_index,
+                  "is_simple_account" .= accountPublicKeyBindingIs_simple_account
+                ]
+            | Entity _key AccountPublicKeyBinding{..} <- queryResult
+            ]
 
 --  |Version of the AccountBalance endpoint.
 data AccountBalanceVersion

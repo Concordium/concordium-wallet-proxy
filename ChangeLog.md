@@ -1,7 +1,13 @@
 # Changelog for wallet-proxy
 
+## [unreleased]
+
+- Added endpoint `/v0/accountsByPublicKey/ AccountsByPublicKey GET` for querying accounts by public key.
+
 ## [0.41.1] - 2025-08-28
+
 - Fixed a bug where CIS2 endpoints would fail to parse token IDs correctly, due to parsing them as PLT Token IDs.
+
 
 ## [0.41.0] - 2025-08-05
 
