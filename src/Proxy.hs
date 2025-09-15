@@ -625,12 +625,13 @@ getAccountsByPublicKey = do
                 case AE.eitherDecodeStrictText pubKeyJSON of
                     Right pk -> return pk
                     Left err -> respond400Error (EMParseError $ "Could not parse public key: " <> show (Text.pack err)) RequestInvalid
-    filterSimple  <- lookupGetParam "filterSimple" >>= \case
-        Nothing -> return Nothing
-        Just fSimple ->
-            case AE.eitherDecodeStrictText fSimple of
-                Right isSimple -> return $ Just isSimple 
-                Left err -> respond400Error (EMParseError $ "Could not parse filter for simple accounts: " <> show (Text.pack err)) RequestInvalid
+    filterSimple <-
+        lookupGetParam "filterSimple" >>= \case
+            Nothing -> return Nothing
+            Just fSimple ->
+                case AE.eitherDecodeStrictText fSimple of
+                    Right isSimple -> return $ Just isSimple
+                    Left err -> respond400Error (EMParseError $ "Could not parse filter for simple accounts: " <> show (Text.pack err)) RequestInvalid
     queryResult :: [Entity AccountPublicKeyBinding] <- runDB $ do
         E.select $ E.from $ \apkb -> do
             -- Filter by public key
@@ -638,7 +639,7 @@ getAccountsByPublicKey = do
             -- Filter by simple field
             case filterSimple of
                 Nothing -> return ()
-                Just isSimple -> 
+                Just isSimple ->
                     E.where_ (apkb E.^. AccountPublicKeyBindingIs_simple_account E.==. E.val isSimple)
             -- Sort by credential index
             E.orderBy [E.asc (apkb E.^. AccountPublicKeyBindingCredential_index)]
