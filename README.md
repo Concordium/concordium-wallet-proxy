@@ -1396,7 +1396,15 @@ The result can be filtered by simple accounts via the GET parameter
 Example response:
 
 ```json
-[{"address":"4svcQyxiroNhWSHsrejP6ifwMMMXZZgi7fhrbBPqYFZw3E8V6H","credential_index":0,"is_simple_account":true,"key_index":0,"public_key":{"schemeId":"Ed25519","verifyKey":"e3ee39d42e9f4ca2e99a706f5962571da55ac79cdd65d9772261895139bba496"}}]
+[
+  { "address":"4svcQyxiroNhWSHsrejP6ifwMMMXZZgi7fhrbBPqYFZw3E8V6H",
+    "credential_index":0,
+    "is_simple_account":true,
+    "key_index":0,
+    "public_key":{"schemeId":"Ed25519",
+                  "verifyKey":"e3ee39d42e9f4ca2e99a706f5962571da55ac79cdd65d9772261895139bba496"}
+  }
+]
 ```
 
 # Deployment
