@@ -49,7 +49,7 @@ cooldowns and the available balance) and get the info if an account is on any al
 * `GET /v1/CIS2TokenBalance/{index}/{subindex}/{account address}`: get the balance of tokens on given contract address for a given account address, ignoring failing requests.
 * `GET /v0/plt/tokens`: get the list of all plt token infos.
 * `GET /v0/plt/tokenInfo/{tokenId}`: get info about a given plt token and its module state (with metadata url).
-* `GET /v0/accountsByPublicKey`: get accounts assoiated with a given public key. Filter the result by active/simple accounts.
+* `GET /v0/accountsByPublicKey`: get accounts assoiated with a given public key. Optionally filter the result for simple accounts.
 
 ### Errors
 
