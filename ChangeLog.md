@@ -1,5 +1,9 @@
 # Changelog for wallet-proxy
 
+## [unreleased]
+
+- Added endpoint `/v0/accountsByPublicKey/ AccountsByPublicKey GET` for querying accounts by public key.
+
 ## [0.41.0] - 2025-08-05
 
 - Fix parsing of the `tokenId` query parameter to work without quotes in the url when using the `GET /v0/transactionCost` endpoint in a `tokenUpdate` transaction type.
