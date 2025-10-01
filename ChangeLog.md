@@ -2,7 +2,7 @@
 
 ## [unreleased]
 
-## [0.41.2-0] - 2025-09-30
+## [0.41.3-0] - 2025-10-01
 
 - Added endpoint `/v0/accountsByPublicKey/ AccountsByPublicKey GET` for querying accounts by public key.
 
