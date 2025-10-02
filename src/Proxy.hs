@@ -627,10 +627,11 @@ getKeyAccounts keyText = do
 
     -- optional param where 'y' only the accounts that are simple will be returned, if 'n' or not provided, all accounts for the public key will be returned
     onlySimpleParam <- lookupGetParam "onlySimple"
-    let onlySimple :: Maybe Bool
-        onlySimple = case fmap Text.toLower onlySimpleParam of
-            Just t | t == "y" -> Just True
-            _ -> Nothing
+    onlySimple <- case fmap Text.toLower onlySimpleParam of
+        Just "y" -> return True
+        Just "n" -> return False
+        Just other -> respond400Error (EMParseError $ "Invalid `onlySimple` parameter (should be `y` or `n`): " <> other)
+        Nothing -> return False
 
     queryResult :: [Entity AccountPublicKeyBinding] <- runDB $ do
         E.select $ E.from $ \apkb -> do
