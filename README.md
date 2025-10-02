@@ -1388,10 +1388,18 @@ Example response:
 
 ## Accounts by public key
 
-A GET request to `/v0/accountsByPublicKey` returns accounts associated to a
-given public key. The public key is specified in the GET parameter `publicKey`.
-The result can be filtered by simple accounts via the GET parameter
-`filterSimple`.
+A GET request to `/v0/keyAccounts/{publicKey}` returns accounts associated to a given public key. 
+
+There is an Optional path variable - which allows the caller to get "only simple" accounts associated to the provided public key
+`?onlySimple=y`. If this parameter is not provided or is set to `?onlySimple=n` then all of the accounts are returned.
+
+Example request for only simple accounts:
+
+`/v0/keyAccounts/bef37420b5d3a9de90abe87da23d5e109599d5778ca572249176846a26c66395?onlySimple=y`
+
+Example request for all accounts:
+
+`/v0/keyAccounts/bef37420b5d3a9de90abe87da23d5e109599d5778ca572249176846a26c66395`
 
 Example response:
 
