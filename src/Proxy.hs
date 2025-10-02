@@ -627,18 +627,16 @@ getKeyAccounts keyText = do
 
     -- optional param where 'y' only the accounts that are simple will be returned, if 'n' or not provided, all accounts for the public key will be returned
     onlySimpleParam <- lookupGetParam "onlySimple"
-    onlySimple <- case fmap Text.toLower onlySimpleParam of
+    onlySimple <- case onlySimpleParam of
         Just "y" -> return True
         Just "n" -> return False
-        Just other -> respond400Error (EMParseError $ "Invalid `onlySimple` parameter (should be `y` or `n`): " <> other)
+        Just other -> respond400Error (EMParseError $ "Invalid `onlySimple` parameter (should be `y` or `n`): " ++ Text.unpack other) RequestInvalid
         Nothing -> return False
 
     queryResult :: [Entity AccountPublicKeyBinding] <- runDB $ do
         E.select $ E.from $ \apkb -> do
             E.where_ (apkb E.^. AccountPublicKeyBindingPublic_key E.==. E.val (ByteStringSerialized pubKey))
-            case onlySimple of
-                Nothing -> return ()
-                Just True -> E.where_ (apkb E.^. AccountPublicKeyBindingIs_simple_account E.==. E.val True)
+            when onlySimple $ E.where_ (apkb E.^. AccountPublicKeyBindingIs_simple_account E.==. E.val True)
             E.orderBy [E.asc (apkb E.^. AccountPublicKeyBindingCredential_index)]
             return apkb
     sendResponse $
