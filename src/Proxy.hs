@@ -110,6 +110,7 @@ import Concordium.Client.Types.Transaction (
  )
 import Concordium.Common.Version
 import Concordium.Crypto.ByteStringHelpers (ShortByteStringHex (..))
+import qualified Concordium.Crypto.Ed25519Signature as Ed25519
 import Concordium.Crypto.SHA256 (Hash)
 import Concordium.Crypto.SignatureScheme (KeyPair, VerifyKey (..))
 import Concordium.ID.Types (CredentialIndex (..), KeyIndex (..), addressFromText)
@@ -306,7 +307,7 @@ mkYesod
 /v0/termsAndConditionsVersion TermsAndConditionsVersion GET
 /v0/plt/tokens PltTokensR GET
 /v0/plt/tokenInfo/#Text PltTokenInfoR GET
-/v0/accountsByPublicKey/ AccountsByPublicKey GET
+/v0/keyAccounts/#Text KeyAccounts GET
 |]
 
 instance Yesod Proxy where
@@ -606,42 +607,36 @@ getRewardPeriodLength lfb = do
 
 -- | Handler function for
 --
--- /v0/accounts Accounts GET
+-- /v0/keyAccounts/#Text KeyAccounts GET
 --
 -- The endpoint expects the following GET parameters:
 --
--- publicKey: The JSON serialized Ed52219 key.
--- filterSimple: (Optional) Whether to filter for simple/non-simple accounts
+-- publicKey: the text of the Ed25519 key.
+-- onlySimple: (Optional) Whether to include only simple accounts.
+--             'y' means only simple accounts are returned.
+--             'n' (or omitted) means all accounts are returned.
 --
--- If the filter is omitted, all results are returned regardless of its simple status.
---
--- endpoint
-getAccountsByPublicKey :: Handler TypedContent
-getAccountsByPublicKey = do
-    pubKey :: VerifyKey <-
-        lookupGetParam "publicKey" >>= \case
-            Nothing -> respond400Error (EMParseError "Missing `publicKey` value.") RequestInvalid
-            Just pubKeyJSON ->
-                case AE.eitherDecodeStrictText pubKeyJSON of
-                    Right pk -> return pk
-                    Left err -> respond400Error (EMParseError $ "Could not parse public key: " <> show (Text.pack err)) RequestInvalid
-    filterSimple <-
-        lookupGetParam "filterSimple" >>= \case
-            Nothing -> return Nothing
-            Just fSimple ->
-                case AE.eitherDecodeStrictText fSimple of
-                    Right isSimple -> return $ Just isSimple
-                    Left err -> respond400Error (EMParseError $ "Could not parse filter for simple accounts: " <> show (Text.pack err)) RequestInvalid
+-- Example: ?onlySimple=y
+getKeyAccounts :: Text -> Handler TypedContent
+getKeyAccounts keyText = do
+    -- Parse the public key from the URL parameter
+    -- Base16 decode then deserialize using the Serialize instance
+    pubKey <- case S.decode =<< BS16.decode (Text.encodeUtf8 keyText) of
+        Left err -> respond400Error (EMParseError $ "Invalid verify key: " <> err) RequestInvalid
+        Right edVk -> return (VerifyKeyEd25519 edVk)
+
+    -- optional param where 'y' only the accounts that are simple will be returned, if 'n' or not provided, all accounts for the public key will be returned
+    onlySimpleParam <- lookupGetParam "onlySimple"
+    onlySimple <- case onlySimpleParam of
+        Just "y" -> return True
+        Just "n" -> return False
+        Just other -> respond400Error (EMParseError $ "Invalid `onlySimple` parameter (should be `y` or `n`): " ++ Text.unpack other) RequestInvalid
+        Nothing -> return False
+
     queryResult :: [Entity AccountPublicKeyBinding] <- runDB $ do
         E.select $ E.from $ \apkb -> do
-            -- Filter by public key
             E.where_ (apkb E.^. AccountPublicKeyBindingPublic_key E.==. E.val (ByteStringSerialized pubKey))
-            -- Filter by simple field
-            case filterSimple of
-                Nothing -> return ()
-                Just isSimple ->
-                    E.where_ (apkb E.^. AccountPublicKeyBindingIs_simple_account E.==. E.val isSimple)
-            -- Sort by credential index
+            when onlySimple $ E.where_ (apkb E.^. AccountPublicKeyBindingIs_simple_account E.==. E.val True)
             E.orderBy [E.asc (apkb E.^. AccountPublicKeyBindingCredential_index)]
             return apkb
     sendResponse $
