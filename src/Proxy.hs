@@ -110,12 +110,12 @@ import Concordium.Client.Types.Transaction (
  )
 import Concordium.Common.Version
 import Concordium.Crypto.ByteStringHelpers (ShortByteStringHex (..))
+import Concordium.Crypto.Ed25519Signature as Ed25519
 import Concordium.Crypto.SHA256 (Hash)
 import Concordium.Crypto.SignatureScheme (KeyPair, VerifyKey (..))
-import qualified Concordium.Crypto.Ed25519Signature as Ed25519
 import Concordium.ID.Types (CredentialIndex (..), KeyIndex (..), addressFromText)
-import qualified Logging
 import qualified Data.Serialize as Cereal
+import qualified Logging
 
 import Internationalization
 
