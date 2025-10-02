@@ -112,8 +112,10 @@ import Concordium.Common.Version
 import Concordium.Crypto.ByteStringHelpers (ShortByteStringHex (..))
 import Concordium.Crypto.SHA256 (Hash)
 import Concordium.Crypto.SignatureScheme (KeyPair, VerifyKey (..))
+import qualified Concordium.Crypto.Ed25519Signature as Ed25519
 import Concordium.ID.Types (CredentialIndex (..), KeyIndex (..), addressFromText)
 import qualified Logging
+import qualified Data.Serialize as Cereal
 
 import Internationalization
 
@@ -610,7 +612,7 @@ getRewardPeriodLength lfb = do
 --
 -- The endpoint expects the following GET parameters:
 --
--- publicKey: The JSON serialized Ed52219 key.
+-- publicKey: The Ed52219 key.
 -- filterSimple: (Optional) Whether to filter for simple/non-simple accounts
 --
 -- If the filter is omitted, all results are returned regardless of its simple status.
@@ -620,11 +622,15 @@ getAccountsByPublicKey :: Handler TypedContent
 getAccountsByPublicKey = do
     pubKey :: VerifyKey <-
         lookupGetParam "publicKey" >>= \case
-            Nothing -> respond400Error (EMParseError "Missing `publicKey` value.") RequestInvalid
-            Just pubKeyJSON ->
-                case AE.eitherDecodeStrictText pubKeyJSON of
-                    Right pk -> return pk
-                    Left err -> respond400Error (EMParseError $ "Could not parse public key: " <> show (Text.pack err)) RequestInvalid
+            Nothing ->
+                respond400Error (EMParseError "Missing `publicKey` value.") RequestInvalid
+            Just publicKey ->
+                case BS16.decode . Text.encodeUtf8 $ publicKey of
+                    Left err -> respond400Error (EMParseError $ "Invalid hex in public key: " ++ err) RequestInvalid
+                    Right decoded ->
+                        case Cereal.decode decoded of
+                            Left err -> respond400Error (EMParseError $ "Could not decode verify key: " ++ err) RequestInvalid
+                            Right edVk -> return (VerifyKeyEd25519 edVk)
     filterSimple <-
         lookupGetParam "filterSimple" >>= \case
             Nothing -> return Nothing

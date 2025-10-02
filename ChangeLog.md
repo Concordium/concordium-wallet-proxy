@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+- Updated endpoint `/v0/accountsByPublicKey/ AccountsByPublicKey GET` to require no quotes around the public key parameter.
+
 ## [0.41.2-0] - 2025-09-30
 
 - Added endpoint `/v0/accountsByPublicKey/ AccountsByPublicKey GET` for querying accounts by public key.
