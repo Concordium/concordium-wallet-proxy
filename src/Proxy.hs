@@ -617,7 +617,6 @@ getRewardPeriodLength lfb = do
 --             'n' (or omitted) means all accounts are returned.
 --
 -- Example: ?onlySimple=y
---
 getKeyAccounts :: Text -> Handler TypedContent
 getKeyAccounts keyText = do
     -- Parse the public key from the URL parameter
@@ -631,7 +630,7 @@ getKeyAccounts keyText = do
     let onlySimple :: Maybe Bool
         onlySimple = case fmap Text.toLower onlySimpleParam of
             Just t | t == "y" -> Just True
-            _                 -> Nothing
+            _ -> Nothing
 
     queryResult :: [Entity AccountPublicKeyBinding] <- runDB $ do
         E.select $ E.from $ \apkb -> do
