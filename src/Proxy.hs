@@ -2907,6 +2907,8 @@ getPltTokenInfoR tokenId =
     runGRPC (getTokenInfoFromText tokenId LastFinal) $ \tokenInfo -> do
         sendResponse $ toJSON tokenInfo
 
+-- | Create a Transak on-ramp session. This requires an "address" parameter to be specified, which
+--  will be the address of the account to which the purchased funds will be sent.
 postTransakOnRamp :: Handler TypedContent
 postTransakOnRamp = do
     yesod <- getYesod
