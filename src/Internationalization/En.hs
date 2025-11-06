@@ -299,3 +299,5 @@ translation = I18n{..}
     i18nErrorMessage EMActionNotCurrentlySupported = "The required action is not supported. The node's protocol version is incompatible with it."
     i18nErrorMessage EMInvokeFailed = "Invoking a contract failed."
     i18nErrorMessage EMV0Contract = "Invoking a V0 contract is not supported."
+    i18nErrorMessage EMBadGateway = "Invalid response from upstream server."
+    i18nErrorMessage EMGatewayTimeout = "Timeout occurred waiting for response from upstream server."
