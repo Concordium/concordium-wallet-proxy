@@ -82,7 +82,7 @@ parser =
             <*> option (eitherReader Logging.logLevelFromString) (long "log-level" <> metavar "LOGLEVEL" <> value Logging.LLOff <> showDefault <> help "Log level. Can be one of either 'off', 'error', 'warning', 'info', 'debug' or 'trace'.")
             <*> optional (strOption (long "tc-version" <> metavar "STRING" <> help "Version of terms and conditions in effect."))
             <*> optional (strOption (long "tc-url" <> metavar "URL" <> help "Link to the terms and conditions."))
-            <*> optional (strOption (long "transak-conf" <> metavar "FILE" <> help "File with configuration for Transak on-ramp gateway."))
+            <*> optional (strOption (long "transak-config" <> metavar "FILE" <> help "File with configuration for Transak on-ramp gateway."))
 
     mkProxyConfig backend timeout =
         ProxyConfig $
