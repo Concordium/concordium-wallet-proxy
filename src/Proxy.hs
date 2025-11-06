@@ -13,6 +13,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+-- Disable warning over orphan instances. We use orphan instances for types that are defined in
+-- concordium-base to provide SQL/persistence.
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Proxy where
 
@@ -111,7 +114,6 @@ import Concordium.Client.Types.Transaction (
  )
 import Concordium.Common.Version
 import Concordium.Crypto.ByteStringHelpers (ShortByteStringHex (..))
-import qualified Concordium.Crypto.Ed25519Signature as Ed25519
 import Concordium.Crypto.SHA256 (Hash)
 import Concordium.Crypto.SignatureScheme (KeyPair, VerifyKey (..))
 import Concordium.ID.Types (CredentialIndex (..), KeyIndex (..), addressFromText)
@@ -149,13 +151,20 @@ instance S.Serialize CIS2TokenId where
         len <- S.getWord8
         CIS2TokenId <$> S.getShortByteString (fromIntegral len)
 
+-- This is an orphan instance for a type defined in concordium-base.
 instance PersistFieldSql CredentialIndex where
     sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy Word8)
+
+-- This is an orphan instance for a type defined in concordium-base.
 instance PersistField CredentialIndex where
     toPersistValue (CredentialIndex i) = toPersistValue i
     fromPersistValue = fmap CredentialIndex . fromPersistValue
+
+-- This is an orphan instance for a type defined in concordium-base.
 instance PersistFieldSql KeyIndex where
     sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy Word8)
+
+-- This is an orphan instance for a type defined in concordium-base.
 instance PersistField KeyIndex where
     toPersistValue (KeyIndex i) = toPersistValue i
     fromPersistValue = fmap KeyIndex . fromPersistValue

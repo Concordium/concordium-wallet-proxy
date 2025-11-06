@@ -85,4 +85,4 @@ jobs:
           key: ${{ runner.os }}-rust-stack-deps-${{ env.RUST }}-${{ hashFiles('stack.yaml', 'package.yaml', 'deps/concordium-client/package.yaml', 'deps/concordium-client/src/**.hs', 'deps/concordium-client/deps/concordium-base/haskell-src/**.hs', 'deps/concordium-client/deps/concordium-base/rust-src/Cargo.toml', 'deps/concordium-base/rust-src/**.rs') }}
 
       - name: Stack build # build all the binaries and tests, but don't run the tests
-        run: stack build --fast
+        run: stack build --fast --ghc-options "-Werror"
