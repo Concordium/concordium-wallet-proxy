@@ -34,6 +34,7 @@ import Concordium.Types (Amount)
 import Concordium.Types.Queries as Types
 import Data.Range.Parser
 import Options.Applicative
+import qualified Transak
 
 serverHost :: String
 serverHost = "0.0.0.0"
@@ -54,7 +55,8 @@ data ProxyConfig = ProxyConfig
       pcIpInfoV2 :: FilePath,
       logLevel :: Logging.LogLevel,
       tcVersion :: Maybe String,
-      tcUrl :: Maybe String
+      tcUrl :: Maybe String,
+      transakConfig :: Maybe FilePath
     }
 
 parser :: ParserInfo ProxyConfig
@@ -80,6 +82,7 @@ parser =
             <*> option (eitherReader Logging.logLevelFromString) (long "log-level" <> metavar "LOGLEVEL" <> value Logging.LLOff <> showDefault <> help "Log level. Can be one of either 'off', 'error', 'warning', 'info', 'debug' or 'trace'.")
             <*> optional (strOption (long "tc-version" <> metavar "STRING" <> help "Version of terms and conditions in effect."))
             <*> optional (strOption (long "tc-url" <> metavar "URL" <> help "Link to the terms and conditions."))
+            <*> optional (strOption (long "transak-config" <> metavar "FILE" <> help "File with configuration for Transak on-ramp gateway."))
 
     mkProxyConfig backend timeout =
         ProxyConfig $
@@ -176,6 +179,12 @@ main = do
     Right ipInfo <- AE.eitherDecode' <$> LBS.readFile pcIpInfo
     Right ipInfoV1 <- AE.eitherDecode' <$> LBS.readFile pcIpInfoV1
     Right ipInfoV2 <- AE.eitherDecode' <$> LBS.readFile pcIpInfoV2
+    transakState <- forM transakConfig $ \configFile ->
+        AE.eitherDecodeFileStrict configFile >>= \case
+            Left err -> die $ "Cannot parse Transak config: " ++ show err
+            Right conf -> do
+                token <- Transak.makeInitialAccessToken
+                return (conf, token)
     runStderrLoggingT . filterL $ do
         $logDebug ("Using iOS V0 update config: " <> fromString (show forcedUpdateConfigIOSV0))
         $logDebug ("Using Android V0 update config: " <> fromString (show forcedUpdateConfigAndroidV0))
@@ -184,7 +193,7 @@ main = do
         $logDebug ("Using logLevel: " <> fromString (show logLevel))
         $logDebug ("Running server on: " <> fromString serverHost <> ":" <> fromString (show pcPort))
     runStderrLoggingT . filterL $ withPostgresqlPool pcDBConnString 10 $ \dbConnectionPool -> liftIO $ do
-        -- do not care about the gtu receipients database if gtu drop is not enabled
+        -- do not care about the gtu recipients database if gtu drop is not enabled
         when (isJust gtuDropData) $ runSqlPool (runMigration migrateGTURecipient) dbConnectionPool
         runExceptT (mkGrpcClient pcGRPC (Just logm)) >>= \case
             Left err -> die $ "Cannot connect to GRPC endpoint: " ++ show err

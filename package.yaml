@@ -1,5 +1,5 @@
 name:                wallet-proxy
-version:             0.41.3-0
+version:             0.42.0
 github:              "Concordium/concordium-wallet-proxy"
 author:              "Concordium"
 maintainer:          "developers@concordium.com"
@@ -22,6 +22,7 @@ description:         Please see the README on GitHub at <https://github.com/Conc
 
 dependencies:
 - aeson >= 1.4.2
+- async
 - attoparsec-aeson
 - base >=4.7 && < 5
 - base16-bytestring >= 0.1.1.6
@@ -34,10 +35,13 @@ dependencies:
 - containers >= 0.6
 - cookie >= 0.4.5
 - esqueleto
+- http-client
+- http-client-tls
 - http-types >= 0.12
 - http2-grpc-types >= 0.5
 - microlens-platform
 - monad-logger >= 0.3.30
+- network-uri
 - persistent >= 2.9.2
 - persistent-postgresql >= 2.9
 - random >= 1.1

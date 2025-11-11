@@ -49,7 +49,8 @@ cooldowns and the available balance) and get the info if an account is on any al
 * `GET /v1/CIS2TokenBalance/{index}/{subindex}/{account address}`: get the balance of tokens on given contract address for a given account address, ignoring failing requests.
 * `GET /v0/plt/tokens`: get the list of all plt token infos.
 * `GET /v0/plt/tokenInfo/{tokenId}`: get info about a given plt token and its module state (with metadata url).
-* `GET /v0/accountsByPublicKey`: get accounts assoiated with a given public key. Optionally filter the result for simple accounts.
+* `GET /v0/keyAccounts/{public key}`: get accounts associated with a given public key. Optionally filter the result for simple accounts.
+* `POST /v0/transakOnRamp`: create a URL to initiate purchasing CCDs through the Transak on-ramp.
 
 ### Errors
 
@@ -1415,6 +1416,27 @@ Example response:
 ]
 ```
 
+## Transak on-ramp
+
+A POST request to `/v0/transakOnRamp?address={accountAddress}` returns a JSON object containing a URL
+that can be used to initiate the Transak on-ramp (for buying CCDs).
+
+Example request:
+
+`/v0/transakOnRamp?address=2ybST9JB7xd9Vmc6ATXNg4Vk1UniPfc2GaK5Gknae4fkmKvjX4`
+
+Example response:
+
+```json
+{"widgetUrl":"https://global-stg.transak.com?apiKey=67ae41cb-396f-46fc-b7a7-f0f2a247d926&sessionId=eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJvdHQiOiJiMmQ1MjM3NmM2Njg2NWQ4ODUzMTE2YTU5NGE5OGE0NyIsImlhdCI6MTc2MjQyNTM2MSwiZXhwIjoxNzYyNDI1NjYxfQ.jOVqHj5xmGQROzorEZvRKP8Cpee_MWbP-lYyiAt5GhAG-YYT7FbGNNzYpRWnnUlWAGjkTJ6mEFmZbqZoQJ5ZAw"}
+```
+
+This endpoint can product 502 Bad Gateway or 504 Gateway Timeout responses if the up-stream server
+does not behave in the expected manner or times out.  (The proxy will time out after 10 seconds.)
+
+Note: per [Transak's documentation](https://docs.transak.com/reference/create-widget-url), the `widgetUrl` is valid only for 5 minutes from the time of creation.
+
+
 # Deployment
 
 The wallet proxy must have access to
@@ -1426,6 +1448,8 @@ The wallet proxy must have access to
   the gtu drop functionality will be disabled.
 - optionally, the configuration file for the `v0/appSettings` endpoint. See
   [Forced update configuration file](#forced-update-configuration-file) for the format of the file.
+- optionally, the configuration file for the `v0/transakOnRamp` endpoint. See
+  [Transak on-ramp configuration file](#transak-on-ramp-configuration-file) for the format of the file.
 
 An example invocation is
 ```console
@@ -1438,6 +1462,7 @@ wallet-proxy --grpc-ip 127.0.0.1\
              --drop-account gtu-drop-account-0.json\
              --forced-update-config-v0 forced-update-config-v0.json\
              --forced-update-config-v1 forced-update-config-v1.json\
+             --transak-config transak.json\
              --health-tolerance 30\
              --log-level debug\
              --grpc-timeout 15
@@ -1468,6 +1493,7 @@ where
 - `--drop-account gtu-drop-account-0.json` keys of the gtu drop account
 - `--forced-update-config-v0 forced-update-config-v0.json` file with app update configuration for the old mobile wallet
 - `--forced-update-config-v1 forced-update-config-v1.json` file with app update configuration for the new mobile wallet
+- `--transak-config transak.json` JSON file with the configuration for the Transak on-ramp.
 - `--health-tolerance 30` tolerated age of last final block in seconds before the health query returns false
 - `--log-level debug` means all logs above debug will be printed. Options are
   `off`, `warning`, `error`, `info`, `debug`, `trace`.
@@ -1690,6 +1716,29 @@ versions `>= 64`.
 The `suggestUrl` field is optional, and if not present the default is taken to
 be `url`. The `suggestUrl` value is used if the version mathches the suggested
 update, but **not** the forced update.
+
+## Transak on-ramp configuration File
+
+The Transak on-ramp configuration file is a JSON file that is specified with the `--transak-config`
+option. If no config file is specified, the `/v0/transakOnRamp` endpoint will be disabled, and only
+respond with 404 Not Found. If the file is specified, it must be a valid JSON file in the following
+format:
+
+```json
+{
+    "useStaging": false,
+    "apiSecret": "MDEyMzQ1Njc4OWFiY2RlCg==",
+    "apiKey": "3de320fb-5470-4608-88f1-647b513e64de",
+    "referrerDomain": "concordium.com"
+}
+```
+where
+- `useStaging` is optional (defaults to `false`). If `true`, the Transak staging endpoint will be used;
+  if `false`, the production endpoint will be used.
+- `apiSecret` is the API secret provided by Transak.
+- `apiKey` is the API key provided by Transak.
+- `referrerDomain` is the domain registered with Transak for the project.
+
 
 ## Release
 

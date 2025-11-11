@@ -2,6 +2,11 @@
 
 ## [unreleased]
 
+## [0.42.0] - 2025-11-11
+
+- Add `POST` endpoint `/v0/transakOnRamp` for starting a Transak on-ramp session.
+  This is only available if configured at runtime via the `--transak-config` command-line argument.
+
 ## [0.41.3-0] - 2025-10-02
 
 - Changed endpoint route from `/v0/accountsByPublicKey/ AccountsByPublicKey GET` to `/v0/keyAccounts/#Text KeyAccounts GET`. Now the public key is provided as a path parameter and the filter is changed to `onlySimple` to retrieve only the simple accounts: where `?onlySimple=y` returns only simple accounts and when `?onlySimple=n` or is not provided then all accounts will be returned matching the public key.

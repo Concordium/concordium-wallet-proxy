@@ -37,6 +37,10 @@ data ErrorMessage
       EMInvokeFailed
     | -- | Expected a V1 contract, but a V0 contract was given.
       EMV0Contract
+    | -- | Bad gateway.
+      EMBadGateway
+    | -- | Gateway time-out.
+      EMGatewayTimeout
 
 data I18n = I18n
     { i18nRejectReason :: RejectReason -> Text,

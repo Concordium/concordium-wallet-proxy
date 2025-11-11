@@ -13,6 +13,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+-- Disable warning over orphan instances. We use orphan instances for types that are defined in
+-- concordium-base to provide SQL/persistence.
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Proxy where
 
@@ -30,6 +33,7 @@ import qualified Data.Char as CH
 import Data.Ratio
 
 import Control.Arrow (first, left)
+import Control.Concurrent
 import Control.Exception (SomeException, catch)
 import Control.Monad
 import Data.Aeson (Result (..), fromJSON, withObject)
@@ -61,7 +65,7 @@ import qualified Database.Esqueleto.Legacy as E
 import qualified Database.Esqueleto.PostgreSQL.JSON as EJ
 import Lens.Micro.Platform hiding ((.=))
 import Network.GRPC.HTTP2.Types (GRPCStatusCode (..))
-import Network.HTTP.Types (Status, badGateway502, badRequest400, internalServerError500, notFound404, serviceUnavailable503)
+import Network.HTTP.Types (Status, badGateway502, badRequest400, gatewayTimeout504, internalServerError500, notFound404, serviceUnavailable503)
 import Paths_wallet_proxy (version)
 import System.Random
 import Text.Read hiding (String)
@@ -110,13 +114,13 @@ import Concordium.Client.Types.Transaction (
  )
 import Concordium.Common.Version
 import Concordium.Crypto.ByteStringHelpers (ShortByteStringHex (..))
-import qualified Concordium.Crypto.Ed25519Signature as Ed25519
 import Concordium.Crypto.SHA256 (Hash)
 import Concordium.Crypto.SignatureScheme (KeyPair, VerifyKey (..))
 import Concordium.ID.Types (CredentialIndex (..), KeyIndex (..), addressFromText)
 import qualified Logging
 
 import Internationalization
+import qualified Transak
 
 -- | Wraps a type for persistent storage via a serialization to a 'ByteString'.
 newtype ByteStringSerialized a = ByteStringSerialized {unBSS :: a}
@@ -147,13 +151,20 @@ instance S.Serialize CIS2TokenId where
         len <- S.getWord8
         CIS2TokenId <$> S.getShortByteString (fromIntegral len)
 
+-- This is an orphan instance for a type defined in concordium-base.
 instance PersistFieldSql CredentialIndex where
     sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy Word8)
+
+-- This is an orphan instance for a type defined in concordium-base.
 instance PersistField CredentialIndex where
     toPersistValue (CredentialIndex i) = toPersistValue i
     fromPersistValue = fmap CredentialIndex . fromPersistValue
+
+-- This is an orphan instance for a type defined in concordium-base.
 instance PersistFieldSql KeyIndex where
     sqlType _ = sqlType (Proxy.Proxy :: Proxy.Proxy Word8)
+
+-- This is an orphan instance for a type defined in concordium-base.
 instance PersistField KeyIndex where
     toPersistValue (KeyIndex i) = toPersistValue i
     fromPersistValue = fmap KeyIndex . fromPersistValue
@@ -236,7 +247,8 @@ data Proxy = Proxy
       tcVersion :: Maybe String,
       -- | URL to access terms and conditions.
       --  If not set the endpoint termsAndConditionsVersion is disabled.
-      tcUrl :: Maybe String
+      tcUrl :: Maybe String,
+      transakState :: Maybe (Transak.TransakConfig, MVar Transak.AccessToken)
     }
 
 -- | Data needed for GTU drops.
@@ -308,6 +320,7 @@ mkYesod
 /v0/plt/tokens PltTokensR GET
 /v0/plt/tokenInfo/#Text PltTokenInfoR GET
 /v0/keyAccounts/#Text KeyAccounts GET
+/v0/transakOnRamp TransakOnRamp POST
 |]
 
 instance Yesod Proxy where
@@ -338,23 +351,22 @@ instance Yesod Proxy where
 -- | Terminate execution and respond with 400 status code with the given error
 --  description.
 respond400Error :: ErrorMessage -> ErrorCode -> Handler a
-respond400Error err code = do
-    i <- internationalize
-    sendResponseStatus badRequest400 $
-        object
-            [ "errorMessage" .= i18n i err,
-              "error" .= fromEnum code
-            ]
+respond400Error = respondStatusError badRequest400
 
 -- | Terminate execution and respond with 404 status code with the given error
 --  description.
 respond404Error :: ErrorMessage -> Handler a
-respond404Error err = do
+respond404Error err = respondStatusError notFound404 err DataNotFound
+
+-- | Terminate execution and respond with the given status code and error
+--  description.
+respondStatusError :: Status -> ErrorMessage -> ErrorCode -> Handler a
+respondStatusError status err code = do
     i <- internationalize
-    sendResponseStatus notFound404 $
+    sendResponseStatus status $
         object
             [ "errorMessage" .= i18n i err,
-              "error" .= fromEnum DataNotFound
+              "error" .= fromEnum code
             ]
 
 -- | Parse a set-cookie header string.
@@ -2894,3 +2906,26 @@ getPltTokenInfoR :: Text -> Handler TypedContent
 getPltTokenInfoR tokenId =
     runGRPC (getTokenInfoFromText tokenId LastFinal) $ \tokenInfo -> do
         sendResponse $ toJSON tokenInfo
+
+-- | Create a Transak on-ramp session. This requires an "address" parameter to be specified, which
+--  will be the address of the account to which the purchased funds will be sent.
+postTransakOnRamp :: Handler TypedContent
+postTransakOnRamp = do
+    yesod <- getYesod
+    case transakState yesod of
+        Nothing -> respond404Error (EMErrorResponse NotFound)
+        Just (conf, mvToken) -> do
+            lookupGetParam "address" >>= \case
+                Nothing -> respond400Error (EMParseError "'address' parameter is required to be an account address") RequestInvalid
+                Just addrText -> case addressFromText addrText of
+                    Left _ -> respond400Error (EMParseError "'address' is not a valid account address") RequestInvalid
+                    Right addr -> do
+                        res <- liftIO $ Transak.tryCreateWidgetUrl conf mvToken addr
+                        case res of
+                            Left (Transak.WUEBadGateway reason) -> do
+                                $(logError) ("transakOnRamp: " <> Text.pack reason)
+                                respondStatusError badGateway502 EMBadGateway InternalError
+                            Left Transak.WUEGatewayTimeout -> do
+                                $(logError) "transakOnRamp: gateway timeout"
+                                respondStatusError gatewayTimeout504 EMGatewayTimeout InternalError
+                            Right url -> sendResponse $ object ["widgetUrl" .= url]
