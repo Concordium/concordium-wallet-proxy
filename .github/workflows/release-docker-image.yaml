@@ -36,7 +36,7 @@ jobs:
         id: meta
         run: |
           export VERSION=$(yq .version package.yaml)
-          TAG_BASE_VERSION=$(echo "${{ github.ref_name }}" | cut -d'-' -f1')
+          TAG_BASE_VERSION=$(echo "${{ github.ref_name }}" | cut -d'-' -f1)
           if [ $VERSION != $TAG_BASE_VERSION ]; then
              echo "::error The tag base version: $TAG_BASE_VERSION does not match the version extracted from package.yaml: $VERSION"
              exit 1
