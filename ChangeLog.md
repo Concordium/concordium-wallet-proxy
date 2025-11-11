@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+## [0.42.0] - 2025-11-11
+
 - Add `POST` endpoint `/v0/transakOnRamp` for starting a Transak on-ramp session.
   This is only available if configured at runtime via the `--transak-config` command-line argument.
 
