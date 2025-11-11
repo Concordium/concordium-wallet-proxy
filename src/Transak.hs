@@ -143,7 +143,7 @@ instance AE.FromJSON WidgetUrlResponse where
             (AE..: "data")
                 >=> (AE.withObject "data" $ \v -> WidgetUrlResponse <$> v AE..: "widgetUrl")
 
--- | This calls the "create widget URL" Transak API with the specified waleet address.
+-- | This calls the "create widget URL" Transak API with the specified wallet address.
 --  The parameter "disableWalletAddressForm" is set, so that Transak will not allow the user to
 --  change the address. The crypto currency is set to CCD.
 --
