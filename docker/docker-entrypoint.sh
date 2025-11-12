@@ -22,6 +22,7 @@ grpc_timeout="${GRPC_TIMEOUT:-15}"
 grpc_retry="${GRPC_RETRY:-0}" # number of times to retry a failed request
 tc_version="${TC_VERSION-}"
 tc_url="${TC_URL-}"
+transak_config_file="${TRANSAK_CONFIG_FILE-}"
 
 args=(
 	--grpc-ip "${grpc_host}"
@@ -54,6 +55,9 @@ if [ -n "${forced_update_config_file_v1}" ]; then
 fi
 if [ "${use_tls}" = "true" ]; then
 	args+=( --secure )
+fi
+if [ -n "${transak_config_file}" ]; then
+	args+=( --transak-config "${transak_config_file}" )
 fi
 
 # Inherits env vars and args.
