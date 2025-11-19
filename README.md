@@ -435,7 +435,7 @@ In this example a buffer of 10% was used.
 ## Submission Status
 
 A GET request to `/submissionStatus/{transactionHash OR submissionId}` returns a
-JSON object summarizing the status of a transfer or credential deployment.
+JSON object summarizing the status of a transfer, credential deployment, or register data transaction.
 On success, the response is of the following form:
 ```
 {
@@ -557,6 +557,9 @@ This field is present if the `status` field is `committed` or `finalized`, and t
 - if the value of the `"type"` field is `"resumed"`, the following additional fields are present:
   - `"address"` - the contract address of the contract that was resumed,
   - `"success"` - a bool indicating whether the operation that was invoked succeeded.
+
+#### `registeredData` (optional)
+This field is present if the `status` field is `committed` or `finalized`, and the `outcome` field is `success`, and the transaction is `RegisterData`. The value is the registered data encoded as hex.
 
 ## Credential deployment/account creation
 

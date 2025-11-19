@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+- `/v0/submissionStatus` now supports RegisterData transactions.
+
 ## [0.42.0] - 2025-11-11
 
 - Add `POST` endpoint `/v0/transakOnRamp` for starting a Transak on-ramp session.
