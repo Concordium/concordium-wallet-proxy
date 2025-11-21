@@ -1469,6 +1469,16 @@ getSimpleTransactionStatus i trHash = do
                                 )
                         TxSuccess _ -> return []
                         TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
+                TSTAccountTransaction (Just TTRegisterData) ->
+                    case tsResult of
+                        TxSuccess [DataRegistered{drData = registeredData}] ->
+                            return
+                                ( [ "outcome" .= String "success",
+                                    "registeredData" .= registeredData
+                                  ]
+                                )
+                        TxSuccess _ -> return []
+                        TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
                 _ -> case tsResult of
                     TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
                     _ -> Left OCEUnsupportedType
