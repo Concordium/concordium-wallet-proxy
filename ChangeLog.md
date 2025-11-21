@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+## [0.43.0] - 2025-11-21
+
 - `/v0/submissionStatus` now supports RegisterData transactions.
 
 ## [0.42.0] - 2025-11-11
