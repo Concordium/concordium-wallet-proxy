@@ -29,6 +29,9 @@ instance Internationalizable TransactionSummaryType where
 instance Internationalizable Event where
     i18n = i18nEvent
 
+instance Internationalizable SupplementedEvent where
+    i18n = i18nSupplementedEvent
+
 instance Internationalizable SpecialTransactionOutcome where
     i18n = i18nSpecialEvent
 

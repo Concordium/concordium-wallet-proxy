@@ -197,7 +197,79 @@ translation = I18n{..}
     i18nEvent TokenMint{..} = Text.pack (tokenAmountToString etmAmount) <> " " <> Text.pack (show etmTokenId) <> " minted to " <> Text.pack (show etmTarget) <> "."
     i18nEvent TokenBurn{..} = Text.pack (tokenAmountToString etbAmount) <> " " <> Text.pack (show etbTokenId) <> " burned from " <> Text.pack (show etbTarget) <> "."
     i18nEvent TokenCreated{..} = "Token created: " <> Text.pack (showPrettyJSON etcPayload)
-    i18nSpecialEvent BakingRewards{..} =
+    i18nSupplementedEvent (ModuleDeployed mref) = "Deployed module " <> descrModule mref
+    i18nSupplementedEvent ContractInitialized{..} =
+        "Initialized smart contract "
+            <> initContractName ecInitName
+            <> " at address "
+            <> descrInstance ecAddress
+            <> " with balance "
+            <> descrAmount ecAmount
+            <> ". "
+            <> Text.pack (show (length ecEvents))
+            <> " events were logged"
+    i18nSupplementedEvent Updated{..} =
+        let (cname, fname) = contractAndFunctionName euReceiveName
+        in  "Invoked smart contract: source="
+                <> descrAddress euInstigator
+                <> ", target="
+                <> descrInstance euAddress
+                <> ", contract= "
+                <> cname
+                <> ", function= "
+                <> fname
+                <> ", amount="
+                <> descrAmount euAmount
+                <> ", message="
+                <> Text.pack (show euMessage)
+    i18nSupplementedEvent (Transferred sender amt recv) = "Transferred " <> descrAmount amt <> " from " <> descrAddress sender <> " to " <> descrAddress recv
+    i18nSupplementedEvent (AccountCreated addr) = "Created account with address " <> descrAccount addr
+    i18nSupplementedEvent (CredentialDeployed _ addr) = "Deployed a credential to account " <> descrAccount addr
+    i18nSupplementedEvent BakerAdded{..} = "Added validator " <> descrBaker ebaBakerId ebaAccount <> " and initial stake " <> descrAmount ebaStake
+    i18nSupplementedEvent BakerRemoved{..} = "Removed validator " <> descrBaker ebrBakerId ebrAccount
+    i18nSupplementedEvent BakerStakeIncreased{..} = "Stake of validator " <> descrBaker ebsiBakerId ebsiAccount <> " increased to " <> descrAmount ebsiNewStake
+    i18nSupplementedEvent BakerStakeDecreased{..} = "Stake of validator " <> descrBaker ebsiBakerId ebsiAccount <> " decreased to " <> descrAmount ebsiNewStake
+    i18nSupplementedEvent BakerSetRestakeEarnings{..} = "Validator " <> descrBaker ebsreBakerId ebsreAccount <> if ebsreRestakeEarnings then " set to restake earnings." else " unset restaking of earnings."
+    i18nSupplementedEvent BakerKeysUpdated{..} = "Validator " <> descrBaker ebkuBakerId ebkuAccount <> " keys updated."
+    i18nSupplementedEvent CredentialKeysUpdated{..} = "Updated keys of credential with ID " <> Text.pack (show ckuCredId)
+    i18nSupplementedEvent NewEncryptedAmount{..} = "New encrypted amount added to account " <> descrAccount neaAccount
+    i18nSupplementedEvent EncryptedAmountsRemoved{..} = "Consumed encrypted amounts on account " <> descrAccount earAccount
+    i18nSupplementedEvent EncryptedSelfAmountAdded{..} = "Updated shielded balance of account " <> descrAccount eaaAccount
+    i18nSupplementedEvent AmountAddedByDecryption{..} = "Unshielded " <> descrAmount aabdAmount <> " on account " <> descrAccount aabdAccount
+    i18nSupplementedEvent UpdateEnqueued{} = "Chain update event enqueued."
+    i18nSupplementedEvent TransferredWithSchedule{..} = "Transferred with schedule from " <> descrAccount etwsFrom <> " to " <> descrAccount etwsTo
+    i18nSupplementedEvent CredentialsUpdated{..} = "Credentials on account " <> descrAccount cuAccount <> " updated."
+    i18nSupplementedEvent DataRegistered{} = "Data registered on the chain."
+    i18nSupplementedEvent TransferMemo{..} = "Memo '" <> Text.pack (show tmMemo) <> "' included in a transfer." -- TODO: This would ideally try to render the Memo in a readable way, if it is a valid string or integer, say.
+    i18nSupplementedEvent Interrupted{..} = "Execution of " <> descrInstance iAddress <> " triggered an operation."
+    i18nSupplementedEvent Resumed{..} | rSuccess = "Operation succeeded and execution of " <> descrInstance rAddress <> " resumed."
+    i18nSupplementedEvent Resumed{..} | otherwise = "Operation failed and execution of " <> descrInstance rAddress <> " resumed."
+    i18nSupplementedEvent Upgraded{..} = "Smart contract instance at " <> descrInstance euAddress <> " was upgraded from " <> descrModule euFrom <> " to " <> descrModule euTo <> "."
+    i18nSupplementedEvent BakerSetOpenStatus{..} = "Open status of validator " <> descrBaker ebsosBakerId ebsosAccount <> " set to " <> descrOpenStatus ebsosOpenStatus
+    i18nSupplementedEvent BakerSetMetadataURL{..} = "Metadata URL of validator " <> descrBaker ebsmuBakerId ebsmuAccount <> " set to " <> descrMetadataURL ebsmuMetadataURL
+    i18nSupplementedEvent BakerSetTransactionFeeCommission{..} = "Transaction fee commission of validator " <> descrBaker ebstfcBakerId ebstfcAccount <> " set to " <> descrAmountFraction ebstfcTransactionFeeCommission
+    i18nSupplementedEvent BakerSetBakingRewardCommission{..} = "Block reward commission of validator " <> descrBaker ebsbrcBakerId ebsbrcAccount <> " set to " <> descrAmountFraction ebsbrcBakingRewardCommission
+    i18nSupplementedEvent BakerSetFinalizationRewardCommission{..} = "Finalization reward commission of validator " <> descrBaker ebsfrcBakerId ebsfrcAccount <> " set to " <> descrAmountFraction ebsfrcFinalizationRewardCommission
+    i18nSupplementedEvent DelegationStakeIncreased{..} = "Stake of delegator " <> descrDelegator edsiDelegatorId edsiAccount <> " increased to " <> descrAmount edsiNewStake
+    i18nSupplementedEvent DelegationStakeDecreased{..} = "Stake of delegator " <> descrDelegator edsdDelegatorId edsdAccount <> " decreased to " <> descrAmount edsdNewStake
+    i18nSupplementedEvent DelegationSetRestakeEarnings{..} = "Delegator " <> descrDelegator edsreDelegatorId edsreAccount <> if edsreRestakeEarnings then " set to restake earnings." else " unset restaking of earnings."
+    i18nSupplementedEvent DelegationSetDelegationTarget{..} =
+        "Delegator "
+            <> descrDelegator edsdtDelegatorId edsdtAccount
+            <> " set delegation target to "
+            <> case edsdtDelegationTarget of
+                DelegatePassive -> "passive delegation"
+                DelegateToBaker bid -> "staking pool " <> Text.pack (show bid)
+    i18nSupplementedEvent DelegationAdded{..} = "Added delegator " <> descrDelegator edaDelegatorId edaAccount
+    i18nSupplementedEvent DelegationRemoved{..} = "Removed delegator " <> descrDelegator edrDelegatorId edrAccount
+    i18nSupplementedEvent BakerSuspended{..} = "Validator " <> descrBaker ebsBakerId ebsAccount <> " was suspended."
+    i18nSupplementedEvent BakerResumed{..} = "Validator " <> descrBaker ebrBakerId ebrAccount <> " was resumed."
+    i18nSupplementedEvent (TokenModuleEvent tokenId type' _) = Text.pack (show tokenId) <> " token module event occurred of type " <> Text.pack (show type') <> "." -- TODO: It would be ideally to render the `details` in a readable way in the wallets.
+    i18nSupplementedEvent (TokenTransfer tokenId from to amount memo) = Text.pack (tokenAmountToString amount) <> " " <> Text.pack (show tokenId) <> " transferred from " <> Text.pack (show from) <> " to " <> Text.pack (show to) <> maybe "" (\m -> " with memo " <> Text.pack (show m)) memo <> "." -- TODO: It would be ideally to render the `memo` in a readable way in the wallets.
+    i18nSupplementedEvent TokenMint{..} = Text.pack (tokenAmountToString etmAmount) <> " " <> Text.pack (show etmTokenId) <> " minted to " <> Text.pack (show etmTarget) <> "."
+    i18nSupplementedEvent TokenBurn{..} = Text.pack (tokenAmountToString etbAmount) <> " " <> Text.pack (show etbTokenId) <> " burned from " <> Text.pack (show etbTarget) <> "."
+    i18nSupplementedEvent TokenCreated{..} = "Token created: " <> Text.pack (showPrettyJSON etcPayload)
+    i18nSpeciaEvent BakingRewards{..} =
         "Block rewards\n"
             <> Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)
     i18nSpecialEvent Mint{..} =

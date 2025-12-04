@@ -1333,17 +1333,18 @@ getSimpleTransactionStatus i trHash = do
     addMemo _ xs = xs
 
     outcomeToPairs :: SupplementedTransactionSummary -> Either OutcomeConversionError [Pair]
-    outcomeToPairs TransactionSummary{..} =
-        ( [ "transactionHash" .= tsHash,
-            "sender" .= tsSender,
-            "cost" .= tsCost
+    outcomeToPairs SupplementedTransactionSummary{..} =
+        ( [ "transactionHash" .= stsHash,
+            "sender" .= stsSender,
+            "cost" .= stsCost,
+            "sponsor" .= stsSponsorDetails
           ]
             <>
         )
-            <$> case tsType of
+            <$> case stsType of
                 TSTCredentialDeploymentTransaction _ ->
                     -- credential deployment
-                    case tsResult of
+                    case stsResult of
                         TxSuccess [AccountCreated{}, _] ->
                             return ["outcome" .= String "success"]
                         TxSuccess [CredentialDeployed{}] ->
@@ -1352,7 +1353,7 @@ getSimpleTransactionStatus i trHash = do
                             Left . OCEError $ "Unexpected outcome of credential deployment: " ++ show es
                 (viewTransfer -> True) ->
                     -- transaction is either a transfer or transfer with memo
-                    case tsResult of
+                    case stsResult of
                         TxSuccess (Transferred{etTo = AddressAccount addr, ..} : mmemo) ->
                             return $
                                 addMemo
@@ -1365,7 +1366,7 @@ getSimpleTransactionStatus i trHash = do
                         es ->
                             Left . OCEError $ "Unexpected outcome of simple transfer: " ++ show es
                 (viewEncryptedTransfer -> True) ->
-                    case tsResult of
+                    case stsResult of
                         TxSuccess (EncryptedAmountsRemoved{..} : NewEncryptedAmount{..} : mmemo) ->
                             return $
                                 addMemo
@@ -1382,7 +1383,7 @@ getSimpleTransactionStatus i trHash = do
                         es ->
                             Left . OCEError $ "Unexpected outcome of encrypted transfer: " ++ show es
                 TSTAccountTransaction (Just TTTransferToPublic) ->
-                    case tsResult of
+                    case stsResult of
                         TxSuccess [EncryptedAmountsRemoved{..}, AmountAddedByDecryption{..}] ->
                             return
                                 [ "outcome" .= String "success",
@@ -1396,7 +1397,7 @@ getSimpleTransactionStatus i trHash = do
                         es ->
                             Left . OCEError $ "Unexpected outcome of secret to public transfer: " ++ show es
                 TSTAccountTransaction (Just TTTransferToEncrypted) ->
-                    case tsResult of
+                    case stsResult of
                         TxSuccess [EncryptedSelfAmountAdded{..}] ->
                             return
                                 [ "outcome" .= String "success",
@@ -1408,7 +1409,7 @@ getSimpleTransactionStatus i trHash = do
                         es ->
                             Left . OCEError $ "Unexpected outcome of public to secret transfer: " ++ show es
                 TSTAccountTransaction (Just TTConfigureBaker) ->
-                    case tsResult of
+                    case stsResult of
                         TxSuccess ((eventBakerId -> (Just bid)) : _) ->
                             return
                                 [ "outcome" .= String "success",
@@ -1417,11 +1418,11 @@ getSimpleTransactionStatus i trHash = do
                         TxSuccess _ -> return ["outcome" .= String "success"]
                         TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
                 TSTAccountTransaction (Just TTConfigureDelegation) ->
-                    case tsResult of
+                    case stsResult of
                         TxSuccess _ -> return ["outcome" .= String "success"]
                         TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
                 TSTAccountTransaction (Just TTDeployModule) ->
-                    case tsResult of
+                    case stsResult of
                         TxSuccess [ModuleDeployed mref] ->
                             return
                                 [ "outcome" .= String "success",
@@ -1431,7 +1432,7 @@ getSimpleTransactionStatus i trHash = do
                         es ->
                             Left . OCEError $ "Unexpected outcome of deploying module: " ++ show es
                 TSTAccountTransaction (Just TTInitContract) ->
-                    case tsResult of
+                    case stsResult of
                         TxSuccess [ContractInitialized{..}] ->
                             return
                                 [ "outcome" .= String "success",
@@ -1446,7 +1447,7 @@ getSimpleTransactionStatus i trHash = do
                         es ->
                             Left . OCEError $ "Unexpected outcome of initialized module: " ++ show es
                 TSTAccountTransaction (Just TTUpdate) ->
-                    case tsResult of
+                    case stsResult of
                         TxSuccess events ->
                             case eventsToMaybeValues events of
                                 Just vals ->
@@ -1454,10 +1455,10 @@ getSimpleTransactionStatus i trHash = do
                                         [ "outcome" .= String "success",
                                           "trace" .= vals
                                         ]
-                                Nothing -> Left . OCEError $ "Unexpected outcome of updating module: " ++ show tsResult
+                                Nothing -> Left . OCEError $ "Unexpected outcome of updating module: " ++ show stsResult
                         TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
                 TSTAccountTransaction (Just TTTokenUpdate) ->
-                    case tsResult of
+                    case stsResult of
                         TxSuccess [TokenTransfer{ettTo = HolderAccount{haAccount = transferDestination}, ..}] ->
                             return
                                 ( [ "outcome" .= String "success",
@@ -1470,7 +1471,7 @@ getSimpleTransactionStatus i trHash = do
                         TxSuccess _ -> return []
                         TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
                 TSTAccountTransaction (Just TTRegisterData) ->
-                    case tsResult of
+                    case stsResult of
                         TxSuccess [DataRegistered{drData = registeredData}] ->
                             return
                                 ( [ "outcome" .= String "success",
@@ -1479,7 +1480,7 @@ getSimpleTransactionStatus i trHash = do
                                 )
                         TxSuccess _ -> return []
                         TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
-                _ -> case tsResult of
+                _ -> case stsResult of
                     TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
                     _ -> Left OCEUnsupportedType
     outcomesToPairs :: [SupplementedTransactionSummary] -> Either OutcomeConversionError [Pair]
@@ -1935,7 +1936,12 @@ getMetadataUrl = do
             return MetadataURL{..}
 
 -- | List transactions for the account.
-getAccountTransactionsWorker :: IncludeMemos -> IncludeSuspensionEvents -> IncludePltEvents -> Text -> Handler TypedContent
+getAccountTransactionsWorker
+    :: IncludeMemos ->
+    IncludeSuspensionEvents ->
+    IncludePltEvents ->
+    Text ->
+    Handler TypedContent
 getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEvents addrText = do
     i <- internationalize
     -- Get the canonical address of the account.
@@ -2060,6 +2066,16 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                                 E.||. extractedType E.==. E.val (Just "encryptedAmountTransferWithMemo")
                 Just _ -> Nothing
 
+        maybeSponsoredTxFilter <- lookupGetParam "includeSponsoredTransactions" <&> \case
+            Nothing -> Just $ const $ return () -- the default: do not exclude sponsored transactions.
+            Just "y" -> Just $ const $ return ()
+            -- check that the transaction is not sponsored.
+            Just "n" -> Just $ \s ->
+                let isSponsored sql = (coerced sql EJ.#>. ["Left", "details", "AccountTransaction"]) EJ.?. "sponsor"
+                in
+                E.where_ (E.not_ (isSponsored s))
+            Just _ -> Nothing
+
         -- For older versions than v2 of the endpoint, we exclude suspension events.
         let suspensionFilter = case includeSuspensionEvents of
                 IncludeSuspensionEvents -> const $ return ()
@@ -2085,15 +2101,16 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                                     )
 
         rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
-        case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter, maybeTypeFilter) of
-            (Nothing, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
-            (_, Nothing, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeTo' parameter.") RequestInvalid
-            (_, _, Nothing, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockReward' parameter.") RequestInvalid
-            (_, _, _, Nothing, _, _, _) -> respond400Error (EMParseError "Unsupported 'finalizationReward' parameter.") RequestInvalid
-            (_, _, _, _, Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'bakingReward' parameter.") RequestInvalid
-            (_, _, _, _, _, Nothing, _) -> respond400Error (EMParseError "Unsupported 'onlyEncrypted' parameter.") RequestInvalid
-            (_, _, _, _, _, _, Nothing) -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
-            (Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter, Just encryptedFilter, Just typeFilter) -> do
+        case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter, maybeTypeFilter, maybeSponsoredTxFilter) of
+            (Nothing, _, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
+            (_, Nothing, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeTo' parameter.") RequestInvalid
+            (_, _, Nothing, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockReward' parameter.") RequestInvalid
+            (_, _, _, Nothing, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'finalizationReward' parameter.") RequestInvalid
+            (_, _, _, _, Nothing, _, _, _) -> respond400Error (EMParseError "Unsupported 'bakingReward' parameter.") RequestInvalid
+            (_, _, _, _, _, Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'onlyEncrypted' parameter.") RequestInvalid
+            (_, _, _, _, _, _, Nothing, _) -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
+            (_, _, _, _, _, _, _, Nothing) -> respond400Error (EMParseError "Unsupported 'includeSponsoredTransaction' parameter.") RequestInvalid
+            (Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter, Just encryptedFilter, Just typeFilter, Just sponsoredTxFilter) -> do
                 entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
                     E.select $ E.from $ \(e `E.InnerJoin` s) -> do
                         -- Assert join
@@ -2115,6 +2132,7 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                         typeFilter s
                         suspensionFilter s
                         pltFilter s
+                        sponsoredTxFilter s
                         -- sort with the requested method or ascending over EntryId.
                         E.orderBy [ordering (e E.^. EntryId)]
                         -- Limit the number of returned rows
@@ -2317,14 +2335,14 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                           "events" .= [i18n i v]
                         ]
                 ]
-        AE.Success (Left TransactionSummary{..}) -> do
+        AE.Success (Left SupplementedTransactionSummary{..}) -> do
             let addMemo mmemo ps =
                     case includeMemos of
                         ExcludeMemo -> ps
                         IncludeMemo -> case mmemo of
                             [TransferMemo{..}] -> ("memo" .= tmMemo) : ps
                             _ -> ps
-            let (origin, selfOrigin) = case tsSender of
+            let (origin, selfOrigin) = case stsSender of
                     Just sender
                         | sameAccount sender self -> (object ["type" .= ("self" :: Text)], True)
                         | otherwise -> (object ["type" .= ("account" :: Text), "address" .= sender], False)
@@ -2336,10 +2354,10 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                     includeMemos == IncludeMemo || case x of
                         TransferMemo{} -> False
                         _ -> True
-                (resultDetails, subtotal) = case tsResult of
+                (resultDetails, subtotal) = case stsResult of
                     TxSuccess evts ->
                         ( ["outcome" .= ("success" :: Text), "events" .= (fmap (i18n i) . filter filterTransferMemo $ evts)]
-                            <> case (tsType, evts) of
+                            <> case (stsType, evts) of
                                 (viewTransfer -> True, Transferred (AddressAccount fromAddr) amt (AddressAccount toAddr) : mmemo) ->
                                     addMemo
                                         mmemo
@@ -2393,20 +2411,20 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                         in  (["outcome" .= ("reject" :: Text), "rejectReason" .= i18n i reason] ++ rawReason, Nothing)
 
                 details = case includeMemos of
-                    IncludeMemo -> object $ ["type" .= renderTransactionSummaryType tsType, "description" .= i18n i tsType] <> resultDetails
-                    ExcludeMemo -> object $ ["type" .= renderTransactionSummaryType (forgetMemoInSummary tsType), "description" .= i18n i tsType] <> resultDetails
+                    IncludeMemo -> object $ ["type" .= renderTransactionSummaryType stsType, "description" .= i18n i stsType] <> resultDetails
+                    ExcludeMemo -> object $ ["type" .= renderTransactionSummaryType (forgetMemoInSummary stsType), "description" .= i18n i stsType] <> resultDetails
 
                 costs
                     | selfOrigin = case subtotal of
-                        Nothing -> let total = -toInteger tsCost in ["cost" .= show (toInteger tsCost), "total" .= show total]
+                        Nothing -> let total = -toInteger stsCost in ["cost" .= show (toInteger stsCost), "total" .= show total]
                         Just st ->
-                            let total = st - toInteger tsCost
-                            in  ["subtotal" .= show st, "cost" .= show (toInteger tsCost), "total" .= show total]
+                            let total = st - toInteger stsCost
+                            in  ["subtotal" .= show st, "cost" .= show (toInteger stsCost), "total" .= show total]
                     | otherwise = ["total" .= show (fromMaybe 0 subtotal)]
 
-                encryptedCost = case tsSender of
+                encryptedCost = case stsSender of
                     Just sender
-                        | sameAccount sender self -> case (tsType, tsResult) of
+                        | sameAccount sender self -> case (stsType, stsResult) of
                             (viewEncryptedTransfer -> True, TxSuccess (EncryptedAmountsRemoved{..} : NewEncryptedAmount{..} : _)) ->
                                 [ "encrypted"
                                     .= object
@@ -2425,7 +2443,7 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                             (TSTAccountTransaction (Just TTTransferToEncrypted), TxSuccess [EncryptedSelfAmountAdded{..}]) ->
                                 ["encrypted" .= object ["newSelfEncryptedAmount" .= eaaNewAmount]]
                             _ -> []
-                        | otherwise -> case (tsType, tsResult) of
+                        | otherwise -> case (stsType, stsResult) of
                             (viewEncryptedTransfer -> True, TxSuccess (EncryptedAmountsRemoved{} : NewEncryptedAmount{..} : _)) ->
                                 [ "encrypted"
                                     .= object
@@ -2437,9 +2455,10 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                     Nothing -> []
             return $
                 [ "origin" .= origin,
-                  "energy" .= tsEnergyCost,
+                  "energy" .= stsEnergyCost,
                   "details" .= details,
-                  "transactionHash" .= tsHash
+                  "transactionHash" .= stsHash,
+                  "sponsor" .= stsSponsorDetails
                 ]
                     <> costs
                     <> encryptedCost
@@ -2496,7 +2515,7 @@ forgetMemoInSummary :: TransactionSummaryType -> TransactionSummaryType
 forgetMemoInSummary (TSTAccountTransaction (Just tt)) = TSTAccountTransaction $ Just $ forgetMemoTransactionType tt
 forgetMemoInSummary other = other
 
-eventSubtotal :: AccountAddress -> [Event] -> Maybe Integer
+eventSubtotal :: AccountAddress -> [SupplementedEvent] -> Maybe Integer
 eventSubtotal self evts = case catMaybes $ eventCost <$> evts of
     [] -> Nothing
     l -> Just (sum l)
@@ -2600,8 +2619,8 @@ putGTUDropR addrText = do
                 Right (Finalized _ outcomeM) ->
                     case outcomeM of
                         Nothing -> StatusOk $ GRPCResponse hds $ Left "Expected exactly one outcome for a finalized transaction"
-                        Just TransactionSummary{..} ->
-                            case tsResult of
+                        Just SupplementedTransactionSummary{..} ->
+                            case stsResult of
                                 TxSuccess{} -> StatusOk $ GRPCResponse hds $ Right True
                                 -- Transaction was finalized but it was rejected.
                                 TxReject{} -> StatusOk $ GRPCResponse hds $ Right False
