@@ -92,6 +92,7 @@ import qualified Concordium.Wasm as Wasm
 import Concordium.Client.GRPC2
 import Concordium.Client.Runner.Helper
 import Concordium.Client.Types.Transaction (
+    ExtendedCostOptions (..),
     accountDecryptEnergyCost,
     accountDecryptPayloadSize,
     accountEncryptEnergyCost,
@@ -958,6 +959,7 @@ getMemoPayloadSize pv = do
 -- | Get the cost of a transaction, based on its type. The following query parameters are supported
 --  - "type", the type of the transaction. This is mandatory.
 --  - "numSignatures", the number of signatures on the transaction, defaults to 1 if not present.
+--  - "sponsored", whether the transaction will be sponsored.
 --  - additional transaction type specific query parameters
 getTransactionCostR :: Handler TypedContent
 getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
@@ -968,6 +970,9 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
   where
     handleTransactionCost pv rate numSignatures = do
         transactionType <- lookupGetParam "type"
+        sponsored <- lookupGetParam "sponsored"
+
+        let extendedCostOptions = Just $ ExtendedCostOptions{hasSponsor = isJust sponsored}
 
         let costResponse energyCost =
                 sendResponse $
@@ -987,7 +992,7 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
             Just tty -> case Text.unpack tty of
                 "simpleTransfer" -> do
                     memoPayloadSize <- getMemoPayloadSize pv
-                    costResponse $ simpleTransferEnergyCost (simpleTransferPayloadSize + memoPayloadSize) numSignatures
+                    costResponse $ simpleTransferEnergyCost (simpleTransferPayloadSize + memoPayloadSize) numSignatures extendedCostOptions
                 "tokenUpdate" -> do
                     listOperationSize <-
                         lookupGetParam "listOperationsSize" >>= \case
@@ -1029,29 +1034,30 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                             respond400Error (EMParseError $ "Token operation specific cost error: " <> show err) RequestInvalid
                         Right cost -> pure cost
 
-                    costResponse $ tokenUpdateTransactionEnergyCost (fromIntegral tokenUpdateTransactionSize) tokenOperationSpecificCost numSignatures
+                    costResponse $ tokenUpdateTransactionEnergyCost (fromIntegral tokenUpdateTransactionSize) tokenOperationSpecificCost numSignatures extendedCostOptions
                 "encryptedTransfer" -> do
                     memoPayloadSize <- getMemoPayloadSize pv
-                    costResponse $ encryptedTransferEnergyCost (encryptedTransferPayloadSize + memoPayloadSize) numSignatures
+                    costResponse $ encryptedTransferEnergyCost (encryptedTransferPayloadSize + memoPayloadSize) numSignatures extendedCostOptions
                 "transferToSecret" ->
                     costResponse $ accountEncryptEnergyCost accountEncryptPayloadSize numSignatures
                 "transferToPublic" ->
-                    costResponse $ accountDecryptEnergyCost accountDecryptPayloadSize numSignatures
+                    costResponse $ accountDecryptEnergyCost accountDecryptPayloadSize numSignatures extendedCostOptions
                 "registerDelegation" -> do
                     isTargetPassiveDelegation <- isJust <$> lookupGetParam "passive"
                     costResponse $
                         delegationConfigureEnergyCost
                             (registerDelegationPayloadSize isTargetPassiveDelegation)
                             numSignatures
+                            extendedCostOptions
                 "updateDelegation" -> do
                     isAmountUpdated <- isJust <$> lookupGetParam "amount"
                     isRestakeUpdated <- isJust <$> lookupGetParam "restake"
                     isTargetUpdated <- isJust <$> lookupGetParam "target"
                     isTargetPassiveDelegation <- isJust <$> lookupGetParam "passive"
                     let pSize = updateDelegationPayloadSize isAmountUpdated isRestakeUpdated isTargetUpdated isTargetPassiveDelegation
-                    costResponse $ delegationConfigureEnergyCost pSize numSignatures
+                    costResponse $ delegationConfigureEnergyCost pSize numSignatures extendedCostOptions
                 "removeDelegation" ->
-                    costResponse $ delegationConfigureEnergyCost removeDelegationPayloadSize numSignatures
+                    costResponse $ delegationConfigureEnergyCost removeDelegationPayloadSize numSignatures extendedCostOptions
                 "registerBaker" -> do
                     metasize <-
                         lookupGetParam "metadataSize" >>= \case
@@ -1060,12 +1066,12 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                                 Nothing -> respond400Error (EMParseError "Could not parse `metadataSize` value.") RequestInvalid
                                 Just v -> return $ Just v
                     let pSize = bakerConfigurePayloadSize True True True True metasize True True True False
-                    costResponse $ bakerConfigureEnergyCostWithKeys pSize numSignatures
+                    costResponse $ bakerConfigureEnergyCostWithKeys pSize numSignatures extendedCostOptions
                 "updateBakerStake" -> do
                     isAmountUpdated <- isJust <$> lookupGetParam "amount"
                     isRestakeUpdated <- isJust <$> lookupGetParam "restake"
                     let pSize = bakerConfigurePayloadSize isAmountUpdated isRestakeUpdated False False Nothing False False False False
-                    costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
+                    costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures extendedCostOptions
                 "updateBakerPool" -> do
                     metasize <-
                         lookupGetParam "metadataSize" >>= \case
@@ -1078,7 +1084,7 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                     isBComUpdated <- isJust <$> lookupGetParam "bakerRewardCommission"
                     isFComUpdated <- isJust <$> lookupGetParam "finalizationRewardCommission"
                     let pSize = bakerConfigurePayloadSize False False isOpenStatusUpdated False metasize isTComUpdated isBComUpdated isFComUpdated False
-                    costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
+                    costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures extendedCostOptions
                 "update" -> do
                     invoker <-
                         lookupGetParam "sender" >>= \case
@@ -1139,7 +1145,7 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                                 + Text.length (Wasm.receiveName wasmReceiveName) -- the number of bytes inside the receive name
                                 + 2 -- 2 bytes for the length of the parameter
                                 + BSS.length (Wasm.parameter wasmParameter) -- the number of bytes inside the parameter
-                    let minCost = minimumCost (fromIntegral pSize) numSignatures
+                    let minCost = minimumCost (fromIntegral pSize) numSignatures extendedCostOptions
                     let invokeContext =
                             InvokeContract.ContractContext
                                 { ccInvoker = invoker,
@@ -1165,10 +1171,10 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                     runGRPC getInvokeCost $ costResponseWithIndication . cost
                 "updateBakerKeys" -> do
                     let pSize = bakerConfigurePayloadSize False False False True Nothing False False False False
-                    costResponse $ bakerConfigureEnergyCostWithKeys pSize numSignatures
+                    costResponse $ bakerConfigureEnergyCostWithKeys pSize numSignatures Nothing
                 "removeBaker" -> do
                     let pSize = bakerConfigurePayloadSize True False False False Nothing False False False False
-                    costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures
+                    costResponse $ bakerConfigureEnergyCostWithoutKeys pSize numSignatures Nothing
                 "configureBaker" -> do
                     metasize <-
                         lookupGetParam "metadataSize" >>= \case
@@ -1199,6 +1205,7 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
                         (if areKeysUpdated then bakerConfigureEnergyCostWithKeys else bakerConfigureEnergyCostWithoutKeys)
                             pSize
                             numSignatures
+                            Nothing
                 tty' -> respond400Error (EMParseError $ "Could not parse transaction type: " <> tty') RequestInvalid
     fetchUpdates :: ClientMonad IO (GRPCResult (Either String (EnergyRate, ProtocolVersion)))
     fetchUpdates = do
@@ -1334,11 +1341,13 @@ getSimpleTransactionStatus i trHash = do
 
     outcomeToPairs :: SupplementedTransactionSummary -> Either OutcomeConversionError [Pair]
     outcomeToPairs SupplementedTransactionSummary{..} =
-        ( ([ "transactionHash" .= stsHash,
-            "sender" .= stsSender,
-            "cost" .= stsCost,
-            "sponsor" .= stsSponsorDetails
-          ] ++ ["sponsor" .= sponsorDetails | Just sponsorDetails <- [stsSponsorDetails]])
+        ( ( [ "transactionHash" .= stsHash,
+              "sender" .= stsSender,
+              "cost" .= stsCost,
+              "sponsor" .= stsSponsorDetails
+            ]
+                ++ ["sponsor" .= sponsorDetails | Just sponsorDetails <- [stsSponsorDetails]]
+          )
             <>
         )
             <$> case stsType of
@@ -1936,8 +1945,8 @@ getMetadataUrl = do
             return MetadataURL{..}
 
 -- | List transactions for the account.
-getAccountTransactionsWorker
-    :: IncludeMemos ->
+getAccountTransactionsWorker ::
+    IncludeMemos ->
     IncludeSuspensionEvents ->
     IncludePltEvents ->
     Text ->
@@ -2066,15 +2075,15 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                                 E.||. extractedType E.==. E.val (Just "encryptedAmountTransferWithMemo")
                 Just _ -> Nothing
 
-        maybeSponsoredTxFilter <- lookupGetParam "includeSponsoredTransactions" <&> \case
-            Nothing -> Just $ const $ return () -- the default: do not exclude sponsored transactions.
-            Just "y" -> Just $ const $ return ()
-            -- check that the transaction is not sponsored.
-            Just "n" -> Just $ \s ->
-                let isSponsored sql = (coerced sql EJ.#>. ["Left", "details", "AccountTransaction"]) EJ.?. "sponsor"
-                in
-                E.where_ (E.not_ (isSponsored s))
-            Just _ -> Nothing
+        maybeSponsoredTxFilter <-
+            lookupGetParam "includeSponsoredTransactions" <&> \case
+                Nothing -> Just $ const $ return () -- the default: do not exclude sponsored transactions.
+                Just "y" -> Just $ const $ return ()
+                -- check that the transaction is not sponsored.
+                Just "n" -> Just $ \s ->
+                    let isSponsored sql = (coerced sql EJ.#>. ["Left", "details", "AccountTransaction"]) EJ.?. "sponsor"
+                    in  E.where_ (E.not_ (isSponsored s))
+                Just _ -> Nothing
 
         -- For older versions than v2 of the endpoint, we exclude suspension events.
         let suspensionFilter = case includeSuspensionEvents of
@@ -2657,7 +2666,7 @@ putGTUDropR addrText = do
             Nothing -> runGRPC (getNextSequenceNumber dropAccount) $ \nonce -> do
                 currentTime <- liftIO $ round <$> getPOSIXTime
                 (payload, thEnergyAmount) <- case dropType of
-                    Normal -> return (Transfer addr dropAmount, simpleTransferEnergyCost simpleTransferPayloadSize numKeys)
+                    Normal -> return (Transfer addr dropAmount, simpleTransferEnergyCost simpleTransferPayloadSize numKeys Nothing)
                     Scheduled -> do
                         -- sample a random release schedule spaced by 5min.
                         numRels <- liftIO $ randomRIO (1 :: Word, 15)
@@ -2671,7 +2680,7 @@ putGTUDropR addrText = do
                                   )
                                 | i <- [1 .. numRels]
                                 ]
-                        return (TransferWithSchedule addr releases, transferWithScheduleEnergyCost (transferWithSchedulePayloadSize (fromIntegral numRels)) (fromIntegral numRels) numKeys)
+                        return (TransferWithSchedule addr releases, transferWithScheduleEnergyCost (transferWithSchedulePayloadSize (fromIntegral numRels)) (fromIntegral numRels) numKeys Nothing)
                 let
                     atrPayload = encodePayload payload
                     atrHeader =
