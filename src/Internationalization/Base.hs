@@ -47,7 +47,6 @@ data I18n = I18n
       i18nTransactionType :: TransactionType -> Text,
       i18nMalformedTransaction :: Text,
       i18nDeployCredential :: CredentialType -> Text,
-      i18nEvent :: Event -> Text,
       i18nSupplementedEvent :: SupplementedEvent -> Text,
       i18nUpdateTransaction :: UpdateType -> Text,
       i18nSpecialEvent :: SpecialTransactionOutcome -> Text,

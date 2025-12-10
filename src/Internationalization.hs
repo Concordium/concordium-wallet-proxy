@@ -26,9 +26,6 @@ instance Internationalizable TransactionSummaryType where
     i18n i (TSTCredentialDeploymentTransaction t) = i18nDeployCredential i t
     i18n i (TSTUpdateTransaction t) = i18nUpdateTransaction i t
 
-instance Internationalizable Event where
-    i18n = i18nEvent
-
 instance Internationalizable SupplementedEvent where
     i18n = i18nSupplementedEvent
 
