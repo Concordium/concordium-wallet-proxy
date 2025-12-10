@@ -269,7 +269,7 @@ translation = I18n{..}
     i18nSupplementedEvent TokenMint{..} = Text.pack (tokenAmountToString etmAmount) <> " " <> Text.pack (show etmTokenId) <> " minted to " <> Text.pack (show etmTarget) <> "."
     i18nSupplementedEvent TokenBurn{..} = Text.pack (tokenAmountToString etbAmount) <> " " <> Text.pack (show etbTokenId) <> " burned from " <> Text.pack (show etbTarget) <> "."
     i18nSupplementedEvent TokenCreated{..} = "Token created: " <> Text.pack (showPrettyJSON etcPayload)
-    i18nSpeciaEvent BakingRewards{..} =
+    i18nSpecialEvent BakingRewards{..} =
         "Block rewards\n"
             <> Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)
     i18nSpecialEvent Mint{..} =
