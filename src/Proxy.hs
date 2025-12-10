@@ -1334,11 +1334,11 @@ getSimpleTransactionStatus i trHash = do
 
     outcomeToPairs :: SupplementedTransactionSummary -> Either OutcomeConversionError [Pair]
     outcomeToPairs SupplementedTransactionSummary{..} =
-        ( [ "transactionHash" .= stsHash,
+        ( ([ "transactionHash" .= stsHash,
             "sender" .= stsSender,
             "cost" .= stsCost,
             "sponsor" .= stsSponsorDetails
-          ]
+          ] ++ ["sponsor" .= sponsorDetails | Just sponsorDetails <- [stsSponsorDetails]])
             <>
         )
             <$> case stsType of
