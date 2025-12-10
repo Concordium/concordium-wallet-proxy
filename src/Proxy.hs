@@ -2460,8 +2460,9 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                   "transactionHash" .= stsHash,
                   "sponsor" .= stsSponsorDetails
                 ]
-                    <> costs
-                    <> encryptedCost
+                    ++ ["sponsor" .= sponsorDetails | Just sponsorDetails <- [stsSponsorDetails]]
+                        <> costs
+                        <> encryptedCost
     return $ object $ ["id" .= key] <> blockDetails <> transactionDetails
 
 -- | Check whether the two addresses point to the same account. In protocol
