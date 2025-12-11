@@ -1344,7 +1344,6 @@ getSimpleTransactionStatus i trHash = do
         ( ( [ "transactionHash" .= stsHash,
               "sender" .= stsSender,
               "cost" .= stsCost,
-              "sponsor" .= stsSponsorDetails
             ]
                 ++ ["sponsor" .= sponsorDetails | Just sponsorDetails <- [stsSponsorDetails]]
           )
@@ -2467,7 +2466,6 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                   "energy" .= stsEnergyCost,
                   "details" .= details,
                   "transactionHash" .= stsHash,
-                  "sponsor" .= stsSponsorDetails
                 ]
                     ++ ["sponsor" .= sponsorDetails | Just sponsorDetails <- [stsSponsorDetails]]
                         <> costs
