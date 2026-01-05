@@ -974,7 +974,7 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
         transactionType <- lookupGetParam "type"
         sponsored <- lookupGetParam "sponsored"
 
-        let extendedCostOptions = Just $ ExtendedCostOptions{hasSponsor = isJust sponsored}
+        let extendedCostOptions = fmap \_ -> ExtendedCostOptions{hasSponsor = True} sponsored
 
         let costResponse energyCost =
                 sendResponse $
