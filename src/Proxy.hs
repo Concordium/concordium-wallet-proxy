@@ -295,7 +295,7 @@ mkYesod
 /v0/submissionStatus/#Text SubmissionStatusR GET
 /v0/submitCredential/ CredentialR PUT
 /v0/submitTransfer/ TransferR PUT
-/v1/submitTransfer/ TransferRV1 PUT
+/v0/submitExtended/ ExtendedR PUT
 /v0/testnetGTUDrop/#Text GTUDropR PUT
 /v0/submitRawTransaction/ RawTransactionR PUT
 /v1/submitRawTransaction/ RawTransactionRV1 PUT
@@ -974,7 +974,7 @@ getTransactionCostR = withExchangeRate $ \(rate, pv) -> do
         transactionType <- lookupGetParam "type"
         sponsored <- lookupGetParam "sponsored"
 
-        let extendedCostOptions = fmap \_ -> ExtendedCostOptions{hasSponsor = True} sponsored
+        let extendedCostOptions = fmap (const ExtendedCostOptions{hasSponsor = True}) sponsored
 
         let costResponse energyCost =
                 sendResponse $
@@ -1284,8 +1284,8 @@ putTransferR =
                     Left err -> fail err
                     Right tx -> return tx
 
-putTransferRV1 :: Handler TypedContent
-putTransferRV1 =
+putExtendedR :: Handler TypedContent
+putExtendedR =
     connect rawRequestBody (sinkParserEither json') >>= \case
         Left err -> respond400Error (EMParseError (show err)) RequestInvalid
         Right txJSON ->
