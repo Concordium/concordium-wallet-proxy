@@ -298,7 +298,6 @@ mkYesod
 /v0/submitExtended/ ExtendedR PUT
 /v0/testnetGTUDrop/#Text GTUDropR PUT
 /v0/submitRawTransaction/ RawTransactionR PUT
-/v1/submitRawTransaction/ RawTransactionRV1 PUT
 /v0/global GlobalFileR GET
 /v0/health HealthR GET
 /v0/ip_info IpsR GET
@@ -1310,20 +1309,6 @@ putExtendedR =
 
 putRawTransactionR :: Handler TypedContent
 putRawTransactionR = do
-    binData <- runConduit $ rawRequestBody .| sinkLbs
-    case S.runGetLazy (getBareBlockItem SP8) binData of
-        Left err -> respond400Error (EMParseError err) RequestInvalid
-        Right bbi -> do
-            runGRPC (doSendBlockItem bbi) $ \case
-                False -> do
-                    -- transaction invalid
-                    $(logError) "Transaction rejected by the node."
-                    respond400Error EMTransactionRejected RequestInvalid
-                True ->
-                    sendResponse (object ["submissionId" .= (getHash bbi :: TransactionHash)])
-
-putRawTransactionRV1 :: Handler TypedContent
-putRawTransactionRV1 = do
     binData <- runConduit $ rawRequestBody .| sinkLbs
     case S.runGetLazy (getBareBlockItem SP10) binData of
         Left err -> respond400Error (EMParseError err) RequestInvalid
