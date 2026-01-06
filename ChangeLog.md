@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+- Support for sponsored transactions for `/v0/submitTransfer` and `v3/accTransactions`.
+
 ## [0.43.0] - 2025-11-21
 
 - `/v0/submissionStatus` now supports RegisterData transactions.
