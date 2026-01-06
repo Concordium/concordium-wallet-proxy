@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+## [0.44.0] - 2026-01-06
+
 - Support for sponsored transactions for `/v0/submitTransfer` and `v3/accTransactions`.
 
 ## [0.43.0] - 2025-11-21
