@@ -23,6 +23,7 @@ cooldowns and the available balance) and get the info if an account is on any al
   of a transfer or credential deployment
 * `PUT /v0/submitCredential`: deploy a credential/create an account
 * `PUT /v0/submitTransfer`: perform a simple transfer
+* `PUT /v0/submitExtended`: perform an extended transfer
 * `PUT /v0/submitRawTransaction`: perform a any raw transaction
 * `GET /v0/accTransactions/{account address}`: get the transactions affecting an account's ccd balance
 * `GET /v1/accTransactions/{account address}`: get the transactions affecting an account's ccd balance (including CCD transactions with memos)
@@ -586,6 +587,32 @@ The data that should be sent is as the one returned from the library provided as
 After submission of the transaction the responses are the same as for the submission of the credential. If successful
 a submission id is returned, which can be used to query the status of the transfer via the `/v0/submissionStatus` endpoint.
 
+## Submit extended transfer
+
+When submitting an extended transfer (e.g. when the transaction is sponsored)
+you should make a PUT request to `/v0/submitExtended` endpoint. The JSON encoded
+transaction has the form:
+
+```json
+{
+  "signatures": {
+    "sender": {
+      "0" : {
+        "0": "6f17c110965054b262ef0d6dee02f77dccb7bd031c2af324b544f5ee3e6e18b3fd1be8a95782e92a89dd40a1b69cad8a37e8b86fc9107c8528d8267212cf030b"
+      }
+    }
+    "sponsor": {
+      "0" : {
+        "0": "6f17c110965054b262ef0d6dee02f77dccb7bd031c2af324b544f5ee3e6e18b3fd1be8a95782e92a89dd40a1b69cad8a37e8b86fc9107c8528d8267212cf030b"
+      }
+      
+    }
+  },
+  "transaction": "<base 16 encoded extended transaction>"
+```
+
+If the submission was successful, a submission id is returned, which can be used to query the status
+of the transfer via the `/v0/submissionStatus` endpoint.
 
 ## Submit raw transaction
 
@@ -630,6 +657,9 @@ They support the following parameters.
   - `y`: only include shield, unshield, and transfer shielded transactions.
 - `includeRawRejectReason`: whether to include the raw rejection reason (the
   same JSON as returned by `GetTransactionStatus` gRPC endpoint).
+- `includeSponsoredTransactions`: whether to include sponsored transactions.
+  - `y`: include all sponsored transactions (The default).
+  - `n`: exclude sponsored transactions.
 
 The result is a JSON object with the following fields:
 - `order`: either `"ascending"` or `"descending"` indicating the ordering applied to the transactions.
@@ -788,6 +818,13 @@ It consists of the following fields:
 - The following field is present if the transaction is a register data transaction:
   - `registeredData`: hex encoding of the data that was registered
 
+#### `sponsor` (optional)
+A JSON object containing details about the sponsor of a transaction.
+It consists of the following fields:
+
+- `sponsor`: The account address of the sponsor.
+- `cost`: The transaction cost paid for by the sponsor.
+
 For the purposes of the above, a simple transfer is a transaction of type `"transfer"` which transfers funds from one account to another.
 A transactions of type `"transfer"` is not considered a simple transfer if the destination is a smart contract instance.
 ### Example
@@ -806,6 +843,10 @@ $ curl -XGET http://localhost:3000/v0/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8A
       },
       "energy": 59,
       "cost": 59,
+      "sponsor": {
+        "sponsor": "4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL",
+        "cost": 59
+      },
       "subtotal": 0,
       "transactionHash": "84bf1e2ef8d3af3063cdb681932990f71ddb3949655f55307a266e5d687b414f",
       "blockHash": "013c6d2dd67affd6f39b9a7b255d244055b53d68fe8b0add4839a20e911d04cb",
