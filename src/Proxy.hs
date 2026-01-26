@@ -2105,7 +2105,7 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                 Just "y" -> Just $ const $ return ()
                 -- check that the transaction is not sponsored.
                 Just "n" -> Just $ \s ->
-                    let isSponsored sql = (coerced sql EJ.#>. ["Left", "details", "AccountTransaction"]) EJ.?. "sponsor"
+                    let isSponsored sql = (coerced sql EJ.#>. ["Left", "details", "AccountTransaction"]) EJ.?. "sponsorDetails"
                     in  E.where_ (E.not_ (isSponsored s))
                 Just _ -> Nothing
 
