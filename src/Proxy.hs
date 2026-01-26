@@ -2099,16 +2099,6 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                                 E.||. extractedType E.==. E.val (Just "encryptedAmountTransferWithMemo")
                 Just _ -> Nothing
 
-        maybeSponsoredTxFilter <-
-            lookupGetParam "includeSponsoredTransactions" <&> \case
-                Nothing -> Just $ const $ return () -- the default: do not exclude sponsored transactions.
-                Just "y" -> Just $ const $ return ()
-                -- check that the transaction is not sponsored.
-                Just "n" -> Just $ \s ->
-                    let isSponsored sql = (coerced sql EJ.#>. ["Left", "details", "AccountTransaction"]) EJ.?. "sponsorDetails"
-                    in  E.where_ (E.not_ (isSponsored s))
-                Just _ -> Nothing
-
         -- For older versions than v2 of the endpoint, we exclude suspension events.
         let suspensionFilter = case includeSuspensionEvents of
                 IncludeSuspensionEvents -> const $ return ()
@@ -2134,16 +2124,15 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                                     )
 
         rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
-        case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter, maybeTypeFilter, maybeSponsoredTxFilter) of
-            (Nothing, _, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
-            (_, Nothing, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeTo' parameter.") RequestInvalid
-            (_, _, Nothing, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockReward' parameter.") RequestInvalid
-            (_, _, _, Nothing, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'finalizationReward' parameter.") RequestInvalid
-            (_, _, _, _, Nothing, _, _, _) -> respond400Error (EMParseError "Unsupported 'bakingReward' parameter.") RequestInvalid
-            (_, _, _, _, _, Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'onlyEncrypted' parameter.") RequestInvalid
-            (_, _, _, _, _, _, Nothing, _) -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
-            (_, _, _, _, _, _, _, Nothing) -> respond400Error (EMParseError "Unsupported 'includeSponsoredTransaction' parameter.") RequestInvalid
-            (Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter, Just encryptedFilter, Just typeFilter, Just sponsoredTxFilter) -> do
+        case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter, maybeTypeFilter) of
+            (Nothing, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
+            (_, Nothing, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeTo' parameter.") RequestInvalid
+            (_, _, Nothing, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockReward' parameter.") RequestInvalid
+            (_, _, _, Nothing, _, _, _) -> respond400Error (EMParseError "Unsupported 'finalizationReward' parameter.") RequestInvalid
+            (_, _, _, _, Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'bakingReward' parameter.") RequestInvalid
+            (_, _, _, _, _, Nothing, _) -> respond400Error (EMParseError "Unsupported 'onlyEncrypted' parameter.") RequestInvalid
+            (_, _, _, _, _, _, Nothing) -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
+            (Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter, Just encryptedFilter, Just typeFilter) -> do
                 entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
                     E.select $ E.from $ \(e `E.InnerJoin` s) -> do
                         -- Assert join
@@ -2165,7 +2154,6 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                         typeFilter s
                         suspensionFilter s
                         pltFilter s
-                        sponsoredTxFilter s
                         -- sort with the requested method or ascending over EntryId.
                         E.orderBy [ordering (e E.^. EntryId)]
                         -- Limit the number of returned rows
