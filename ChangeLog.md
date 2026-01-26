@@ -2,6 +2,10 @@
 
 ## [unreleased]
 
+## [0.44.1] - 2026-01-26
+
+- Alignment with database format from transaction logger
+
 ## [0.44.0] - 2026-01-06
 
 - Support for sponsored transactions for `/v0/submitTransfer` and `v3/accTransactions`.
