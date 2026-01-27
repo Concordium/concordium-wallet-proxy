@@ -657,9 +657,6 @@ They support the following parameters.
   - `y`: only include shield, unshield, and transfer shielded transactions.
 - `includeRawRejectReason`: whether to include the raw rejection reason (the
   same JSON as returned by `GetTransactionStatus` gRPC endpoint).
-- `includeSponsoredTransactions`: whether to include sponsored transactions.
-  - `y`: include all sponsored transactions (The default).
-  - `n`: exclude sponsored transactions.
 
 The result is a JSON object with the following fields:
 - `order`: either `"ascending"` or `"descending"` indicating the ordering applied to the transactions.

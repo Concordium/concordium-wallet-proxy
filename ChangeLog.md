@@ -2,9 +2,9 @@
 
 ## [unreleased]
 
-## [0.44.1] - 2026-01-26
+## [0.44.1] - 2026-01-27
 
-- Alignment with database format from transaction logger
+- Remove incorrect `includeSponsoredTransactions` filter
 
 ## [0.44.0] - 2026-01-06
 
