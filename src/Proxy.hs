@@ -2435,13 +2435,27 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                     IncludeMemo -> object $ ["type" .= renderTransactionSummaryType stsType, "description" .= i18n i stsType] <> resultDetails
                     ExcludeMemo -> object $ ["type" .= renderTransactionSummaryType (forgetMemoInSummary stsType), "description" .= i18n i stsType] <> resultDetails
 
-                costs
-                    | selfOrigin = case subtotal of
-                        Nothing -> let total = -toInteger stsCost in ["cost" .= show (toInteger stsCost), "total" .= show total]
-                        Just st ->
-                            let total = st - toInteger stsCost
-                            in  ["subtotal" .= show st, "cost" .= show (toInteger stsCost), "total" .= show total]
-                    | otherwise = ["total" .= show (fromMaybe 0 subtotal)]
+                -- Cost to the account. If it's the sponsor account, then it's the sponsor cost.
+                -- Otherwise, if it's the origin, then it's the cost. Otherwise it's Nothing.
+                myCost
+                    | Just SponsorDetails{..} <- stsSponsorDetails,
+                      sameAccount sdSponsor self =
+                        Just (toInteger sdCost)
+                    | selfOrigin = Just (toInteger stsCost)
+                    | otherwise = Nothing
+
+                -- The subtotal to show. We only show it if neither the cost (to the account) nor
+                -- the subtotal are Nothing.
+                mySubtotal
+                    | isJust myCost = subtotal
+                    | otherwise = Nothing
+
+                myTotal = fromMaybe 0 subtotal - fromMaybe 0 myCost
+
+                costs =
+                    ["subtotal" .= show st | Just st <- [mySubtotal]]
+                        ++ ["cost" .= show c | Just c <- [myCost]]
+                        ++ ["total" .= show myTotal]
 
                 encryptedCost = case stsSender of
                     Just sender
