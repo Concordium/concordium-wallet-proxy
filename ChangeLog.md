@@ -2,6 +2,10 @@
 
 ## [unreleased]
 
+## [0.44.2] - 2026-01-28
+
+- Revise `cost`/`subtotal`/`total` display for sponsored transactions.
+
 ## [0.44.1] - 2026-01-27
 
 - Remove incorrect `includeSponsoredTransactions` filter
