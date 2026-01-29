@@ -699,7 +699,8 @@ This is not present for special transactions, such as rewards.
 
 #### `subtotal` (optional)
 The change in the account's __public__ balance due to this transaction, not including the transaction fee.
-This is only present if the origin type is `"self"` and the transaction involves a transfer to or from the account other than the transaction fee.
+This is present if the origin type is `"self"` and the transaction involves a transfer to or from the account other than the transaction fee.
+It is also present when the account is both the recipient of a transfer and the sponsor of the transaction.
 
 #### `encrypted` (optional)
 The change in the encrypted balance of the account. This is only present if the
@@ -722,8 +723,11 @@ encrypted balance was changed.
 
 #### `cost` (optional)
 The cost of performing the transaction, if this cost is paid by the account.
-This is only present if the origin type is `"self"` (since otherwise the account is not responsible for the cost).
-When present, this is always a positive value.
+This is always present if the origin type is `"self"`, but will be `0` if the transaction is sponsored by another account.
+In the case of a transaction sponsored by the account, this will be the actual cost of the transaction paid by the account.
+
+Note, prior to sponsored transactions, the value was always positive when present, however, now it may be `0`.
+Similarly, the value was historically only present when the origin was `"self"`, but for sponsored transactions that is not the case.
 
 #### `total` (required)
 The total change in the account's __public__ CCD balance due to the transaction and associated fees.
