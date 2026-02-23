@@ -52,6 +52,7 @@ cooldowns and the available balance) and get the info if an account is on any al
 * `GET /v0/plt/tokenInfo/{tokenId}`: get info about a given plt token and its module state (with metadata url).
 * `GET /v0/keyAccounts/{public key}`: get accounts associated with a given public key. Optionally filter the result for simple accounts.
 * `POST /v0/transakOnRamp`: create a URL to initiate purchasing CCDs through the Transak on-ramp.
+* `GET /v0/genesisHash`: get the genesis block hash for the connected network.
 
 ### Errors
 
@@ -1480,6 +1481,20 @@ This endpoint can product 502 Bad Gateway or 504 Gateway Timeout responses if th
 does not behave in the expected manner or times out.  (The proxy will time out after 10 seconds.)
 
 Note: per [Transak's documentation](https://docs.transak.com/reference/create-widget-url), the `widgetUrl` is valid only for 5 minutes from the time of creation.
+
+
+
+## Genesis block hash
+
+A GET request to `/v0/genesisHash` returns the genesis block hash for the connected network.
+
+Example response:
+
+```json
+{
+  "genesis_block":"853288fa5a45554d3cbbf8a756b85abcbfddf28e752b13223eb747209a4d0d3c"
+}
+```
 
 
 # Deployment

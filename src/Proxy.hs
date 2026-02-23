@@ -323,6 +323,7 @@ mkYesod
 /v0/plt/tokenInfo/#Text PltTokenInfoR GET
 /v0/keyAccounts/#Text KeyAccounts GET
 /v0/transakOnRamp TransakOnRamp POST
+/v0/genesisHash GenesisHash GET
 |]
 
 instance Yesod Proxy where
@@ -2970,6 +2971,14 @@ getPltTokenInfoR :: Text -> Handler TypedContent
 getPltTokenInfoR tokenId =
     runGRPC (getTokenInfoFromText tokenId LastFinal) $ \tokenInfo -> do
         sendResponse $ toJSON tokenInfo
+
+-- | Returns the genesis block hash for the connected network.
+getGenesisHash :: Handler TypedContent
+getGenesisHash =
+    runGRPC getConsensusInfo $ \cInfo -> do
+        let genesisBlock = object ["genesis_block" .= csGenesisBlock cInfo]
+        $(logOther "Trace") "Successfully got the genesis block hash."
+        sendResponse $ toJSON genesisBlock
 
 -- | Create a Transak on-ramp session. This requires an "address" parameter to be specified, which
 --  will be the address of the account to which the purchased funds will be sent.
