@@ -2,6 +2,10 @@
 
 ## [unreleased]
 
+## [0.45.0] - 2026-02-23
+
+- Add `GET` endpoint `/v0/genesisHash` for getting the genesis block hash for the connected network.
+
 ## [0.44.2] - 2026-01-28
 
 - Revise `cost`/`subtotal`/`total` display for sponsored transactions.
