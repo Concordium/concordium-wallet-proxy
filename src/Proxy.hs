@@ -2977,7 +2977,6 @@ getGenesisHash :: Handler TypedContent
 getGenesisHash =
     runGRPC getConsensusInfo $ \cInfo -> do
         let genesisBlock = object ["genesis_block" .= csGenesisBlock cInfo]
-        $(logOther "Trace") "Successfully got the genesis block hash."
         sendResponse $ toJSON genesisBlock
 
 -- | Create a Transak on-ramp session. This requires an "address" parameter to be specified, which
