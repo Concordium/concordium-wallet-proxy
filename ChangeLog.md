@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+- Add `GET` endpoint `/v0/consensusInfo` for getting the current consensus status from the node, including last finalized block, best block, protocol version, and timing parameters.
+
 ## [0.45.0] - 2026-02-23
 
 - Add `GET` endpoint `/v0/genesisHash` for getting the genesis block hash for the connected network.
