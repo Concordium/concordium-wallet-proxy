@@ -54,6 +54,7 @@ cooldowns and the available balance) and get the info if an account is on any al
 * `POST /v0/transakOnRamp`: create a URL to initiate purchasing CCDs through the Transak on-ramp.
 * `GET /v0/genesisHash`: get the genesis block hash for the connected network.
 * `GET /v0/consensusInfo`: get the current consensus status from the node.
+* `GET /v0/blockInfo/{blockHash}`: get block information for a given block hash.
 
 ### Errors
 
@@ -1542,6 +1543,60 @@ Example response (protocol version 6+):
     "currentEpoch": 100,
     "triggerBlockTime": "2024-01-15T12:00:00Z"
   }
+}
+```
+
+## Block info
+
+A GET request to `/v0/blockInfo/{blockHash}` returns information about the block with the given hash.
+
+Returns `404 Not Found` if no block with the given hash exists.
+
+The response includes:
+
+| Field | Type | Description |
+|---|---|---|
+| `blockHash` | string (hex) | Hash of the block |
+| `blockParent` | string (hex) | Hash of the parent block |
+| `blockLastFinalized` | string (hex) | Hash of the last finalized block at the time this block was baked |
+| `blockHeight` | number | Absolute height of the block |
+| `genesisIndex` | number | Number of protocol updates preceding this block |
+| `eraBlockHeight` | number | Height of this block relative to the (re)genesis block of its era |
+| `blockReceiveTime` | string (ISO 8601) | Time the block was received |
+| `blockArriveTime` | string (ISO 8601) | Time the block was verified |
+| `blockSlotTime` | string (ISO 8601) | Nominal time of the slot in which the block was baked |
+| `blockBaker` | number or null | Identifier of the block baker, or `null` for a genesis block |
+| `finalized` | boolean | Whether the block is finalized |
+| `transactionCount` | number | Number of transactions in the block |
+| `transactionEnergyCost` | number | Total energy cost of transactions in the block |
+| `transactionsSize` | number | Total size of transactions in the block (bytes) |
+| `blockStateHash` | string (hex) | Hash of the block state |
+| `protocolVersion` | number | Protocol version of the block |
+
+Additionally, `blockSlot` (slot number) is included for protocol versions 1–5, and `round` and `epoch` are included for protocol version 6 and later.
+
+Example response:
+
+```json
+{
+  "blockHash": "63e2571547f8e9b7dbef849ab5fce5eae7fe96a1ab94b52e1adcb62adcab3e42",
+  "blockParent": "a5e75c2419f539dfbde1fcc41c2c2b8dd1b9f0a0d4a2fd3d5e52c75a1b00000",
+  "blockLastFinalized": "a5e75c2419f539dfbde1fcc41c2c2b8dd1b9f0a0d4a2fd3d5e52c75a1b00000",
+  "blockHeight": 12345678,
+  "genesisIndex": 5,
+  "eraBlockHeight": 100000,
+  "blockReceiveTime": "2024-01-15T12:00:01Z",
+  "blockArriveTime": "2024-01-15T12:00:01Z",
+  "blockSlotTime": "2024-01-15T12:00:00Z",
+  "blockBaker": 42,
+  "finalized": true,
+  "transactionCount": 3,
+  "transactionEnergyCost": 6000,
+  "transactionsSize": 512,
+  "blockStateHash": "9dd9aee09a3b6d9c3f48e4f3df4f8b2c1e4d7a9b2f6c8e1d3a5b7c9e2f4a6b8",
+  "protocolVersion": 6,
+  "round": 42,
+  "epoch": 100
 }
 ```
 

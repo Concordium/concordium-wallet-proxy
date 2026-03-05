@@ -325,6 +325,7 @@ mkYesod
 /v0/transakOnRamp TransakOnRamp POST
 /v0/genesisHash GenesisHash GET
 /v0/consensusInfo ConsensusInfoR GET
+/v0/blockInfo/#Text BlockInfoR GET
 |]
 
 instance Yesod Proxy where
@@ -3013,6 +3014,21 @@ getConsensusInfoR =
               "currentEpoch" .= cbftsCurrentEpoch bft,
               "triggerBlockTime" .= cbftsTriggerBlockTime bft
             ]
+
+-- | Returns block information for the block with the given hash.
+--  Returns 404 if no block with the given hash exists.
+--  If the block hash could not be parsed, a HTTP response with status code @400@ is returned.
+getBlockInfoR :: Text -> Handler TypedContent
+getBlockInfoR hashText =
+    case readMaybe (Text.unpack hashText) of
+        Nothing -> respond400Error EMMalformedBlockHash RequestInvalid
+        Just blockHash ->
+            runGRPCWithCustomError
+                (Just (StatusNotOkError NOT_FOUND, Just notFound404, Nothing, Just $ EMErrorResponse NotFound))
+                (getBlockInfo (Given blockHash))
+                $ \blockInfo -> do
+                    $(logOther "Trace") "Successfully got block info."
+                    sendResponse $ toJSON blockInfo
 
 -- | Create a Transak on-ramp session. This requires an "address" parameter to be specified, which
 --  will be the address of the account to which the purchased funds will be sent.
