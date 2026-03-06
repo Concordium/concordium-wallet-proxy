@@ -324,6 +324,7 @@ mkYesod
 /v0/keyAccounts/#Text KeyAccounts GET
 /v0/transakOnRamp TransakOnRamp POST
 /v0/genesisHash GenesisHash GET
+/v0/consensusInfo ConsensusInfoR GET
 |]
 
 instance Yesod Proxy where
@@ -2978,6 +2979,40 @@ getGenesisHash =
     runGRPC getConsensusInfo $ \cInfo -> do
         let genesisBlock = object ["genesis_block" .= csGenesisBlock cInfo]
         sendResponse $ toJSON genesisBlock
+
+-- | Returns the current consensus status from the node.
+--  This includes key information about the chain state such as the last finalized block,
+--  best block, protocol version, and timing parameters.
+getConsensusInfoR :: Handler TypedContent
+getConsensusInfoR =
+    runGRPC getConsensusInfo $ \cInfo -> do
+        let consensusInfoObject =
+                object $
+                    [ "bestBlock" .= csBestBlock cInfo,
+                      "bestBlockHeight" .= csBestBlockHeight cInfo,
+                      "genesisBlock" .= csGenesisBlock cInfo,
+                      "genesisTime" .= csGenesisTime cInfo,
+                      "lastFinalizedBlock" .= csLastFinalizedBlock cInfo,
+                      "lastFinalizedBlockHeight" .= csLastFinalizedBlockHeight cInfo,
+                      "lastFinalizedTime" .= csLastFinalizedTime cInfo,
+                      "epochDuration" .= csEpochDuration cInfo,
+                      "protocolVersion" .= csProtocolVersion cInfo,
+                      "genesisIndex" .= csGenesisIndex cInfo,
+                      "currentEraGenesisBlock" .= csCurrentEraGenesisBlock cInfo,
+                      "currentEraGenesisTime" .= csCurrentEraGenesisTime cInfo
+                    ]
+                        ++ maybe [] (\sd -> ["slotDuration" .= sd]) (csSlotDuration cInfo)
+                        ++ maybe [] (\bft -> ["concordiumBFTStatus" .= bftObject bft]) (csConcordiumBFTStatus cInfo)
+        $(logOther "Trace") "Successfully got consensus info."
+        sendResponse $ toJSON consensusInfoObject
+  where
+    bftObject bft =
+        object
+            [ "currentTimeoutDuration" .= cbftsCurrentTimeoutDuration bft,
+              "currentRound" .= cbftsCurrentRound bft,
+              "currentEpoch" .= cbftsCurrentEpoch bft,
+              "triggerBlockTime" .= cbftsTriggerBlockTime bft
+            ]
 
 -- | Create a Transak on-ramp session. This requires an "address" parameter to be specified, which
 --  will be the address of the account to which the purchased funds will be sent.

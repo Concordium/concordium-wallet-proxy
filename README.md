@@ -53,6 +53,7 @@ cooldowns and the available balance) and get the info if an account is on any al
 * `GET /v0/keyAccounts/{public key}`: get accounts associated with a given public key. Optionally filter the result for simple accounts.
 * `POST /v0/transakOnRamp`: create a URL to initiate purchasing CCDs through the Transak on-ramp.
 * `GET /v0/genesisHash`: get the genesis block hash for the connected network.
+* `GET /v0/consensusInfo`: get the current consensus status from the node.
 
 ### Errors
 
@@ -1496,6 +1497,53 @@ Example response:
 }
 ```
 
+## Consensus info
+
+A GET request to `/v0/consensusInfo` returns the current consensus status from the node.
+
+The response always includes:
+
+| Field | Type | Description |
+|---|---|---|
+| `bestBlock` | string (hex) | Hash of the current best block |
+| `bestBlockHeight` | number | Absolute height of the best block |
+| `genesisBlock` | string (hex) | Hash of the genesis block |
+| `genesisTime` | string (ISO 8601) | Timestamp of the genesis block |
+| `lastFinalizedBlock` | string (hex) | Hash of the last finalized block |
+| `lastFinalizedBlockHeight` | number | Absolute height of the last finalized block |
+| `lastFinalizedTime` | string (ISO 8601) or null | Time of last verified finalization |
+| `epochDuration` | number | Current epoch duration in milliseconds |
+| `protocolVersion` | number | Currently active protocol version |
+| `genesisIndex` | number | Number of chain restarts via protocol updates |
+| `currentEraGenesisBlock` | string (hex) | Genesis block hash of the current era |
+| `currentEraGenesisTime` | string (ISO 8601) | Start time of the current era |
+
+Additionally, `slotDuration` (slot duration in milliseconds) is included for protocol versions 1–5, and `concordiumBFTStatus` is included for protocol version 6 and later.
+
+Example response (protocol version 6+):
+
+```json
+{
+  "bestBlock": "63e2571547f8e9b7dbef849ab5fce5eae7fe96a1ab94b52e1adcb62adcab3e42",
+  "bestBlockHeight": 12345678,
+  "genesisBlock": "853288fa5a45554d3cbbf8a756b85abcbfddf28e752b13223eb747209a4d0d3c",
+  "genesisTime": "2021-06-09T10:00:00Z",
+  "lastFinalizedBlock": "a5e75c2419f539dfbde1fcc41c2c2b8dd1b9f0a0d4a2fd3d5e52c75a1b00000",
+  "lastFinalizedBlockHeight": 12345677,
+  "lastFinalizedTime": "2024-01-15T12:00:00Z",
+  "epochDuration": 3600000,
+  "protocolVersion": 6,
+  "genesisIndex": 5,
+  "currentEraGenesisBlock": "9dd9aee09a3b6d9c3f48e4f3df4f8b2c1e4d7a9b2f6c8e1d3a5b7c9e2f4a6b8",
+  "currentEraGenesisTime": "2024-01-01T00:00:00Z",
+  "concordiumBFTStatus": {
+    "currentTimeoutDuration": 10000,
+    "currentRound": 42,
+    "currentEpoch": 100,
+    "triggerBlockTime": "2024-01-15T12:00:00Z"
+  }
+}
+```
 
 # Deployment
 
