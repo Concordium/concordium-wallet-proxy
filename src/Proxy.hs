@@ -326,6 +326,7 @@ mkYesod
 /v0/genesisHash GenesisHash GET
 /v0/consensusInfo ConsensusInfoR GET
 /v0/blockInfo/#Text BlockInfoR GET
+/v0/blocksAtHeight/#Word64 BlocksAtHeightR GET
 |]
 
 instance Yesod Proxy where
@@ -2980,6 +2981,14 @@ getGenesisHash =
     runGRPC getConsensusInfo $ \cInfo -> do
         let genesisBlock = object ["genesis_block" .= csGenesisBlock cInfo]
         sendResponse $ toJSON genesisBlock
+
+-- | Returns the block hashes at a given absolute block height.
+--  Returns an empty list if no blocks exist at the given height.
+getBlocksAtHeightR :: Word64 -> Handler TypedContent
+getBlocksAtHeightR height =
+    runGRPC (getBlocksAtHeight (Absolute (AbsoluteBlockHeight height))) $ \blockHashes -> do
+        $(logOther "Trace") "Successfully got blocks at height."
+        sendResponse $ toJSON blockHashes
 
 -- | Returns the current consensus status from the node.
 --  This includes key information about the chain state such as the last finalized block,

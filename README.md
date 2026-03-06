@@ -55,6 +55,7 @@ cooldowns and the available balance) and get the info if an account is on any al
 * `GET /v0/genesisHash`: get the genesis block hash for the connected network.
 * `GET /v0/consensusInfo`: get the current consensus status from the node.
 * `GET /v0/blockInfo/{blockHash}`: get block information for a given block hash.
+* `GET /v0/blocksAtHeight/{blockHeight}`: get the block hashes at a given absolute block height.
 
 ### Errors
 
@@ -1599,6 +1600,22 @@ Example response:
   "epoch": 100
 }
 ```
+
+## Blocks at height
+
+A GET request to `/v0/blocksAtHeight/{blockHeight}` returns the hashes of all blocks at the given absolute block height.
+
+Returns an empty list if no blocks exist at the given height (e.g. the chain has not yet reached that height).
+
+Example response:
+
+```json
+[
+  "63e2571547f8e9b7dbef849ab5fce5eae7fe96a1ab94b52e1adcb62adcab3e42"
+]
+```
+
+In rare cases of a branching chain, multiple hashes may be returned.
 
 # Deployment
 
