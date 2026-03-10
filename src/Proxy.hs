@@ -2026,6 +2026,28 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                         Just seconds -> Just $ \s ->
                             E.where_ (s E.^. SummaryTimestamp E.<=. (E.val Timestamp{tsMillis = seconds * 1000}))
 
+        -- Exclude any transactions with block height earlier than `blockHeightFrom`
+        maybeBlockHeightFromFilter <-
+            lookupGetParam "blockHeightFrom" <&> \mText ->
+                case mText of
+                    Nothing -> Just $ \_ -> return ()  -- default: no filter
+                    Just txt ->
+                        case readMaybe (Text.unpack txt) of
+                            Nothing -> Nothing
+                            Just height -> Just $ \s ->
+                                E.where_ (s E.^. SummaryHeight E.>=. E.val (AbsoluteBlockHeight (fromIntegral (height :: Int))))
+
+        -- Exclude any transactions with block height later than `blockHeightTo`
+        maybeBlockHeightToFilter <-
+            lookupGetParam "blockHeightTo" <&> \mText ->
+                case mText of
+                    Nothing -> Just $ \_ -> return ()  -- default: no filter
+                    Just txt ->
+                        case readMaybe (Text.unpack txt) of
+                            Nothing -> Nothing
+                            Just height -> Just $ \s ->
+                                E.where_ (s E.^. SummaryHeight E.<=. E.val (AbsoluteBlockHeight (fromIntegral (height :: Int))))
+             
         -- Construct filters to only query the relevant transaction types specified by `blockRewards`, `finalizationRewards`,
         -- `bakingRewards`, and `onlyEncrypted`.
         -- This is done as part of the SQL query since it is both more efficient, but also simpler since we do not have to filter
@@ -2128,15 +2150,17 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                                     )
 
         rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
-        case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter, maybeTypeFilter) of
-            (Nothing, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
-            (_, Nothing, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeTo' parameter.") RequestInvalid
-            (_, _, Nothing, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockReward' parameter.") RequestInvalid
-            (_, _, _, Nothing, _, _, _) -> respond400Error (EMParseError "Unsupported 'finalizationReward' parameter.") RequestInvalid
-            (_, _, _, _, Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'bakingReward' parameter.") RequestInvalid
-            (_, _, _, _, _, Nothing, _) -> respond400Error (EMParseError "Unsupported 'onlyEncrypted' parameter.") RequestInvalid
-            (_, _, _, _, _, _, Nothing) -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
-            (Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter, Just encryptedFilter, Just typeFilter) -> do
+        case (maybeTimeFromFilter, maybeTimeToFilter, maybeBlockRewardFilter, maybeFinalizationRewardFilter, maybeBakingRewardFilter, maybeEncryptedFilter, maybeTypeFilter, maybeBlockHeightFromFilter, maybeBlockHeightToFilter) of
+            (Nothing, _, _, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeFrom' parameter.") RequestInvalid
+            (_, Nothing, _, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockTimeTo' parameter.") RequestInvalid
+            (_, _, Nothing, _, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'blockReward' parameter.") RequestInvalid
+            (_, _, _, Nothing, _, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'finalizationReward' parameter.") RequestInvalid
+            (_, _, _, _, Nothing, _, _, _, _) -> respond400Error (EMParseError "Unsupported 'bakingReward' parameter.") RequestInvalid
+            (_, _, _, _, _, Nothing, _, _, _) -> respond400Error (EMParseError "Unsupported 'onlyEncrypted' parameter.") RequestInvalid
+            (_, _, _, _, _, _, Nothing, _, _) -> respond400Error (EMParseError "Unsupported 'includeRewards' parameter.") RequestInvalid
+            (_, _, _, _, _, _, _, Nothing, _) -> respond400Error (EMParseError "Unsupported 'blockHeightFrom' parameter.") RequestInvalid
+            (_, _, _, _, _, _, _, _, Nothing) -> respond400Error (EMParseError "Unsupported 'blockHeightTo' parameter.") RequestInvalid
+            (Just timeFromFilter, Just timeToFilter, Just blockRewardFilter, Just finalizationRewardFilter, Just bakingRewardFilter, Just encryptedFilter, Just typeFilter, Just blockHeightFromFilter, Just blockHeightToFilter) -> do
                 entries :: [(Entity Entry, Entity Summary)] <- runDB $ do
                     E.select $ E.from $ \(e `E.InnerJoin` s) -> do
                         -- Assert join
@@ -2151,6 +2175,8 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                         -- Apply any additional filters
                         timeFromFilter s
                         timeToFilter s
+                        blockHeightFromFilter s
+                        blockHeightToFilter s
                         blockRewardFilter s
                         finalizationRewardFilter s
                         bakingRewardFilter s

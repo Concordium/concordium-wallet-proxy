@@ -647,6 +647,8 @@ They support the following parameters.
   - `all`: include all rewards. This is also the default if not supplied.
 - `blockTimeFrom`: exclude any transactions with block time earlier than `blockTimeFrom` (integer number of seconds after epoch).
 - `blockTimeTo`: exclude any transactions with block time later than  `blockTimeTo` (integer number of seconds after epoch).
+- `blockHeightFrom`: exclude any transactions with block height earlier than `blockTimeFrom`.
+- `blockHeightTo`: exclude any transactions with block height later than  `blockHeightTo`.
 - `blockRewards`: whether to include block rewards. Possible values:
   - `y`: include block rewards. (The default)
   - `n`: exclude block rewards.
@@ -835,7 +837,8 @@ A transactions of type `"transfer"` is not considered a simple transfer if the d
 ### Example
 
 ```console
-$ curl -XGET http://localhost:3000/v0/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL?limit=2&from=4&order=a
+$ curl -XGET "http://localhost:3000/v0/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL?limit=2&from=4&order=a"
+
 ```
 ```JSON
 {
@@ -1652,7 +1655,7 @@ or
 
 ```console
 stack run wallet-proxy -- \
-  --grpc-ip grpc.devnet-plt-beta.concordium.com \
+  --grpc-ip grpc.testnet.concordium.com \
   --grpc-port 20000\
   --db "host=localhost port=5432 dbname=transaction-outcome user=postgres password=password"\
   --ip-data ./examples/identity-providers-with-metadata.json\
