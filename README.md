@@ -838,7 +838,6 @@ A transactions of type `"transfer"` is not considered a simple transfer if the d
 
 ```console
 $ curl -XGET "http://localhost:3000/v0/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL?limit=2&from=4&order=a"
-
 ```
 ```JSON
 {

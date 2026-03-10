@@ -2030,7 +2030,7 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
         maybeBlockHeightFromFilter <-
             lookupGetParam "blockHeightFrom" <&> \mText ->
                 case mText of
-                    Nothing -> Just $ \_ -> return ()  -- default: no filter
+                    Nothing -> Just $ \_ -> return () -- default: no filter
                     Just txt ->
                         case readMaybe (Text.unpack txt) of
                             Nothing -> Nothing
@@ -2041,13 +2041,13 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
         maybeBlockHeightToFilter <-
             lookupGetParam "blockHeightTo" <&> \mText ->
                 case mText of
-                    Nothing -> Just $ \_ -> return ()  -- default: no filter
+                    Nothing -> Just $ \_ -> return () -- default: no filter
                     Just txt ->
                         case readMaybe (Text.unpack txt) of
                             Nothing -> Nothing
                             Just height -> Just $ \s ->
                                 E.where_ (s E.^. SummaryHeight E.<=. E.val (AbsoluteBlockHeight (fromIntegral (height :: Int))))
-             
+
         -- Construct filters to only query the relevant transaction types specified by `blockRewards`, `finalizationRewards`,
         -- `bakingRewards`, and `onlyEncrypted`.
         -- This is done as part of the SQL query since it is both more efficient, but also simpler since we do not have to filter
