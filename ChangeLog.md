@@ -2,9 +2,10 @@
 
 ## [unreleased]
 
+## [0.46.0] - 2026-03-10
+
 - Add `GET` endpoint `/v0/blockInfo/{blockHash}` for getting block information for a given block hash.
 - Add `GET` endpoint `/v0/blocksAtHeight/{blockHeight}` for getting block hashes at a given absolute block height.
-
 - Add `GET` endpoint `/v0/consensusInfo` for getting the current consensus status from the node, including last finalized block, best block, protocol version, and timing parameters.
 
 ## [0.45.0] - 2026-02-23
