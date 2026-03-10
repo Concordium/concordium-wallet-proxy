@@ -291,6 +291,7 @@ translation = I18n{..}
     i18nErrorMessage EMTransactionRejected = "Transaction rejected by the node"
     i18nErrorMessage EMMalformedTransaction = "Malformed transaction hash"
     i18nErrorMessage EMMalformedAddress = "Malformed account address"
+    i18nErrorMessage EMMalformedBlockHash = "Malformed block hash"
     i18nErrorMessage EMDatabaseError = "Database error"
     i18nErrorMessage EMAccountNotFinal = "Account creation is not finalized"
     i18nErrorMessage EMConfigurationError = "Server configuration error"

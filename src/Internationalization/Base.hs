@@ -26,6 +26,7 @@ data ErrorMessage
     | EMTransactionRejected
     | EMMalformedTransaction
     | EMMalformedAddress
+    | EMMalformedBlockHash
     | EMDatabaseError
     | EMAccountNotFinal
     | EMConfigurationError
