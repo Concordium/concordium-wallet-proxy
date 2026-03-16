@@ -699,6 +699,9 @@ The time is given in seconds since the UNIX epoch, given as a fractional number,
 i.e., floating point number. Note that on JSON if a float number has no decimals, it is
 outputted as an Int instead of having `.00` or something like that.
 
+#### `blockHeight` (required)
+The absolute height of the block in which the transaction occurs.
+
 #### `transactionHash` (optional)
 This is the hash of the transaction.
 This is not present for special transactions, such as rewards.
@@ -857,6 +860,7 @@ $ curl -XGET "http://localhost:3000/v0/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8
       "subtotal": 0,
       "transactionHash": "84bf1e2ef8d3af3063cdb681932990f71ddb3949655f55307a266e5d687b414f",
       "blockHash": "013c6d2dd67affd6f39b9a7b255d244055b53d68fe8b0add4839a20e911d04cb",
+      "blockHeight": 1234567,
       "details": {
         "transferAmount": "123",
         "events": [
@@ -877,6 +881,7 @@ $ curl -XGET "http://localhost:3000/v0/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8
         "type": "reward"
       },
       "blockHash": "7a496e01bf67ad4fe720551185cf10c05acd8d4c91e995826d0703193eeac2b4",
+      "blockHeight": 1234570,
       "details": {
         "events": [
           "Award 6270 to baker 0 at 4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL"
