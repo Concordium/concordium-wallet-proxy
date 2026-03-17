@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+- Add `blockHeight` field to the response of `v0/accTransactions`, `v1/accTransactions`, `v2/accTransactions`, and `v3/accTransactions`.
+
 ## [0.47.0] - 2026-03-11
 
 - Add two query parameters to the endpoints `v0/accTransactions`, `v1/accTransactions`, `v2/accTransactions`, and `v3/accTransactions`:

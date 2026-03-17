@@ -2254,7 +2254,8 @@ formatEntry ::
 formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Summary{..}) = do
     let blockDetails =
             [ "blockHash" .= unBSS summaryBlock,
-              "blockTime" .= timestampToFracSeconds summaryTimestamp
+              "blockTime" .= timestampToFracSeconds summaryTimestamp,
+              "blockHeight" .= summaryHeight
             ]
     transactionDetails <- case AE.fromJSON summarySummary of
         AE.Error e -> Left e
