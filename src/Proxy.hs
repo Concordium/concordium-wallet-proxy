@@ -928,7 +928,10 @@ knownTokenOperationSpecificCostMap =
           ("addDenyList", Cost.tokenListOperationCost),
           ("removeDenyList", Cost.tokenListOperationCost),
           ("pause", Cost.tokenPauseUnpauseCost),
-          ("unpause", Cost.tokenPauseUnpauseCost)
+          ("unpause", Cost.tokenPauseUnpauseCost),
+          ("assignAdminRoles", Cost.tokenAssignRevokeRolesCost),
+          ("revokeAdminRoles", Cost.tokenAssignRevokeRolesCost),
+          ("updateMetadata", Cost.tokenUpdateTokenMetadataCost)
         ]
 
 -- | Computes the sum of the token operation specific costs from a supplied map containing the number of occurrences of each operation type.

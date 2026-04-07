@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+- Add support for new RBAC token operation types `assignAdminRoles`, `revokeAdminRoles` and `updateMetadata` in `v0/transactionCost`.
+
 ## [0.47.1] - 2026-03-17
 
 - Add `blockHeight` field to the response of `v0/accTransactions`, `v1/accTransactions`, `v2/accTransactions`, and `v3/accTransactions`.
