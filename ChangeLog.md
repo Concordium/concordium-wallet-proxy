@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+## [0.48.0] - 2026-04-14
+
 - Add support for new RBAC token operation types `assignAdminRoles`, `revokeAdminRoles` and `updateMetadata` in `v0/transactionCost`.
 
 ## [0.47.1] - 2026-03-17
@@ -13,7 +15,7 @@
 - Add two query parameters to the endpoints `v0/accTransactions`, `v1/accTransactions`, `v2/accTransactions`, and `v3/accTransactions`:
   - `blockHeightFrom`: excludes transactions with block height earlier than `blockTimeFrom`
   - `blockHeightTo`: exclude transactions with block height later than  `blockHeightTo`
- 
+
 ## [0.46.0] - 2026-03-10
 
 - Add `GET` endpoint `/v0/blockInfo/{blockHash}` for getting block information for a given block hash.
