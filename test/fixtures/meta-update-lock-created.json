@@ -1,0 +1,23 @@
+{
+  "sender": "2xBpaHottqhwFZURMZW4uZduQvpxNDSy46iXMYs9kceNGaPpZX",
+  "hash": "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+  "cost": "0",
+  "energyCost": 0,
+  "type": { "contents": "metaUpdate", "type": "accountTransaction" },
+  "result": {
+    "events": [
+      {
+        "lockConfig": "a1647465737401",
+        "lockId": {
+          "accountIndex": 10,
+          "creationOrder": 12,
+          "sequenceNumber": 11
+        },
+        "tag": "LockCreated"
+      }
+    ],
+    "outcome": "success"
+  },
+  "index": 0,
+  "sponsorDetails": null
+}

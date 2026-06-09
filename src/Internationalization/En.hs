@@ -98,6 +98,14 @@ translation = I18n{..}
     i18nRejectReason InsufficientDelegationStake = "Adding a delegator with 0 stake is not allowed."
     i18nRejectReason (NonExistentTokenId tokenId) = "Non existing plt token id " <> Text.pack (show tokenId) <> "."
     i18nRejectReason (TokenUpdateTransactionFailed reason) = "Token update transaction failed with reason: " <> Text.pack (show reason) <> "."
+    i18nRejectReason (NonExistentLockId lockId) = "Non existing lock id " <> Text.pack (show lockId) <> "."
+    i18nRejectReason (LockExpired lockId) = "Lock " <> Text.pack (show lockId) <> " has expired."
+    i18nRejectReason (LockFundNotAuthorized lockId account) = "Account " <> descrAccount account <> " is not authorized to fund lock " <> Text.pack (show lockId) <> "."
+    i18nRejectReason (LockSendNotAuthorized lockId account) = "Account " <> descrAccount account <> " is not authorized to send from lock " <> Text.pack (show lockId) <> "."
+    i18nRejectReason (LockReturnNotAuthorized lockId account) = "Account " <> descrAccount account <> " is not authorized to return from lock " <> Text.pack (show lockId) <> "."
+    i18nRejectReason (LockCancelNotAuthorized lockId account) = "Account " <> descrAccount account <> " is not authorized to cancel lock " <> Text.pack (show lockId) <> "."
+    i18nRejectReason (LockTokenNotPermitted lockId tokenId) = "Token " <> Text.pack (show tokenId) <> " is not permitted by lock " <> Text.pack (show lockId) <> "."
+    i18nRejectReason (LockRecipientNotPermitted lockId account) = "Account " <> descrAccount account <> " is not a permitted recipient for lock " <> Text.pack (show lockId) <> "."
 
     i18nTransactionType TTDeployModule = "Deploy module"
     i18nTransactionType TTInitContract = "Initialize smart contract"
@@ -121,6 +129,7 @@ translation = I18n{..}
     i18nTransactionType TTConfigureBaker = "Configure validator"
     i18nTransactionType TTConfigureDelegation = "Configure delegation"
     i18nTransactionType TTTokenUpdate = "Token update"
+    i18nTransactionType TTMetaUpdate = "Meta update"
 
     i18nDeployCredential Initial = "Deploy initial account credential"
     i18nDeployCredential Normal = "Deploy account credential"
@@ -193,10 +202,12 @@ translation = I18n{..}
     i18nSupplementedEvent BakerSuspended{..} = "Validator " <> descrBaker ebsBakerId ebsAccount <> " was suspended."
     i18nSupplementedEvent BakerResumed{..} = "Validator " <> descrBaker ebrBakerId ebrAccount <> " was resumed."
     i18nSupplementedEvent (TokenModuleEvent tokenId type' _) = Text.pack (show tokenId) <> " token module event occurred of type " <> Text.pack (show type') <> "." -- TODO: It would be ideally to render the `details` in a readable way in the wallets.
-    i18nSupplementedEvent (TokenTransfer tokenId from to amount memo) = Text.pack (tokenAmountToString amount) <> " " <> Text.pack (show tokenId) <> " transferred from " <> Text.pack (show from) <> " to " <> Text.pack (show to) <> maybe "" (\m -> " with memo " <> Text.pack (show m)) memo <> "." -- TODO: It would be ideally to render the `memo` in a readable way in the wallets.
+    i18nSupplementedEvent TokenTransfer{..} = Text.pack (tokenAmountToString ettAmount) <> " " <> Text.pack (show ettTokenId) <> " transferred from " <> Text.pack (show ettFrom) <> maybe "" (\lockId -> " locked by " <> Text.pack (show lockId)) ettFromLock <> " to " <> Text.pack (show ettTo) <> maybe "" (\lockId -> " locked by " <> Text.pack (show lockId)) ettToLock <> maybe "" (\m -> " with memo " <> Text.pack (show m)) ettMemo <> "." -- TODO: It would be ideally to render the `memo` in a readable way in the wallets.
     i18nSupplementedEvent TokenMint{..} = Text.pack (tokenAmountToString etmAmount) <> " " <> Text.pack (show etmTokenId) <> " minted to " <> Text.pack (show etmTarget) <> "."
     i18nSupplementedEvent TokenBurn{..} = Text.pack (tokenAmountToString etbAmount) <> " " <> Text.pack (show etbTokenId) <> " burned from " <> Text.pack (show etbTarget) <> "."
     i18nSupplementedEvent TokenCreated{..} = "Token created: " <> Text.pack (showPrettyJSON etcPayload)
+    i18nSupplementedEvent LockCreated{..} = "Lock created: " <> Text.pack (show elcLockId) <> "."
+    i18nSupplementedEvent LockDestroyed{..} = "Lock destroyed: " <> Text.pack (show eldLockId) <> "."
     i18nSpecialEvent BakingRewards{..} =
         "Block rewards\n"
             <> Text.unlines (map (\(addr, amnt) -> "  - account " <> descrAccount addr <> " awarded " <> descrAmount amnt) . Map.toAscList . accountAmounts $ stoBakerRewards)
