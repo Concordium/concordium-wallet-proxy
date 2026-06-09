@@ -2,6 +2,10 @@
 
 ## [unreleased]
 
+- Add support for PLT lock meta-update transaction summaries in account history.
+- Decode and render `metaUpdate` account transactions with `LockCreated` and `LockDestroyed` events.
+- Preserve `fromLock` and `toLock` metadata for PLT token transfers in `v3/accTransactions`.
+
 ## [0.48.0] - 2026-04-14
 
 - Add support for new RBAC token operation types `assignAdminRoles`, `revokeAdminRoles` and `updateMetadata` in `v0/transactionCost`.
