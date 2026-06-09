@@ -1,0 +1,37 @@
+{
+  "sender": "2xBpaHottqhwFZURMZW4uZduQvpxNDSy46iXMYs9kceNGaPpZX",
+  "hash": "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+  "cost": "0",
+  "energyCost": 0,
+  "type": { "contents": "metaUpdate", "type": "accountTransaction" },
+  "result": {
+    "events": [
+      {
+        "amount": { "decimals": 0, "value": "10" },
+        "from": {
+          "address": "2xdTv8awN1BjgYEw8W1BVXVtiEwG2b29U8KoZQqJrDuEqddseE",
+          "type": "account"
+        },
+        "fromLock": {
+          "accountIndex": 30,
+          "creationOrder": 32,
+          "sequenceNumber": 31
+        },
+        "tag": "TokenTransfer",
+        "to": {
+          "address": "2y57FyMyqAfY7X1SuSWJ5VMt1Z3ZgxbKt9w5mGoTwqA7YcpbXr",
+          "type": "account"
+        },
+        "toLock": {
+          "accountIndex": 40,
+          "creationOrder": 42,
+          "sequenceNumber": 41
+        },
+        "tokenId": "CCD"
+      }
+    ],
+    "outcome": "success"
+  },
+  "index": 0,
+  "sponsorDetails": null
+}
