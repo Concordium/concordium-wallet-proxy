@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+## [0.49.0] - 2026-06-10
+
 - Add support for PLT lock meta-update transaction summaries in account history.
 - Decode and render `metaUpdate` account transactions with `LockCreated` and `LockDestroyed` events.
 - Preserve `fromLock` and `toLock` metadata for PLT token transfers in `v3/accTransactions`.
@@ -17,8 +19,8 @@
 ## [0.47.0] - 2026-03-11
 
 - Add two query parameters to the endpoints `v0/accTransactions`, `v1/accTransactions`, `v2/accTransactions`, and `v3/accTransactions`:
-  - `blockHeightFrom`: excludes transactions with block height earlier than `blockTimeFrom`
-  - `blockHeightTo`: exclude transactions with block height later than  `blockHeightTo`
+    - `blockHeightFrom`: excludes transactions with block height earlier than `blockTimeFrom`
+    - `blockHeightTo`: exclude transactions with block height later than `blockHeightTo`
 
 ## [0.46.0] - 2026-03-10
 
@@ -62,7 +64,6 @@
 ## [0.41.1] - 2025-08-28
 
 - Fixed a bug where CIS2 endpoints would fail to parse token IDs correctly, due to parsing them as PLT Token IDs.
-
 
 ## [0.41.0] - 2025-08-05
 
@@ -210,7 +211,7 @@
 - Add `GET /v0/termsAndConditionsVersion` endpoint and the corresponding
   configuration options `--tc-version`, and `--tc-url` which default to 1.0.0
   and
-  https://developer.concordium.software/en/mainnet/net/resources/terms-and-conditions-bw.html 
+  https://developer.concordium.software/en/mainnet/net/resources/terms-and-conditions-bw.html
   if not set.
 
 ## 0.23.0
@@ -246,9 +247,9 @@ Add support for protocol version 5.
 
 - add cookie forwarding
 - introduce new configuration options
-  - `--log-level` for controlling log output
-  - `grpc-timeout` for controlling the timeout of requests to the node
-  - `--secure` which enables TLS support
+    - `--log-level` for controlling log output
+    - `grpc-timeout` for controlling the timeout of requests to the node
+    - `--secure` which enables TLS support
 
 ## 0.18
 
@@ -258,8 +259,8 @@ Add support for protocol version 5.
 
 - cover smart contract update transactions in the `v0/transactionCost` endpoint
 
-
 ## 0.17.0
+
 - Support `suggestUrl` in the `appSettings` configuration.
 - cover smart contract transactions in the `v0/submissionStatus` endpoint.
 
@@ -268,79 +269,92 @@ Add support for protocol version 5.
 - add `v1/appSettings` endpoint.
 
 ## 0.15.7
+
 - add `GET /v1/ip_info` endpoint.
 - add `--ip-data-v1` option for the JSON file that should be displayed at the above endpoint.
 
 ## 0.15.6
- - more informative error responses when the node rejects the GRPC call
+
+- more informative error responses when the node rejects the GRPC call
 
 ## 0.15.4
- - make the format of baker pool pending changes consistent with account pending
-   changes
+
+- make the format of baker pool pending changes consistent with account pending
+  changes
 
 ## 0.15.3
- - add estimated cooldown also to the `bakerPool` query.
+
+- add estimated cooldown also to the `bakerPool` query.
 
 ## 0.15.2
- - fix regression in account balance format introduced in 0.15.1
+
+- fix regression in account balance format introduced in 0.15.1
 
 ## 0.15.1
- - add an estimate cooldown end to the `accBalance` query.
+
+- add an estimate cooldown end to the `accBalance` query.
 
 ## 0.15.0
- - add `GET /v0/epochLength` endpoint
+
+- add `GET /v0/epochLength` endpoint
 
 ## 0.14.0
- - add `GET /v0/appSettings` endpoint
+
+- add `GET /v0/appSettings` endpoint
 
 ## 0.13.5
- - add `GET /v0/passiveDelegation` endpoint
- - correct calculation of cost of the configure baker transaction
+
+- add `GET /v0/passiveDelegation` endpoint
+- correct calculation of cost of the configure baker transaction
 
 ## 0.13.4
- - add `GET /v0/bakerPool/{bakerId}` endpoint
- - add `GET /v0/chainParameters` endpoint
- - add `GET /v0/nextPayday` endpoint
- - add support for delegation events and new baker and delegation transactions
-   in the `submissionStatus` endpoint.
- - add support for the cost of the new baker and delegation transactions
-   in the `transactionCost` endpoint.
- - add support for events triggered by V1 smart contracts
+
+- add `GET /v0/bakerPool/{bakerId}` endpoint
+- add `GET /v0/chainParameters` endpoint
+- add `GET /v0/nextPayday` endpoint
+- add support for delegation events and new baker and delegation transactions
+  in the `submissionStatus` endpoint.
+- add support for the cost of the new baker and delegation transactions
+  in the `transactionCost` endpoint.
+- add support for events triggered by V1 smart contracts
 
 ## 0.8.2
- - Rename GTU to CCD in transaction details.
+
+- Rename GTU to CCD in transaction details.
 
 ## 0.8.1
- - Add the data field to a transaction list response when the transaction is a
-   register data transaction.
+
+- Add the data field to a transaction list response when the transaction is a
+  register data transaction.
 
 ## 0.8.0
- - Fix bug where encrypted transfers with memo were not included in transaction
-   list when the encrypted filter was applied.
- - Do not create gtu drop table in the database if not configured for GTU drop.
- - Add support for account aliases.
 
+- Fix bug where encrypted transfers with memo were not included in transaction
+  list when the encrypted filter was applied.
+- Do not create gtu drop table in the database if not configured for GTU drop.
+- Add support for account aliases.
 
 ## 0.7.0
 
- - Add support for transfers with a memo.
-   - New endpoint v1/accTransactions which lists transfers with a memo.
-   - v0/transactionCost endpoint is updated to support new transfer types. The
-     change is backwards compatible.
-   - Existing v0/accTransactions endpoint converts outcomes of new transaction
-     types to old ones.
-   - Minimum supported node version is bumped to 1.2.
+- Add support for transfers with a memo.
+    - New endpoint v1/accTransactions which lists transfers with a memo.
+    - v0/transactionCost endpoint is updated to support new transfer types. The
+      change is backwards compatible.
+    - Existing v0/accTransactions endpoint converts outcomes of new transaction
+      types to old ones.
+    - Minimum supported node version is bumped to 1.2.
 
 ## 0.6.0
 
- - Disable sessions since we don't use them.
- - Add query parameter `includeRawRejectReason` to the `accTransactions` query.
- - Health query checks connections to database and GRPC, and that the last final
-   block is less than `health-tolerance` seconds old. `health-tolerance` is 300
-   seconds unless an alternative value is chosen at startup.
- - Add filtering options `blockTimeFrom`, `blockTimeTo`, `blockRewards`, 
-  `finalizationRewards`, `bakingRewards`, and  `onlyEncrypted` to the 
+- Disable sessions since we don't use them.
+- Add query parameter `includeRawRejectReason` to the `accTransactions` query.
+- Health query checks connections to database and GRPC, and that the last final
+  block is less than `health-tolerance` seconds old. `health-tolerance` is 300
+  seconds unless an alternative value is chosen at startup.
+- Add filtering options `blockTimeFrom`, `blockTimeTo`, `blockRewards`,
+  `finalizationRewards`, `bakingRewards`, and `onlyEncrypted` to the
   `accTransactions` query.
 
 ## 0.5.0
- - Make the GTU drop functionality optional.
+
+- Make the GTU drop functionality optional.
