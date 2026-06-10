@@ -19,8 +19,8 @@
 ## [0.47.0] - 2026-03-11
 
 - Add two query parameters to the endpoints `v0/accTransactions`, `v1/accTransactions`, `v2/accTransactions`, and `v3/accTransactions`:
-    - `blockHeightFrom`: excludes transactions with block height earlier than `blockTimeFrom`
-    - `blockHeightTo`: exclude transactions with block height later than `blockHeightTo`
+  - `blockHeightFrom`: excludes transactions with block height earlier than `blockTimeFrom`
+  - `blockHeightTo`: exclude transactions with block height later than  `blockHeightTo`
 
 ## [0.46.0] - 2026-03-10
 
@@ -211,7 +211,7 @@
 - Add `GET /v0/termsAndConditionsVersion` endpoint and the corresponding
   configuration options `--tc-version`, and `--tc-url` which default to 1.0.0
   and
-  https://developer.concordium.software/en/mainnet/net/resources/terms-and-conditions-bw.html
+  https://developer.concordium.software/en/mainnet/net/resources/terms-and-conditions-bw.html 
   if not set.
 
 ## 0.23.0
@@ -247,9 +247,9 @@ Add support for protocol version 5.
 
 - add cookie forwarding
 - introduce new configuration options
-    - `--log-level` for controlling log output
-    - `grpc-timeout` for controlling the timeout of requests to the node
-    - `--secure` which enables TLS support
+  - `--log-level` for controlling log output
+  - `grpc-timeout` for controlling the timeout of requests to the node
+  - `--secure` which enables TLS support
 
 ## 0.18
 
@@ -334,15 +334,16 @@ Add support for protocol version 5.
 - Do not create gtu drop table in the database if not configured for GTU drop.
 - Add support for account aliases.
 
+
 ## 0.7.0
 
 - Add support for transfers with a memo.
-    - New endpoint v1/accTransactions which lists transfers with a memo.
-    - v0/transactionCost endpoint is updated to support new transfer types. The
-      change is backwards compatible.
-    - Existing v0/accTransactions endpoint converts outcomes of new transaction
-      types to old ones.
-    - Minimum supported node version is bumped to 1.2.
+  - New endpoint v1/accTransactions which lists transfers with a memo.
+  - v0/transactionCost endpoint is updated to support new transfer types. The
+    change is backwards compatible.
+  - Existing v0/accTransactions endpoint converts outcomes of new transaction
+    types to old ones.
+  - Minimum supported node version is bumped to 1.2.
 
 ## 0.6.0
 
@@ -351,10 +352,10 @@ Add support for protocol version 5.
 - Health query checks connections to database and GRPC, and that the last final
   block is less than `health-tolerance` seconds old. `health-tolerance` is 300
   seconds unless an alternative value is chosen at startup.
-- Add filtering options `blockTimeFrom`, `blockTimeTo`, `blockRewards`,
-  `finalizationRewards`, `bakingRewards`, and `onlyEncrypted` to the
-  `accTransactions` query.
+- Add filtering options `blockTimeFrom`, `blockTimeTo`, `blockRewards`, 
+ `finalizationRewards`, `bakingRewards`, and  `onlyEncrypted` to the 
+ `accTransactions` query.
 
 ## 0.5.0
 
-- Make the GTU drop functionality optional.
+ - Make the GTU drop functionality optional.
