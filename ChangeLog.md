@@ -2,7 +2,11 @@
 
 ## [unreleased]
 
-## [0.49.0] - 2026-06-10
+## [0.49.1] - 2026-06-25
+
+- Fixed incompatibility of JSON model for lock related reject reasons
+
+## [0.49.0] - 2026-06-10 [YANKED]
 
 - Add support for PLT lock meta-update transaction summaries in account history.
 - Decode and render `metaUpdate` account transactions with `LockCreated` and `LockDestroyed` events.
