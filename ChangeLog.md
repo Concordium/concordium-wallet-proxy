@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+- Add `GET` endpoint `/v0/blockTransactionEvents/{blockHash}` for getting the transaction events (outcomes) in a given block, proxying the node's `GetBlockTransactionEvents` method.
+
 ## [0.47.1] - 2026-03-17
 
 - Add `blockHeight` field to the response of `v0/accTransactions`, `v1/accTransactions`, `v2/accTransactions`, and `v3/accTransactions`.

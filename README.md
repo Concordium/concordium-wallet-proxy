@@ -56,6 +56,7 @@ cooldowns and the available balance) and get the info if an account is on any al
 * `GET /v0/consensusInfo`: get the current consensus status from the node.
 * `GET /v0/blockInfo/{blockHash}`: get block information for a given block hash.
 * `GET /v0/blocksAtHeight/{blockHeight}`: get the block hashes at a given absolute block height.
+* `GET /v0/blockTransactionEvents/{blockHash}`: get the transaction events (outcomes) in a given block.
 
 ### Errors
 
@@ -1623,6 +1624,45 @@ Example response:
 ```
 
 In rare cases of a branching chain, multiple hashes may be returned.
+
+## Block transaction events
+
+A GET request to `/v0/blockTransactionEvents/{blockHash}` returns the list of transaction events (transaction outcomes) contained in the block with the given hash. This proxies the node's `GetBlockTransactionEvents` method.
+
+Returns `404 Not Found` if no block with the given hash exists.
+
+Returns an empty list if the block contains no transactions.
+
+Each element is a transaction summary with the same shape as the summary returned by the `/v0/submissionStatus/{transactionHash}` endpoint, including fields such as `hash`, `sender`, `cost`, `energyCost`, `type`, `index`, and a `result` describing whether the transaction succeeded (with its events) or was rejected (with the reject reason).
+
+Example response:
+
+```json
+[
+  {
+    "hash": "7c0a... ",
+    "sender": "3uxeCZwa3SxbksPWHwXWxCsaPucZdzNaXsRbkztqUUYRo1MnvF",
+    "cost": "601",
+    "energyCost": 601,
+    "index": 0,
+    "type": {
+      "type": "accountTransaction",
+      "contents": "transfer"
+    },
+    "result": {
+      "outcome": "success",
+      "events": [
+        {
+          "tag": "Transferred",
+          "amount": "1000000",
+          "from": { "type": "AddressAccount", "address": "3uxeCZwa3SxbksPWHwXWxCsaPucZdzNaXsRbkztqUUYRo1MnvF" },
+          "to": { "type": "AddressAccount", "address": "4tjy... " }
+        }
+      ]
+    }
+  }
+]
+```
 
 # Deployment
 
