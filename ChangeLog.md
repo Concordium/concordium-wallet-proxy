@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+- Add `GET` endpoint `/v0/blockTransactionEvents/{blockHash}` for getting the transaction events (outcomes) in a given block, proxying the node's `GetBlockTransactionEvents` method.
+
 ## [0.49.1] - 2026-06-25
 
 - Fixed incompatibility of JSON model for lock related reject reasons

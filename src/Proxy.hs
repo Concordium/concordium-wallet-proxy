@@ -327,6 +327,7 @@ mkYesod
 /v0/consensusInfo ConsensusInfoR GET
 /v0/blockInfo/#Text BlockInfoR GET
 /v0/blocksAtHeight/#Word64 BlocksAtHeightR GET
+/v0/blockTransactionEvents/#Text BlockTransactionEventsR GET
 |]
 
 instance Yesod Proxy where
@@ -3115,6 +3116,23 @@ getBlockInfoR hashText =
                 $ \blockInfo -> do
                     $(logOther "Trace") "Successfully got block info."
                     sendResponse $ toJSON blockInfo
+
+-- | Returns the transaction events (transaction outcomes) for the block with the given hash.
+--  This proxies the node's @GetBlockTransactionEvents@ method and returns the list of
+--  transaction summaries contained in the block.
+--  Returns 404 if no block with the given hash exists.
+--  If the block hash could not be parsed, a HTTP response with status code @400@ is returned.
+getBlockTransactionEventsR :: Text -> Handler TypedContent
+getBlockTransactionEventsR hashText =
+    case readMaybe (Text.unpack hashText) of
+        Nothing -> respond400Error EMMalformedBlockHash RequestInvalid
+        Just blockHash ->
+            runGRPCWithCustomError
+                (Just (StatusNotOkError NOT_FOUND, Just notFound404, Nothing, Just $ EMErrorResponse NotFound))
+                (getBlockTransactionEvents (Given blockHash))
+                $ \txEvents -> do
+                    $(logOther "Trace") "Successfully got block transaction events."
+                    sendResponse $ toJSON txEvents
 
 -- | Create a Transak on-ramp session. This requires an "address" parameter to be specified, which
 --  will be the address of the account to which the purchased funds will be sent.
