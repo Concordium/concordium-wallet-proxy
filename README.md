@@ -1477,6 +1477,8 @@ Example response:
 
 A POST request to `/v0/transakOnRamp?address={accountAddress}` returns a JSON object containing a URL
 that can be used to initiate the Transak on-ramp (for buying CCDs).
+This endpoint requires a Transak configuration file via `--transak-config`, including a configured
+source for the end-user IP address sent to Transak.
 
 Example request:
 
@@ -1720,7 +1722,7 @@ where
 - `--drop-account gtu-drop-account-0.json` keys of the gtu drop account
 - `--forced-update-config-v0 forced-update-config-v0.json` file with app update configuration for the old mobile wallet
 - `--forced-update-config-v1 forced-update-config-v1.json` file with app update configuration for the new mobile wallet
-- `--transak-config transak.json` JSON file with the configuration for the Transak on-ramp.
+- `--transak-config transak.json` JSON file with the configuration for the Transak on-ramp, including how to source the end-user IP address for Transak requests.
 - `--health-tolerance 30` tolerated age of last final block in seconds before the health query returns false
 - `--log-level debug` means all logs above debug will be printed. Options are
   `off`, `warning`, `error`, `info`, `debug`, `trace`.
@@ -1956,7 +1958,8 @@ format:
     "useStaging": false,
     "apiSecret": "MDEyMzQ1Njc4OWFiY2RlCg==",
     "apiKey": "3de320fb-5470-4608-88f1-647b513e64de",
-    "referrerDomain": "concordium.com"
+    "referrerDomain": "concordium.com",
+    "userIpSource": "x-forwarded-for"
 }
 ```
 where
@@ -1965,6 +1968,11 @@ where
 - `apiSecret` is the API secret provided by Transak.
 - `apiKey` is the API key provided by Transak.
 - `referrerDomain` is the domain registered with Transak for the project.
+- `userIpSource` is required and selects how the end-user IP is sourced for the `x-user-ip`
+  header on Transak widget-session requests. Supported values are:
+  - `remote-address`: use the remote IP address observed by wallet-proxy.
+  - `x-forwarded-for`: use the first comma-separated value from the `X-Forwarded-For` header,
+    after trimming whitespace.
 
 
 ## Release

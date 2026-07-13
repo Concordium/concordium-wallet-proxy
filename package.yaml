@@ -41,8 +41,10 @@ dependencies:
 - http2-grpc-types >= 0.5
 - microlens-platform
 - monad-logger >= 0.3.30
+- network
 - network-uri
 - persistent >= 2.9.2
+- wai
 - persistent-postgresql >= 2.9
 - random >= 1.1
 - range >= 0.3
