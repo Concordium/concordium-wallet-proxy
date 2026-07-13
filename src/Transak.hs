@@ -98,7 +98,8 @@ refreshAccessToken TransakConfig{..} = do
     let requestURI = refreshTokenURI transakUseStaging
     initialRequest <- requestFromURI requestURI
     let requestObject = AE.object ["apiKey" AE..= transakApiKey]
-    let headers = ("api-secret", transakApiSecret) : jsonHeaders
+    -- Transak requires the partner API key to be sent in the x-api-key header on API calls.
+    let headers = ("api-secret", transakApiSecret) : ("x-api-key", encodeUtf8 transakApiKey) : jsonHeaders
     let request =
             initialRequest
                 { method = "POST",
@@ -174,7 +175,8 @@ createWidgetUrl TransakConfig{..} token addr = do
                           "disableWalletAddressForm" AE..= True
                         ]
                 ]
-    let headers = ("access-token", token) : jsonHeaders
+    -- Transak requires the partner API key to be sent in the x-api-key header on API calls.
+    let headers = ("access-token", token) : ("x-api-key", encodeUtf8 transakApiKey) : jsonHeaders
     let request =
             initialRequest
                 { method = "POST",
