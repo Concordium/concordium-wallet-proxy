@@ -47,8 +47,9 @@ import Data.Conduit.Attoparsec (sinkParserEither)
 import Data.Conduit.Binary (sinkLbs)
 import Data.Foldable
 import Data.Functor
+import Data.List (intercalate)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (catMaybes, fromMaybe, isJust, maybeToList)
+import Data.Maybe (catMaybes, fromMaybe, isJust, listToMaybe, maybeToList)
 import qualified Data.Proxy as Proxy
 import Data.Range
 import qualified Data.Ratio as Rational
@@ -66,6 +67,9 @@ import qualified Database.Esqueleto.PostgreSQL.JSON as EJ
 import Lens.Micro.Platform hiding ((.=))
 import Network.GRPC.HTTP2.Types (GRPCStatusCode (..))
 import Network.HTTP.Types (Status, badGateway502, badRequest400, gatewayTimeout504, internalServerError500, notFound404, serviceUnavailable503)
+import Network.Socket (SockAddr (..), hostAddress6ToTuple, hostAddressToTuple)
+import qualified Network.Wai as Wai
+import Numeric (showHex)
 import Paths_wallet_proxy (version)
 import System.Random
 import Text.Read hiding (String)
@@ -3136,6 +3140,38 @@ getBlockTransactionEventsR hashText =
 
 -- | Create a Transak on-ramp session. This requires an "address" parameter to be specified, which
 --  will be the address of the account to which the purchased funds will be sent.
+resolveTransakUserIp :: Transak.TransakConfig -> Handler (Either Text Text)
+resolveTransakUserIp conf = do
+    req <- waiRequest
+    return $ case Transak.transakUserIpSource conf of
+        Transak.UserIpRemoteAddress ->
+            case renderRemoteHost (Wai.remoteHost req) of
+                Nothing -> Left "transakOnRamp: could not extract an IP address from the remote socket address"
+                Just ip -> Right ip
+        Transak.UserIpXForwardedFor ->
+            case lookup "x-forwarded-for" (Wai.requestHeaders req) of
+                Nothing -> Left "transakOnRamp: x-forwarded-for header is missing"
+                Just headerValue ->
+                    case Text.decodeUtf8' headerValue of
+                        Left err -> Left $ "transakOnRamp: x-forwarded-for header is not valid UTF-8: " <> Text.pack (show err)
+                        Right decoded ->
+                            case Text.strip <$> listToMaybe (Text.splitOn "," decoded) of
+                                Nothing -> Left "transakOnRamp: x-forwarded-for header does not contain a first IP address"
+                                Just firstIp ->
+                                    if Text.null firstIp
+                                        then Left "transakOnRamp: x-forwarded-for header does not contain a first IP address"
+                                        else Right firstIp
+  where
+    renderRemoteHost :: SockAddr -> Maybe Text
+    renderRemoteHost = \case
+        SockAddrInet _ hostAddress ->
+            let (a, b, c, d) = hostAddressToTuple hostAddress
+            in  Just . Text.pack $ show a ++ "." ++ show b ++ "." ++ show c ++ "." ++ show d
+        SockAddrInet6 _ _ hostAddress6 _ ->
+            let (g1, g2, g3, g4, g5, g6, g7, g8) = hostAddress6ToTuple hostAddress6
+            in  Just . Text.pack $ intercalate ":" (map (`showHex` "") [g1, g2, g3, g4, g5, g6, g7, g8])
+        _ -> Nothing
+
 postTransakOnRamp :: Handler TypedContent
 postTransakOnRamp = do
     yesod <- getYesod
@@ -3147,12 +3183,17 @@ postTransakOnRamp = do
                 Just addrText -> case addressFromText addrText of
                     Left _ -> respond400Error (EMParseError "'address' is not a valid account address") RequestInvalid
                     Right addr -> do
-                        res <- liftIO $ Transak.tryCreateWidgetUrl conf mvToken addr
-                        case res of
-                            Left (Transak.WUEBadGateway reason) -> do
-                                $(logError) ("transakOnRamp: " <> Text.pack reason)
-                                respondStatusError badGateway502 EMBadGateway InternalError
-                            Left Transak.WUEGatewayTimeout -> do
-                                $(logError) "transakOnRamp: gateway timeout"
-                                respondStatusError gatewayTimeout504 EMGatewayTimeout InternalError
-                            Right url -> sendResponse $ object ["widgetUrl" .= url]
+                        resolveTransakUserIp conf >>= \case
+                            Left reason -> do
+                                $(logError) reason
+                                respondStatusError internalServerError500 (EMErrorResponse $ Yesod.InternalError "Unable to determine the end-user IP for the Transak request.") InternalError
+                            Right userIp -> do
+                                res <- liftIO $ Transak.tryCreateWidgetUrl conf mvToken userIp addr
+                                case res of
+                                    Left (Transak.WUEBadGateway reason) -> do
+                                        $(logError) ("transakOnRamp: " <> Text.pack reason)
+                                        respondStatusError badGateway502 EMBadGateway InternalError
+                                    Left Transak.WUEGatewayTimeout -> do
+                                        $(logError) "transakOnRamp: gateway timeout"
+                                        respondStatusError gatewayTimeout504 EMGatewayTimeout InternalError
+                                    Right url -> sendResponse $ object ["widgetUrl" .= url]

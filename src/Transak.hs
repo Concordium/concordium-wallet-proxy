@@ -25,6 +25,12 @@ import Network.URI
 import Concordium.Types
 
 -- | Configuration for the Transak on-ramp.
+data UserIpSource
+    = UserIpRemoteAddress
+    | UserIpXForwardedFor
+    deriving (Eq, Show)
+
+-- | Configuration for the Transak on-ramp.
 data TransakConfig = TransakConfig
     { -- | Whether to use the staging environment.
       transakUseStaging :: !Bool,
@@ -33,8 +39,16 @@ data TransakConfig = TransakConfig
       -- | API key set by Transak.
       transakApiKey :: !Text,
       -- | Referrer domain to use with Transak calls.
-      transakReferrerDomain :: !Text
+      transakReferrerDomain :: !Text,
+      -- | Source for the end-user IP sent to Transak.
+      transakUserIpSource :: !UserIpSource
     }
+
+instance AE.FromJSON UserIpSource where
+    parseJSON = AE.withText "UserIpSource" $ \case
+        "remote-address" -> return UserIpRemoteAddress
+        "x-forwarded-for" -> return UserIpXForwardedFor
+        src -> fail $ "Invalid userIpSource: " ++ show src
 
 instance AE.FromJSON TransakConfig where
     parseJSON = AE.withObject "TransakConfig" $ \v -> do
@@ -42,6 +56,7 @@ instance AE.FromJSON TransakConfig where
         transakApiSecret <- encodeUtf8 <$> v AE..: "apiSecret"
         transakApiKey <- v AE..: "apiKey"
         transakReferrerDomain <- v AE..: "referrerDomain"
+        transakUserIpSource <- v AE..: "userIpSource"
         return TransakConfig{..}
 
 -- | Relative URI path for the refresh-token call.
@@ -98,7 +113,8 @@ refreshAccessToken TransakConfig{..} = do
     let requestURI = refreshTokenURI transakUseStaging
     initialRequest <- requestFromURI requestURI
     let requestObject = AE.object ["apiKey" AE..= transakApiKey]
-    let headers = ("api-secret", transakApiSecret) : jsonHeaders
+    -- Transak requires the partner API key to be sent in the x-api-key header on API calls.
+    let headers = ("api-secret", transakApiSecret) : ("x-api-key", encodeUtf8 transakApiKey) : jsonHeaders
     let request =
             initialRequest
                 { method = "POST",
@@ -157,10 +173,12 @@ createWidgetUrl ::
     TransakConfig ->
     -- | Access token
     BS.ByteString ->
+    -- | End-user IP address
+    Text ->
     -- | Account address to use
     AccountAddress ->
     IO (Either Status URI)
-createWidgetUrl TransakConfig{..} token addr = do
+createWidgetUrl TransakConfig{..} token userIp addr = do
     let requestURI = createWidgetUrlURI transakUseStaging
     initialRequest <- requestFromURI requestURI
     let requestObject =
@@ -174,7 +192,9 @@ createWidgetUrl TransakConfig{..} token addr = do
                           "disableWalletAddressForm" AE..= True
                         ]
                 ]
-    let headers = ("access-token", token) : jsonHeaders
+    -- Transak requires the partner API key on API calls and the originating end-user IP on
+    -- createWidgetUrl calls.
+    let headers = ("access-token", token) : ("x-api-key", encodeUtf8 transakApiKey) : ("x-user-ip", encodeUtf8 userIp) : jsonHeaders
     let request =
             initialRequest
                 { method = "POST",
@@ -211,8 +231,8 @@ data WidgetUrlError
 --  'WUEGatewayTimeout'.
 --  If an unexpected error occurred with the upstream server, including if the result could not be
 --  decoded, 'WUEBadGateway' is returned, with a description of the cause.
-tryCreateWidgetUrl :: TransakConfig -> MVar AccessToken -> AccountAddress -> IO (Either WidgetUrlError URI)
-tryCreateWidgetUrl conf mvToken addr = do
+tryCreateWidgetUrl :: TransakConfig -> MVar AccessToken -> Text -> AccountAddress -> IO (Either WidgetUrlError URI)
+tryCreateWidgetUrl conf mvToken userIp addr = do
     res <- race doIt (threadDelay 10000000)
     return $! case res of
         Left (Left err) -> Left $ WUEBadGateway err
@@ -222,13 +242,13 @@ tryCreateWidgetUrl conf mvToken addr = do
     doIt = do
         res <- try $ do
             token <- getAccessToken conf mvToken
-            createWidgetUrl conf (accessToken token) addr >>= \case
+            createWidgetUrl conf (accessToken token) userIp addr >>= \case
                 Left status
                     | status == status401 -> do
                         -- In the event of a 401, we retry in case another thread concurrently
                         -- refreshed the token, causing createWidgetUrl to fail.
                         token' <- getAccessToken conf mvToken
-                        createWidgetUrl conf (accessToken token') addr >>= \case
+                        createWidgetUrl conf (accessToken token') userIp addr >>= \case
                             Left e -> return (Left $ "(On retry) createWidgetUrl received status: " ++ show e)
                             Right uri -> return (Right uri)
                     | otherwise -> return (Left $ "createWidgetUrl received status: " ++ show status)

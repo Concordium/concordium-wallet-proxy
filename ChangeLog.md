@@ -3,6 +3,8 @@
 ## [unreleased]
 
 - Add `GET` endpoint `/v0/blockTransactionEvents/{blockHash}` for getting the transaction events (outcomes) in a given block, proxying the node's `GetBlockTransactionEvents` method.
+- Add the `x-api-key` header to outbound Transak API calls while preserving the existing request body `apiKey` fields.
+- Add configurable Transak end-user IP sourcing (`remote-address` or `x-forwarded-for`) and send the resolved value in the `x-user-ip` header on widget-session creation calls.
 
 ## [0.49.1] - 2026-06-25
 
