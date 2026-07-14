@@ -66,7 +66,7 @@ import qualified Database.Esqueleto.Legacy as E
 import qualified Database.Esqueleto.PostgreSQL.JSON as EJ
 import Lens.Micro.Platform hiding ((.=))
 import Network.GRPC.HTTP2.Types (GRPCStatusCode (..))
-import Network.HTTP.Types (Status, badGateway502, badRequest400, gatewayTimeout504, internalServerError500, notFound404, serviceUnavailable503)
+import Network.HTTP.Types (Status, badGateway502, badRequest400, gatewayTimeout504, internalServerError500, notFound404, serviceUnavailable503, status200)
 import Network.Socket (SockAddr (..), hostAddress6ToTuple, hostAddressToTuple)
 import qualified Network.Wai as Wai
 import Numeric (showHex)
@@ -326,7 +326,7 @@ mkYesod
 /v0/plt/tokens PltTokensR GET
 /v0/plt/tokenInfo/#Text PltTokenInfoR GET
 /v0/keyAccounts/#Text KeyAccounts GET
-/v0/transakOnRamp TransakOnRamp POST
+/v0/transakOnRamp TransakOnRamp POST OPTIONS
 /v0/genesisHash GenesisHash GET
 /v0/consensusInfo ConsensusInfoR GET
 /v0/blockInfo/#Text BlockInfoR GET
@@ -3121,6 +3121,13 @@ resolveTransakUserIp conf = do
             let (g1, g2, g3, g4, g5, g6, g7, g8) = hostAddress6ToTuple hostAddress6
             in  Just . Text.pack $ intercalate ":" (map (`showHex` "") [g1, g2, g3, g4, g5, g6, g7, g8])
         _ -> Nothing
+
+optionsTransakOnRamp :: Handler TypedContent
+optionsTransakOnRamp = do
+    yesod <- getYesod
+    case transakState yesod of
+        Nothing -> respond404Error (EMErrorResponse NotFound)
+        Just _ -> sendResponseStatus status200 ("" :: Text)
 
 postTransakOnRamp :: Handler TypedContent
 postTransakOnRamp = do
