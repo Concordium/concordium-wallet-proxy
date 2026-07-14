@@ -27,6 +27,7 @@ dependencies:
 - base >=4.7 && < 5
 - base16-bytestring >= 0.1.1.6
 - bytestring >= 0.10
+- case-insensitive
 - cereal >= 0.5.7
 - concordium-base
 - concordium-client
@@ -45,6 +46,7 @@ dependencies:
 - network-uri
 - persistent >= 2.9.2
 - wai
+- wai-cors
 - persistent-postgresql >= 2.9
 - random >= 1.1
 - range >= 0.3

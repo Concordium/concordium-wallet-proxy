@@ -2,6 +2,7 @@
 
 ## [unreleased]
 
+- Add application-level CORS handling. A new `--enable-public-cors` flag for the public API and a strict exact-origin allowlist for `POST /v0/transakOnRamp` configured via `allowedOrigins` in the Transak config file.
 - Add `GET` endpoint `/v0/blockTransactionEvents/{blockHash}` for getting the transaction events (outcomes) in a given block, proxying the node's `GetBlockTransactionEvents` method.
 - Add the `x-api-key` header to outbound Transak API calls while preserving the existing request body `apiKey` fields.
 - Add configurable Transak end-user IP sourcing (`remote-address` or `x-forwarded-for`) and send the resolved value in the `x-user-ip` header on widget-session creation calls.

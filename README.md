@@ -1493,9 +1493,11 @@ Example response:
 This endpoint can product 502 Bad Gateway or 504 Gateway Timeout responses if the up-stream server
 does not behave in the expected manner or times out.  (The proxy will time out after 10 seconds.)
 
+If the Transak endpoint is enabled, wallet-proxy applies application-level CORS protection to
+`/v0/transakOnRamp` and only emits `Access-Control-Allow-Origin` for origins listed in the
+Transak configuration file as [required by Transak](https://docs.transak.com/guides/mandatory-security-changes#cors-protection-on-apis).
+
 Note: per [Transak's documentation](https://docs.transak.com/reference/create-widget-url), the `widgetUrl` is valid only for 5 minutes from the time of creation.
-
-
 
 ## Genesis block hash
 
@@ -1692,6 +1694,7 @@ wallet-proxy --grpc-ip 127.0.0.1\
              --forced-update-config-v0 forced-update-config-v0.json\
              --forced-update-config-v1 forced-update-config-v1.json\
              --transak-config transak.json\
+             --enable-public-cors\
              --health-tolerance 30\
              --log-level debug\
              --grpc-timeout 15
@@ -1722,7 +1725,8 @@ where
 - `--drop-account gtu-drop-account-0.json` keys of the gtu drop account
 - `--forced-update-config-v0 forced-update-config-v0.json` file with app update configuration for the old mobile wallet
 - `--forced-update-config-v1 forced-update-config-v1.json` file with app update configuration for the new mobile wallet
-- `--transak-config transak.json` JSON file with the configuration for the Transak on-ramp, including how to source the end-user IP address for Transak requests.
+- `--transak-config transak.json` JSON file with the configuration for the Transak on-ramp, including how to source the end-user IP address for Transak requests and which browser origins may access the endpoint.
+- `--enable-public-cors` enables application-level wildcard CORS handling for the public wallet-proxy endpoints. The `/v0/transakOnRamp` endpoint always uses the stricter Transak-specific origin allowlist instead.
 - `--health-tolerance 30` tolerated age of last final block in seconds before the health query returns false
 - `--log-level debug` means all logs above debug will be printed. Options are
   `off`, `warning`, `error`, `info`, `debug`, `trace`.
@@ -1959,7 +1963,11 @@ format:
     "apiSecret": "MDEyMzQ1Njc4OWFiY2RlCg==",
     "apiKey": "3de320fb-5470-4608-88f1-647b513e64de",
     "referrerDomain": "concordium.com",
-    "userIpSource": "x-forwarded-for"
+    "userIpSource": "x-forwarded-for",
+    "allowedOrigins": [
+        "chrome-extension://abcdefghijklmnopqrstuvwxyzabcdef",
+        "https://wallet.concordium.com"
+    ]
 }
 ```
 where
@@ -1973,6 +1981,9 @@ where
   - `remote-address`: use the remote IP address observed by wallet-proxy.
   - `x-forwarded-for`: use the first comma-separated value from the `X-Forwarded-For` header,
     after trimming whitespace.
+- `allowedOrigins` is required and must contain one or more exact browser origins that may access
+  `/v0/transakOnRamp`. When the request `Origin` matches one of these values, wallet-proxy echoes
+  it in the `Access-Control-Allow-Origin` response header. Wildcards are not supported.
 
 
 ## Release
