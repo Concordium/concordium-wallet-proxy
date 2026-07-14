@@ -933,7 +933,10 @@ knownTokenOperationSpecificCostMap =
           ("addDenyList", Cost.tokenListOperationCost),
           ("removeDenyList", Cost.tokenListOperationCost),
           ("pause", Cost.tokenPauseUnpauseCost),
-          ("unpause", Cost.tokenPauseUnpauseCost)
+          ("unpause", Cost.tokenPauseUnpauseCost),
+          ("assignAdminRoles", Cost.tokenAssignRevokeRolesCost),
+          ("revokeAdminRoles", Cost.tokenAssignRevokeRolesCost),
+          ("updateMetadata", Cost.tokenUpdateTokenMetadataCost)
         ]
 
 -- | Computes the sum of the token operation specific costs from a supplied map containing the number of occurrences of each operation type.
@@ -1508,8 +1511,36 @@ getSimpleTransactionStatus i trHash = do
                                     "tokenId" .= ettTokenId,
                                     "tokenAmount" .= ettAmount
                                   ]
+                                    ++ ["fromLock" AE..= lockId | lockId <- toList ettFromLock]
+                                    ++ ["toLock" AE..= lockId | lockId <- toList ettToLock]
                                     ++ ["memo" AE..= memo | memo <- toList ettMemo]
                                 )
+                        TxSuccess _ -> return []
+                        TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
+                TSTAccountTransaction (Just TTMetaUpdate) ->
+                    case stsResult of
+                        TxSuccess [TokenTransfer{ettTo = HolderAccount{haAccount = transferDestination}, ..}] ->
+                            return
+                                ( [ "outcome" .= String "success",
+                                    "to" .= transferDestination,
+                                    "tokenId" .= ettTokenId,
+                                    "tokenAmount" .= ettAmount
+                                  ]
+                                    ++ ["fromLock" AE..= lockId | lockId <- toList ettFromLock]
+                                    ++ ["toLock" AE..= lockId | lockId <- toList ettToLock]
+                                    ++ ["memo" AE..= memo | memo <- toList ettMemo]
+                                )
+                        TxSuccess [LockCreated{..}] ->
+                            return
+                                [ "outcome" .= String "success",
+                                  "lockId" .= elcLockId,
+                                  "lockConfig" .= elcLockConfig
+                                ]
+                        TxSuccess [LockDestroyed{..}] ->
+                            return
+                                [ "outcome" .= String "success",
+                                  "lockId" .= eldLockId
+                                ]
                         TxSuccess _ -> return []
                         TxReject reason -> return ["outcome" .= String "reject", "rejectReason" .= i18n i reason]
                 TSTAccountTransaction (Just TTRegisterData) ->
@@ -2152,6 +2183,7 @@ getAccountTransactionsWorker includeMemos includeSuspensionEvents includePltEven
                                 E.||. E.not_
                                     ( extractedType E.==. E.val (Just "updateCreatePLT")
                                         E.||. extractedType E.==. E.val (Just "tokenUpdate")
+                                        E.||. extractedType E.==. E.val (Just "metaUpdate")
                                     )
 
         rawReason <- isJust <$> lookupGetParam "includeRawRejectReason"
@@ -2459,7 +2491,24 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
                                       "tokenId" .= ettTokenId,
                                       "tokenTransferAmount" .= ettAmount
                                     ]
+                                        ++ ["fromLock" AE..= lockId | lockId <- toList ettFromLock]
+                                        ++ ["toLock" AE..= lockId | lockId <- toList ettToLock]
                                         ++ ["memo" AE..= memo | memo <- toList ettMemo]
+                                (TSTAccountTransaction (Just TTMetaUpdate), [TokenTransfer{ettFrom = HolderAccount{haAccount = transferSource}, ettTo = HolderAccount{haAccount = transferDestination}, ..}]) ->
+                                    [ "transferSource" .= transferSource,
+                                      "transferDestination" .= transferDestination,
+                                      "tokenId" .= ettTokenId,
+                                      "tokenTransferAmount" .= ettAmount
+                                    ]
+                                        ++ ["fromLock" AE..= lockId | lockId <- toList ettFromLock]
+                                        ++ ["toLock" AE..= lockId | lockId <- toList ettToLock]
+                                        ++ ["memo" AE..= memo | memo <- toList ettMemo]
+                                (TSTAccountTransaction (Just TTMetaUpdate), [LockCreated{..}]) ->
+                                    [ "lockId" .= elcLockId,
+                                      "lockConfig" .= elcLockConfig
+                                    ]
+                                (TSTAccountTransaction (Just TTMetaUpdate), [LockDestroyed{..}]) ->
+                                    ["lockId" .= eldLockId]
                                 _ -> [],
                           eventSubtotal self evts
                         )
@@ -2569,6 +2618,7 @@ renderTransactionType TTRegisterData = "registerData"
 renderTransactionType TTConfigureBaker = "configureBaker"
 renderTransactionType TTConfigureDelegation = "configureDelegation"
 renderTransactionType TTTokenUpdate = "tokenUpdate"
+renderTransactionType TTMetaUpdate = "metaUpdate"
 
 renderTransactionSummaryType :: TransactionSummaryType -> Text
 renderTransactionSummaryType (TSTAccountTransaction (Just tt)) = renderTransactionType tt
