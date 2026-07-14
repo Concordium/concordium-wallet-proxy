@@ -8,13 +8,19 @@ module Main where
 import qualified Data.Aeson as AE
 import qualified Data.Aeson.Types as AE
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.CaseInsensitive as CI
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map.Strict as Map
 import Data.Maybe
 import Data.String
 import Database.Persist.Postgresql
 import qualified Logging
+import Network.HTTP.Types.Method (methodGet, methodOptions, methodPost, methodPut)
+import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp
+import Network.Wai.Middleware.Cors
 import Proxy
 import Yesod
 
@@ -56,7 +62,8 @@ data ProxyConfig = ProxyConfig
       logLevel :: Logging.LogLevel,
       tcVersion :: Maybe String,
       tcUrl :: Maybe String,
-      transakConfig :: Maybe FilePath
+      transakConfig :: Maybe FilePath,
+      pcEnablePublicCors :: Bool
     }
 
 parser :: ParserInfo ProxyConfig
@@ -83,6 +90,7 @@ parser =
             <*> optional (strOption (long "tc-version" <> metavar "STRING" <> help "Version of terms and conditions in effect."))
             <*> optional (strOption (long "tc-url" <> metavar "URL" <> help "Link to the terms and conditions."))
             <*> optional (strOption (long "transak-config" <> metavar "FILE" <> help "File with configuration for Transak on-ramp gateway."))
+            <*> switch (long "enable-public-cors" <> help "Enable wildcard CORS handling for public wallet-proxy endpoints.")
 
     mkProxyConfig backend timeout =
         ProxyConfig $
@@ -94,8 +102,8 @@ parser =
                 (Just (fromMaybe 15 timeout))
                 (CMDS.grpcUseTls backend)
 
-runSite :: (YesodDispatch site) => Int -> site -> IO ()
-runSite port site = do
+runSite :: (YesodDispatch site) => Int -> Wai.Middleware -> site -> IO ()
+runSite port middleware site = do
     toWaiApp site
         >>= Network.Wai.Handler.Warp.runSettings
             ( Network.Wai.Handler.Warp.setPort port $
@@ -103,6 +111,41 @@ runSite port site = do
                     Network.Wai.Handler.Warp.setHost (fromString serverHost) $
                         Network.Wai.Handler.Warp.defaultSettings
             )
+            . middleware
+
+transakOnRampPath :: ByteString
+transakOnRampPath = "/v0/transakOnRamp"
+
+mkCorsMiddleware :: Bool -> Maybe Transak.TransakConfig -> Wai.Middleware
+mkCorsMiddleware enablePublicCors mTransakConf =
+    cors $ \req ->
+        case Wai.rawPathInfo req of
+            path
+                | path == transakOnRampPath -> transakCorsPolicy <$> mTransakConf
+                | enablePublicCors -> Just (publicCorsPolicy req)
+                | otherwise -> Nothing
+  where
+    transakCorsPolicy conf =
+        simpleCorsResourcePolicy
+            { corsOrigins = Just (NonEmpty.toList (Transak.transakAllowedOrigins conf), False),
+              corsMethods = [methodPost, methodOptions],
+              corsRequestHeaders = ["Content-Type"],
+              corsVaryOrigin = True,
+              corsRequireOrigin = False,
+              corsIgnoreFailures = True
+            }
+    publicCorsPolicy req =
+        simpleCorsResourcePolicy
+            { corsOrigins = Nothing,
+              corsMethods = [methodGet, methodPost, methodPut, methodOptions],
+              corsRequestHeaders = requestedHeaders req,
+              corsRequireOrigin = False,
+              corsIgnoreFailures = True
+            }
+    requestedHeaders =
+        maybe [] (map (CI.mk . BS8.strip) . BS8.split ',')
+            . lookup "Access-Control-Request-Headers"
+            . Wai.requestHeaders
 
 accountParser :: AE.Value -> AE.Parser (AccountAddress, [(CredentialIndex, [(KeyIndex, KeyPair)])])
 accountParser = AE.withObject "Account keys" $ \v -> do
@@ -205,5 +248,6 @@ main = do
                     Right res -> case getResponseValue res of
                         Right cParams -> do
                             let globalInfo = toJSON $ Versioned (Version 0) cParams
-                            runSite pcPort Proxy{grpcEnvData = cfg, ..}
+                            let corsMiddleware = mkCorsMiddleware pcEnablePublicCors (fst <$> transakState)
+                            runSite pcPort corsMiddleware Proxy{grpcEnvData = cfg, ..}
                         Left (_, err) -> die $ "Cannot obtain cryptographic parameters due to error: " ++ err

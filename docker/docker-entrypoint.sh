@@ -23,6 +23,7 @@ grpc_retry="${GRPC_RETRY:-0}" # number of times to retry a failed request
 tc_version="${TC_VERSION-}"
 tc_url="${TC_URL-}"
 transak_config_file="${TRANSAK_CONFIG_FILE-}"
+enable_public_cors="${ENABLE_PUBLIC_CORS:-false}"
 
 args=(
 	--grpc-ip "${grpc_host}"
@@ -58,6 +59,9 @@ if [ "${use_tls}" = "true" ]; then
 fi
 if [ -n "${transak_config_file}" ]; then
 	args+=( --transak-config "${transak_config_file}" )
+fi
+if [ "${enable_public_cors}" = "true" ]; then
+	args+=( --enable-public-cors )
 fi
 
 # Inherits env vars and args.

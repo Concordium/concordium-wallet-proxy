@@ -13,6 +13,8 @@ import Control.Exception
 import Control.Monad
 import qualified Data.Aeson as AE
 import qualified Data.ByteString as BS
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NonEmpty
 import Data.Maybe
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
@@ -41,7 +43,9 @@ data TransakConfig = TransakConfig
       -- | Referrer domain to use with Transak calls.
       transakReferrerDomain :: !Text,
       -- | Source for the end-user IP sent to Transak.
-      transakUserIpSource :: !UserIpSource
+      transakUserIpSource :: !UserIpSource,
+      -- | Browser origins allowed to access the wallet-proxy Transak endpoint.
+      transakAllowedOrigins :: !(NonEmpty BS.ByteString)
     }
 
 instance AE.FromJSON UserIpSource where
@@ -57,6 +61,11 @@ instance AE.FromJSON TransakConfig where
         transakApiKey <- v AE..: "apiKey"
         transakReferrerDomain <- v AE..: "referrerDomain"
         transakUserIpSource <- v AE..: "userIpSource"
+        allowedOrigins <- v AE..: "allowedOrigins"
+        transakAllowedOrigins <-
+            case NonEmpty.nonEmpty (map encodeUtf8 allowedOrigins) of
+                Nothing -> fail "allowedOrigins must contain at least one origin"
+                Just origins -> return origins
         return TransakConfig{..}
 
 -- | Relative URI path for the refresh-token call.
