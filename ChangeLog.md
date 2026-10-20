@@ -2,6 +2,9 @@
 
 ## [unreleased]
 
+- Report submission `outcome: "success"` for all successful Token Updates, including empty and multi-event results. Single-transfer fields remain conditional.
+- Remove unreleased Meta Update handling and migrate client conversions to current base/protobuf types.
+
 ## [0.50.0] - 2026-07-14
 
 - Add application-level CORS handling. A new `--enable-public-cors` flag for the public API and a strict exact-origin allowlist for `POST /v0/transakOnRamp` configured via `allowedOrigins` in the Transak config file.
