@@ -1,0 +1,49 @@
+name: Rust Wallet Proxy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wallet_proxy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/wallet_proxy_test
+      SQLX_OFFLINE: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.94.0"
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Formatting
+        run: cargo fmt --all -- --check
+      - name: Offline build and static analysis
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: All tests including isolated PostgreSQL databases
+        run: cargo test --locked --all-targets -- --include-ignored
+      - name: Install matching query-validation tool
+        run: cargo install sqlx-cli --version 0.9.0 --locked --no-default-features --features postgres,rustls
+      - name: Load test-only legacy schema for query checking
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f rust/tests/fixtures/schema.sql
+      - name: Validate offline query metadata against PostgreSQL
+        env:
+          SQLX_OFFLINE: "false"
+        run: cargo sqlx prepare --check -- --all-targets

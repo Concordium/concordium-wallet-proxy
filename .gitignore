@@ -1,5 +1,6 @@
 .DS_Store
 .stack-work/
+/target/
 simple-client.cabal
 *~
 .cache

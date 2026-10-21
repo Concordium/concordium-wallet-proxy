@@ -1,0 +1,4 @@
+[env]
+# Normal builds use committed metadata. CI checks it against PostgreSQL with
+# SQLX_OFFLINE=false cargo sqlx prepare --check -- --all-targets.
+SQLX_OFFLINE = { value = "true", force = false }

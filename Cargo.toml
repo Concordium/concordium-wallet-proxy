@@ -1,0 +1,51 @@
+[package]
+name = "concordium-wallet-proxy"
+version = "0.50.0"
+edition = "2021"
+rust-version = "1.94"
+license = "Apache-2.0"
+publish = false
+description = "Wallet-facing HTTP backend for Concordium"
+
+[lib]
+path = "rust/src/lib.rs"
+
+[[bin]]
+name = "concordium-wallet-proxy"
+path = "rust/src/main.rs"
+
+[[test]]
+name = "integration"
+path = "rust/tests/integration.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+async-trait = "0.1.92"
+axum = { version = "0.8.9", features = ["http2"] }
+chrono = { version = "0.4.45", features = ["serde"] }
+clap = { version = "4.6.7", features = ["derive", "env"] }
+concordium-rust-sdk = "=10.0.0"
+http = "1.5.0"
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["arbitrary_precision"] }
+sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "chrono", "json"] }
+thiserror = "2.0.21"
+tokio = { version = "1.54.0", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
+# Match the SDK's transport types and enable TLS on its Tonic dependency.
+tonic = { version = "0.12.3", features = ["tls", "tls-roots"] }
+tower = { version = "0.5.3", features = ["util"] }
+tower-http = { version = "0.7.1", features = ["cors", "trace"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+sqlx = { version = "0.9.0", default-features = false, features = ["migrate"] }
+http-body-util = "0.1.5"
+tempfile = "3.27.0"
+tokio = { version = "1.54.0", features = ["test-util"] }
+tokio-stream = { version = "0.1.19", features = ["net"] }
+
+[lints.rust]
+missing_docs = "deny"
+unsafe_code = "forbid"

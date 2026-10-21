@@ -1,0 +1,68 @@
+{
+  "provenance": {
+    "health": "src/Proxy.hs getHealthR: node response absent skips SQL; successful response probes ati CROSS JOIN summaries; age is strictly less than tolerance; database exceptions use Yesod errorHandler",
+    "errors": "src/Internationalization/En.hs i18nErrorMessage; src/Proxy.hs runGRPCWithCustomError and Yesod instance",
+    "version": "package.yaml version 0.50.0 (hpack source); checked-in ignored cabal file contains an older version",
+    "review": "Source-derived expectations, not captured from Rust. Independent human fixture review remains required before compatibility sign-off."
+  },
+  "now": "2026-01-01T00:05:00Z",
+  "toleranceSeconds": 300,
+  "cases": [
+    {
+      "name": "fresh block",
+      "node": "2026-01-01T00:00:00.001Z",
+      "status": 200,
+      "body": { "healthy": true, "lastFinalTime": "2026-01-01T00:00:00.001Z", "version": "0.50.0" }
+    },
+    {
+      "name": "fractional timestamps omit trailing zeros",
+      "node": "2026-01-01T00:04:59.100Z",
+      "status": 200,
+      "body": { "healthy": true, "lastFinalTime": "2026-01-01T00:04:59.1Z", "version": "0.50.0" }
+    },
+    {
+      "name": "exact freshness boundary is stale",
+      "node": "2026-01-01T00:00:00Z",
+      "status": 200,
+      "body": { "healthy": false, "reason": "The last final block is too old.", "lastFinalTime": "2026-01-01T00:00:00Z", "version": "0.50.0" }
+    },
+    {
+      "name": "old block",
+      "node": "2025-12-31T23:59:59.999Z",
+      "status": 200,
+      "body": { "healthy": false, "reason": "The last final block is too old.", "lastFinalTime": "2025-12-31T23:59:59.999Z", "version": "0.50.0" }
+    },
+    {
+      "name": "future block retains existing behavior",
+      "node": "2026-01-01T00:06:00Z",
+      "status": 200,
+      "body": { "healthy": true, "lastFinalTime": "2026-01-01T00:06:00Z", "version": "0.50.0" }
+    },
+    {
+      "name": "missing node result skips even failed database",
+      "node": "missing",
+      "databaseFailure": true,
+      "status": 200,
+      "body": { "healthy": false, "reason": "Could not get response from GRPC.", "version": "0.50.0" }
+    },
+    {
+      "name": "client connection failure",
+      "node": "transport",
+      "status": 502,
+      "body": { "error": 0, "errorMessage": "Cannot communicate with node via GRPC endpoint." }
+    },
+    {
+      "name": "node invariant failure",
+      "node": "invalid",
+      "status": 500,
+      "body": { "error": 0, "errorMessage": "Internal server error" }
+    },
+    {
+      "name": "database failure is generic internal error",
+      "node": "2026-01-01T00:04:59Z",
+      "databaseFailure": true,
+      "status": 500,
+      "body": { "error": 0, "errorMessage": "Internal server error" }
+    }
+  ]
+}
