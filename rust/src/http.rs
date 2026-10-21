@@ -1,7 +1,8 @@
-//! This module serves the health route and formats HTTP errors.
+//! This module serves health and catalogue routes and formats HTTP errors.
 //! It applies path redirects, response headers, and optional public CORS handling.
 
 use crate::{
+    catalogs,
     health::{Health, HealthError},
     node::NodeFailure,
 };
@@ -14,19 +15,20 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use serde_json::json;
+use serde_json::{json, Value};
 use tower_http::trace::TraceLayer;
 
-/// Build the health routes with the existing error and header formats.
+/// Build the health and catalogue routes with the existing error and header formats.
 /// Enable public CORS handling only when `public_cors` is true.
-pub fn router(health: Health, public_cors: bool) -> Router {
+pub fn router(health: Health, catalogs: [Value; 3], public_cors: bool) -> Router {
     Router::new()
         .route("/v0/health", get(check_health))
+        .with_state(health)
+        .merge(catalogs::routes(catalogs))
         .fallback(|| async { error(StatusCode::NOT_FOUND, 1, "Not found") })
         .method_not_allowed_fallback(|| async {
             error(StatusCode::METHOD_NOT_ALLOWED, 1, "Bad method")
         })
-        .with_state(health)
         .layer(middleware::from_fn_with_state(public_cors, compatibility))
         .layer(TraceLayer::new_for_http())
 }

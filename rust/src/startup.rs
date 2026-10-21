@@ -29,7 +29,7 @@ pub async fn initialize(config: &Config) -> anyhow::Result<Application> {
     let catalogs = load_catalogs(&config.catalogs)?;
     let pool = PgPoolOptions::new()
         .max_connections(config.database.max_connections.get())
-        .connect(&config.database.connection_string()?)
+        .connect(&config.database.url)
         .await
         .context("Cannot initialize PostgreSQL pool")?;
     let node = Arc::new(SdkNode::connect(&config.node).await?);

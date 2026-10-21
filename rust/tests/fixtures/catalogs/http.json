@@ -1,0 +1,116 @@
+{
+  "provenance": {
+    "routes": "src/Proxy.hs parseRoutes declares GET /v0/ip_info, /v1/ip_info, and /v2/ip_info",
+    "bodies": "src/Proxy.hs getIpsR, getIpsV1R, and getIpsV2R return their configured Aeson Value unchanged; response bodyCatalog selects the corresponding v0.json, v1.json, or v2.json file",
+    "startup": "app/Main.hs decodes each file as an Aeson Value before database and node initialization; malformed JSON fails, but valid JSON has no additional schema validation",
+    "examples": "README.md Identity providers metadata files describes initial-account issuance, recovery, duplicate provider identities, and optional display names",
+    "syntheticData": "Public keys and icons are opaque placeholders. No cryptographic validity is asserted. Null and extension fields test the existing unvalidated pass-through contract.",
+    "sharedHttp": "src/Proxy.hs Yesod instance; src/Internationalization/En.hs error translations; app/Main.hs mkCorsMiddleware",
+    "review": "Source-derived expectations, not captured from Rust. Independent human review remains required before compatibility sign-off."
+  },
+  "cases": [
+    {
+      "name": "version 0 initial-account catalogue",
+      "request": { "method": "GET", "uri": "/v0/ip_info", "headers": {} },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json; charset=utf-8", "server": "Concordium-wallet-proxy" },
+        "absentHeaders": ["content-language", "access-control-allow-origin"],
+        "bodyCatalog": 0
+      }
+    },
+    {
+      "name": "version 1 keeps duplicate verification backends",
+      "request": { "method": "GET", "uri": "/v1/ip_info", "headers": {} },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json; charset=utf-8", "server": "Concordium-wallet-proxy" },
+        "absentHeaders": ["content-language"],
+        "bodyCatalog": 1
+      }
+    },
+    {
+      "name": "version 2 keeps company and individual flows",
+      "request": { "method": "GET", "uri": "/v2/ip_info", "headers": {} },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json; charset=utf-8", "server": "Concordium-wallet-proxy" },
+        "absentHeaders": ["content-language"],
+        "bodyCatalog": 2
+      }
+    },
+    {
+      "name": "query and language preferences do not transform provider data",
+      "request": {
+        "method": "GET", "uri": "/v2/ip_info?_LANG=fr&company=false",
+        "headers": { "accept-language": "fr, en;q=0.5", "cookie": "_LANG=de" }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json; charset=utf-8" },
+        "absentHeaders": ["content-language"],
+        "bodyCatalog": 2
+      }
+    },
+    {
+      "name": "canonical path redirect keeps query parameters",
+      "request": { "method": "GET", "uri": "/v1/ip_info/?_LANG=fr", "headers": {} },
+      "response": {
+        "status": 301,
+        "headers": { "location": "/v1/ip_info?_LANG=fr" },
+        "emptyBody": true
+      }
+    },
+    {
+      "name": "unknown catalogue version",
+      "request": { "method": "GET", "uri": "/v3/ip_info", "headers": {} },
+      "response": {
+        "status": 404,
+        "headers": { "content-type": "application/json; charset=utf-8", "content-language": "en" },
+        "body": { "error": 1, "errorMessage": "Not found" }
+      }
+    },
+    {
+      "name": "catalogue routes reject writes",
+      "request": { "method": "PUT", "uri": "/v1/ip_info", "headers": { "accept-language": "fr" } },
+      "response": {
+        "status": 405,
+        "headers": { "content-type": "application/json; charset=utf-8", "content-language": "en" },
+        "body": { "error": 1, "errorMessage": "Bad method" }
+      }
+    },
+    {
+      "name": "OPTIONS has no implicit public CORS policy",
+      "request": { "method": "OPTIONS", "uri": "/v0/ip_info", "headers": { "origin": "https://wallet.example", "access-control-request-method": "GET" } },
+      "response": {
+        "status": 405,
+        "headers": { "content-language": "en" },
+        "absentHeaders": ["access-control-allow-origin"],
+        "body": { "error": 1, "errorMessage": "Bad method" }
+      }
+    },
+    {
+      "name": "public CORS applies to catalogue responses",
+      "publicCors": true,
+      "request": { "method": "GET", "uri": "/v0/ip_info", "headers": { "origin": "https://wallet.example" } },
+      "response": {
+        "status": 200,
+        "headers": { "access-control-allow-origin": "*", "content-type": "application/json; charset=utf-8" },
+        "bodyCatalog": 0
+      }
+    },
+    {
+      "name": "public CORS handles catalogue preflight",
+      "publicCors": true,
+      "request": {
+        "method": "OPTIONS", "uri": "/v2/ip_info",
+        "headers": { "origin": "https://wallet.example", "access-control-request-method": "GET", "access-control-request-headers": "Content-Type,X-Test" }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, PUT, OPTIONS", "access-control-allow-headers": "Content-Type,X-Test" },
+        "emptyBody": true
+      }
+    }
+  ]
+}

@@ -57,22 +57,18 @@ impl Default for ServerConfig {
     }
 }
 
-/// This type identifies the PostgreSQL database.
-/// Use an inline URL or a secret file, but not both.
+/// This type contains the PostgreSQL connection settings.
 #[derive(Clone, Args)]
 #[group(skip)]
-#[command(group(clap::ArgGroup::new("database_connection").args(["url", "url_file"]).required(true).multiple(false)))]
 pub struct DatabaseConfig {
-    /// This URL supplies the database connection settings.
+    /// This required URL supplies the database connection settings.
+    /// Use the environment variable for credentials.
     #[arg(
         long = "database-url",
         env = "WALLET_PROXY_DATABASE_URL",
         hide_env_values = true
     )]
-    pub url: Option<String>,
-    /// This file supplies the database URL. Final line endings are removed.
-    #[arg(long = "database-url-file", env = "WALLET_PROXY_DATABASE_URL_FILE")]
-    pub url_file: Option<PathBuf>,
+    pub url: String,
     /// This positive count limits connections in the PostgreSQL pool. The default is 10.
     #[arg(
         long = "database-max-connections",
@@ -139,7 +135,7 @@ impl Config {
     /// Check settings before a network connection starts.
     /// Return an error if a setting is invalid or the SDK does not support it.
     pub fn validate(&self) -> anyhow::Result<()> {
-        self.database.connection_string()?;
+        self.database.validate()?;
         if self.node.timeout_seconds == 0 {
             bail!("Node timeout must be positive");
         }
@@ -173,21 +169,12 @@ impl Config {
 }
 
 impl DatabaseConfig {
-    /// Read and check the database URL.
-    /// Error messages do not contain the URL.
-    pub fn connection_string(&self) -> anyhow::Result<String> {
-        let url = match (&self.url, &self.url_file) {
-            (Some(url), None) => url.clone(),
-            (None, Some(file)) => std::fs::read_to_string(file)
-                .context("Cannot read database URL secret file")?
-                .trim_end_matches(['\r', '\n'])
-                .to_owned(),
-            _ => bail!("Configure exactly one database URL or database URL file"),
-        };
+    /// Check the database URL without including it in error messages.
+    fn validate(&self) -> anyhow::Result<()> {
         use std::str::FromStr;
-        sqlx::postgres::PgConnectOptions::from_str(&url)
+        sqlx::postgres::PgConnectOptions::from_str(&self.url)
             .map_err(|_| anyhow::anyhow!("Invalid PostgreSQL connection URL"))?;
-        Ok(url)
+        Ok(())
     }
 }
 

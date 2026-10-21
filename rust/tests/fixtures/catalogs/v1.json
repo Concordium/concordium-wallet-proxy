@@ -1,0 +1,40 @@
+[
+  {
+    "metadata": {
+      "issuanceStart": "https://individual.example/issuance",
+      "recoveryStart": "https://individual.example/recovery",
+      "icon": "c3ludGhldGljLXYxLWljb24=",
+      "support": "support@individual.example"
+    },
+    "ipInfo": {
+      "ipIdentity": 0,
+      "ipDescription": {
+        "name": "Individual provider",
+        "url": "https://individual.example",
+        "description": "Synthetic provider without initial accounts"
+      },
+      "ipVerifyKey": "opaque-test-key-v1",
+      "ipCdiVerifyKey": "opaque-test-credential-key-v1"
+    },
+    "arsInfos": {}
+  },
+  {
+    "metadata": {
+      "issuanceStart": "https://alternative.example/issuance",
+      "recoveryStart": "https://alternative.example/recovery",
+      "icon": "c3ludGhldGljLWFsdGVybmF0ZS1pY29u",
+      "support": null
+    },
+    "ipInfo": {
+      "ipIdentity": 0,
+      "ipDescription": {
+        "name": "Individual provider",
+        "url": "https://individual.example",
+        "description": "The same provider with a second verification backend"
+      },
+      "ipVerifyKey": "opaque-test-key-v1",
+      "ipCdiVerifyKey": "opaque-test-credential-key-v1"
+    },
+    "arsInfos": {}
+  }
+]

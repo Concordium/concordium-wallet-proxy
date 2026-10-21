@@ -1,0 +1,26 @@
+[
+  {
+    "metadata": {
+      "issuanceStart": "https://individual.example/issuance-with-account",
+      "icon": "c3ludGhldGljLXYwLWljb24=",
+      "support": "support@individual.example"
+    },
+    "ipInfo": {
+      "ipIdentity": 0,
+      "ipDescription": {
+        "name": "Individual provider",
+        "url": "https://individual.example",
+        "description": "Synthetic provider for the initial-account flow"
+      },
+      "ipVerifyKey": "opaque-test-key-v0",
+      "ipCdiVerifyKey": "opaque-test-credential-key-v0"
+    },
+    "arsInfos": {
+      "1": {
+        "arIdentity": 1,
+        "arDescription": { "name": "AR-1", "url": "", "description": "" },
+        "arPublicKey": "opaque-test-revoker-key"
+      }
+    }
+  }
+]

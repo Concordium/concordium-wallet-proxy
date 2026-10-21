@@ -20,7 +20,11 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(address = %listener.local_addr()?, "Wallet Proxy listening");
     axum::serve(
         listener,
-        router(application.health.clone(), config.server.enable_public_cors),
+        router(
+            application.health.clone(),
+            application.catalogs,
+            config.server.enable_public_cors,
+        ),
     )
     .with_graceful_shutdown(shutdown())
     .await?;

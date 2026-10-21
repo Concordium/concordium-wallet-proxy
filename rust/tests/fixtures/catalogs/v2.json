@@ -1,0 +1,47 @@
+[
+  {
+    "metadata": {
+      "issuanceStart": "https://provider.example/individual/issuance",
+      "recoveryStart": "https://provider.example/individual/recovery",
+      "icon": "c3ludGhldGljLWluZGl2aWR1YWwtaWNvbg==",
+      "support": "support@provider.example"
+    },
+    "ipInfo": {
+      "ipIdentity": 4,
+      "ipDescription": {
+        "name": "Individual and company provider",
+        "url": "https://provider.example",
+        "description": "Synthetic individual identity flow"
+      },
+      "ipVerifyKey": "opaque-test-key-v2",
+      "ipCdiVerifyKey": "opaque-test-credential-key-v2"
+    },
+    "arsInfos": {}
+  },
+  {
+    "metadata": {
+      "display": "Company identity — Øresund 東京",
+      "issuanceStart": "https://provider.example/company/issuance",
+      "recoveryStart": "https://provider.example/company/recovery",
+      "icon": "c3ludGhldGljLWNvbXBhbnktaWNvbg==",
+      "support": "company-support@provider.example"
+    },
+    "ipInfo": {
+      "ipIdentity": 4,
+      "ipDescription": {
+        "name": "Individual and company provider",
+        "url": "https://provider.example",
+        "description": "Synthetic company identity flow"
+      },
+      "ipVerifyKey": "opaque-test-key-v2",
+      "ipCdiVerifyKey": "opaque-test-credential-key-v2"
+    },
+    "arsInfos": {},
+    "extension": {
+      "largeInteger": 184467440737095516160000,
+      "enabled": false,
+      "optional": null,
+      "tags": ["company", "individual"]
+    }
+  }
+]

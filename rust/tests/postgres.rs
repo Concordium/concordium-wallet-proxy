@@ -1,4 +1,4 @@
-//! This module checks health and startup with real PostgreSQL databases.
+//! This module checks startup, health, and catalogue routes with real PostgreSQL databases.
 //! These tests require a disposable server and run only when ignored tests are enabled.
 
 use super::{
@@ -57,21 +57,48 @@ async fn health_probe_detects_schema_and_unsigned_decode_failures(pool: PgPool) 
 
 #[sqlx::test]
 #[ignore = "requires disposable PostgreSQL and a DATABASE_URL with CREATE DATABASE permission"]
-async fn configured_startup_and_http_health_use_real_postgres_and_sdk(pool: PgPool) {
+async fn configured_startup_and_http_routes_use_real_postgres_and_sdk(pool: PgPool) {
     schema(&pool).await;
     let node = support::serve(RpcState::default()).await;
     let (_dir, mut config) = test_config();
-    config.database.url = Some(pool.connect_options().to_url_lossy().to_string());
+    config.database.url = pool.connect_options().to_url_lossy().to_string();
     config.node.endpoint = node.endpoint.clone();
     config.database.max_connections = std::num::NonZeroU32::new(1).unwrap();
     config.server.health_tolerance_seconds = 9_223_372_036_854_775;
+    for (version, path) in [
+        &config.catalogs.v0,
+        &config.catalogs.v1,
+        &config.catalogs.v2,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        std::fs::write(
+            path,
+            serde_json::to_vec(&serde_json::json!([{"catalogVersion": version}])).unwrap(),
+        )
+        .unwrap();
+    }
     let application = initialize(&config).await.unwrap();
     assert_eq!(
         application.cryptographic_parameters.genesis_string,
         "test-network"
     );
-    let server = support::serve_router(router(application.health, false)).await;
+    let server =
+        support::serve_router(router(application.health, application.catalogs, false)).await;
     let http = reqwest::Client::builder().no_proxy().build().unwrap();
+    for version in 0..3 {
+        let response = http
+            .get(format!("{}/v{version}/ip_info", server.endpoint))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        assert_eq!(
+            response.json::<serde_json::Value>().await.unwrap(),
+            serde_json::json!([{"catalogVersion": version}])
+        );
+    }
     let response = http
         .get(format!("{}/v0/health", server.endpoint))
         .send()
@@ -96,6 +123,16 @@ async fn configured_startup_and_http_health_use_real_postgres_and_sdk(pool: PgPo
         response.json::<serde_json::Value>().await.unwrap(),
         serde_json::json!({"error":0,"errorMessage":"Internal server error"})
     );
+    let response = http
+        .get(format!("{}/v2/ip_info", server.endpoint))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(
+        response.json::<serde_json::Value>().await.unwrap(),
+        serde_json::json!([{"catalogVersion": 2}])
+    );
 }
 
 #[sqlx::test]
@@ -108,7 +145,7 @@ async fn startup_fails_when_required_node_initialization_fails(pool: PgPool) {
     })
     .await;
     let (_dir, mut config) = test_config();
-    config.database.url = Some(pool.connect_options().to_url_lossy().to_string());
+    config.database.url = pool.connect_options().to_url_lossy().to_string();
     config.node.endpoint = node.endpoint.clone();
     assert!(initialize(&config).await.is_err());
 }

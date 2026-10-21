@@ -1,190 +1,221 @@
 # Rust Wallet Proxy
 
-The Cargo package is rooted at the project root. Rust sources live here so the
-existing Haskell application remains independently buildable and unchanged.
+The Wallet Proxy provides a wallet-facing HTTP API for Concordium. It connects to
+a Concordium node and the existing transaction-history database, and serves
+identity-provider information used by wallet issuance and recovery flows.
 
-## Status
+## Overview
 
-The first slice implements startup, configuration, required cryptographic-parameter
-acquisition, and `GET /v0/health`. It is **not a production replacement**. Other
-wallet capabilities remain in the Haskell service. Task 01 is not signed off:
-PostgreSQL validation, unrestricted transport tests, independent fixture review,
-and the compatibility issues below remain outstanding.
+The service exposes these endpoints:
 
-## Known compatibility issues
+- `GET /v0/health`: check node access, transaction-history database access, and
+  the age of the last finalized block.
+- `GET /v0/ip_info`: get the identity-provider catalogue for the initial-account
+  issuance flow.
+- `GET /v1/ip_info`: get the configured identity-provider catalogue for issuance
+  and recovery without initial accounts.
+- `GET /v2/ip_info`: get the configured identity-provider catalogue, including
+  company identity flows.
 
-### SDK request metadata and node cookies — unresolved, release-blocking
+Errors use the existing wallet-facing JSON format:
 
-The Haskell node client sends a configured `target` metadata header, passes request
-cookies to the node, and forwards the first node `set-cookie` response headers to
-the wallet. SDK 10's high-level client has a private transport, no custom metadata
-hook, and returns decoded responses without exposing those cookies.
+```json
+{"error": 0, "errorMessage": "Internal server error"}
+```
 
-The current Rust implementation cannot reproduce those behaviors. Configuration
-with `--node-target` or `WALLET_PROXY_NODE_TARGET` is rejected explicitly instead of silently ignoring it. Direct
-node connections can be used for development; cookie forwarding is not supported.
-Continuing development with this issue documented does **not** waive full release
-compatibility. No SDK fork, direct protobuf bypass, or additional production proxy
-has been introduced. Prefer an upstream SDK extension and pinned supported
-revision when resolving this issue.
+See the known compatibility issues below for differences from the Haskell service.
 
-Sources: Haskell `mkGrpcClient` and `runClientWithCookies` in the client dependency,
-`runGRPCWithCustomError` in the proxy; SDK `v2::Client`, `Client::new`, and
-`QueryResponse`.
+## Dependencies
 
-### SDK error provenance — unresolved, release-blocking
+### Runtime dependencies
 
-The health handler distinguishes client/network failure from a non-OK node RPC
-response and from a response-conversion invariant failure. SDK conversion errors
-can become the same Tonic status type as remote RPC failures. The adapter handles
-transport errors with a source, explicit parse errors, deadlines, and ordinary RPC
-statuses, but cannot reliably distinguish every SDK conversion failure from a
-remote status. In particular, some malformed responses may currently yield an
-unhealthy response instead of the legacy internal-error response. This needs SDK
-support or an explicitly approved resolution; a service-level error fixture is
-not proof that the real SDK adapter preserves every failure distinction.
+- A Concordium node with an accessible gRPC V2 endpoint.
+- PostgreSQL containing the existing transaction-history tables.
+- Three identity-provider catalogue JSON files, one for each API version.
+  See the [identity-provider metadata documentation](../README.md#identity-providers-metadata-files)
+  for the usual file contents.
 
-## Configuration and startup
+## Build and run
 
-Use Rust 1.94 or newer. Clap reads command-line flags and environment variables;
-there is no application configuration file or automatic `.env` loading. Supply
-an explicit node endpoint, the three real catalogue files, and exactly one database
-URL source. The node endpoint has no default:
+Run the following commands from the project root:
 
 ```sh
-cargo fetch --locked
-cargo run --locked -- \
-  --database-url-file /run/secrets/database-url \
+cargo build --release --locked
+export WALLET_PROXY_DATABASE_URL='postgresql://user:password@database:5432/transaction-outcome'
+./target/release/concordium-wallet-proxy \
   --node-endpoint https://node.example:20000 \
   --ip-data /data/catalogs/v0.json \
   --ip-data-v1 /data/catalogs/v1.json \
   --ip-data-v2 /data/catalogs/v2.json
 ```
 
-Every setting has a corresponding `WALLET_PROXY_` environment variable. For example:
+Set `WALLET_PROXY_DATABASE_URL` through your deployment's environment or secret
+management system. Avoid putting credentials in command-line arguments or shell
+history.
+
+For development, use `cargo run --locked --` with the same arguments. Show all
+flags, environment variables, and defaults with:
 
 ```sh
-export WALLET_PROXY_DATABASE_URL_FILE=/run/secrets/database-url
-export WALLET_PROXY_IP_DATA=/data/catalogs/v0.json
-export WALLET_PROXY_IP_DATA_V1=/data/catalogs/v1.json
-export WALLET_PROXY_IP_DATA_V2=/data/catalogs/v2.json
-export WALLET_PROXY_NODE_ENDPOINT=https://node.example:20000
-export WALLET_PROXY_LISTEN=127.0.0.1:3001
-cargo run --locked -- --listen 127.0.0.1:3002
+cargo run --locked -- --help
 ```
 
-Command-line flags override the same option's environment value; environment
-values override defaults. The example listens on port 3002. Run
-`cargo run --locked -- --help` for every flag, environment name, and default.
-`rust/config.example.env` is a shell example that can be sourced explicitly.
-
-An `https://` node endpoint enables TLS with system trust roots and verification
-of the endpoint hostname. An `http://` endpoint disables TLS. Custom CA files and
-TLS-domain overrides are not supported; the Haskell service has no such options.
-
-Use exactly one of `--database-url` / `WALLET_PROXY_DATABASE_URL` or
-`--database-url-file` / `WALLET_PROXY_DATABASE_URL_FILE`. These are different,
-mutually exclusive options: setting one via a flag does not clear the other from
-the environment. Prefer the file option for secrets; inline command-line URLs can
-appear in process listings. Help output hides the database URL environment value.
-Secret files have trailing line endings removed. Validation errors do not include
-the database URL.
-
-Set `--database-max-connections` or `WALLET_PROXY_DATABASE_MAX_CONNECTIONS` to
-limit PostgreSQL pool connections. The default is 10; zero and negative values
-are rejected. This setting is independent of the database URL source.
-
-Relative paths start at the process working directory, for both flags and
-environment values. `--enable-public-cors` enables public CORS;
-`--enable-public-cors=false` can override a true environment value. Environment
-booleans accept `true` or `false`. Unknown flags are rejected; unrelated environment
-variables are ignored. The old `--config`, `WALLET_PROXY_CONFIG`, and double-underscore
-environment convention are no longer supported.
-
-Defaults preserve the existing listen address/port, 300-second health tolerance,
-15-second RPC timeout, zero additional connection attempts, ten database pool
-connections, disabled public CORS, and disabled logging. Startup validates
-configuration and catalogue JSON, connects to PostgreSQL and the node, and acquires
-last-final cryptographic parameters before binding the HTTP listener. No external
-table is created or migrated. Configuration changes require restart. Interrupt
-and termination signals initiate graceful HTTP shutdown.
-
-Optional wallet features and their configuration will be added in their own
-slices; unknown settings are not silently accepted as implemented capabilities.
-
-## Health compatibility
-
-The handler follows `getHealthR` in the Haskell proxy:
-
-- A missing/non-OK node result returns HTTP 200 with `healthy: false` and skips SQL.
-- A valid last-final block triggers a one-row Cartesian-product read of `ati` and
-  `summaries`, including row decoding. Empty tables are allowed; this is not a join
-  or a database freshness check.
-- The block is healthy only when its age is strictly less than the configured
-  tolerance. An exact boundary is stale; a future block is not newly rejected.
-- Database exceptions use the generic internal-server-error contract, not the
-  account-history-specific database error message.
-- Time rendering trims trailing fractional zeros to match Aeson's UTC rendering.
-- The reported version follows the package version, currently 0.50.0 from the
-  Haskell package metadata. The ignored generated Cabal file is older.
-
-Request/response fixtures record source provenance and are not captured from
-replacement output. Independent human review is still required before sign-off.
-English is currently the sole translation, so all supported preference sources
-and fallback combinations select English for localized errors. Success health
-responses do not gain an unrelated language header.
-
-## Dependencies
-
-`Cargo.lock` records resolved dependencies. The Concordium Rust SDK is pinned to
-published 10.0.0; no sibling checkout is required. Tonic stays on the SDK-compatible
-0.12 line so its transport types and TLS features match the SDK. The other direct
-dependencies were updated to current stable releases when the project was created.
-
-## Tests and query checking
+The server listens on `0.0.0.0:3000` by default. Query it with:
 
 ```sh
-cargo fmt --all -- --check
-cargo clippy --locked --all-targets -- -D warnings
+curl http://localhost:3000/v0/health
+curl http://localhost:3000/v2/ip_info
+```
+
+Startup validates settings and catalogue JSON, connects to PostgreSQL and the
+node, and obtains cryptographic parameters before opening the HTTP listener.
+Interrupt and termination signals initiate graceful HTTP shutdown.
+
+## Configuration
+
+Can be configured using command-line flags and environment variables. Flags override the same
+option's environment value; environment values override defaults.
+
+[`config.example.env`](config.example.env) provides a shell example that can be
+sourced explicitly. Relative paths start at the process working directory.
+Configuration and catalogue changes require a restart.
+
+### Database settings
+
+Supply the required PostgreSQL URL through `WALLET_PROXY_DATABASE_URL`.
+Environment variables are recommended for credentials because command-line
+arguments can appear in process listings. `--database-url` remains available as
+an explicit override.
+
+Set `--database-max-connections` or `WALLET_PROXY_DATABASE_MAX_CONNECTIONS` to
+limit pool connections. The default is 10; zero and negative values are rejected.
+The pool limit is independent of the database URL.
+
+### Node and server settings
+
+- `--node-endpoint`: required HTTP or HTTPS node address. Custom CA files and
+  TLS-domain overrides are not supported.
+- `--node-timeout-seconds`: RPC and connection-attempt timeout; defaults to 15.
+- `--node-connect-retries`: additional connection attempts; defaults to zero.
+- `--listen`: HTTP listen address; defaults to `0.0.0.0:3000`.
+- `--health-tolerance-seconds`: block age limit; defaults to 300.
+- `--log-filter`: log selection; defaults to `off`. Logs use structured JSON on
+  standard error.
+- `--enable-public-cors`: permit browser requests from any origin on public
+  routes. CORS is disabled by default. Use `--enable-public-cors=false` to override
+  a true environment value.
+
+Environment booleans accept `true` or `false`. Unknown flags are rejected;
+unrelated environment variables are ignored. Use `--help` for the corresponding
+`WALLET_PROXY_` names.
+
+## Configuration migration from Haskell
+
+Replace the Haskell entrypoint with the Rust executable. Rename the environment
+variables as shown below.
+Use `--help` to check which flags Rust accepts.
+
+| Haskell flag | Haskell Docker variable | Rust environment variable |
+| --- | --- | --- |
+| `--db` | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | `WALLET_PROXY_DATABASE_URL` |
+| `--grpc-ip`, `--grpc-port`, `--secure` | `GRPC_HOST`, `GRPC_PORT`, `USE_TLS` | `WALLET_PROXY_NODE_ENDPOINT` |
+| `--grpc-timeout` | `GRPC_TIMEOUT` | `WALLET_PROXY_NODE_TIMEOUT_SECONDS` |
+| `--grpc-retry` | `GRPC_RETRY` | `WALLET_PROXY_NODE_CONNECT_RETRIES` |
+| `--port` | — | `WALLET_PROXY_LISTEN` |
+| `--health-tolerance` | — | `WALLET_PROXY_HEALTH_TOLERANCE_SECONDS` |
+| `--ip-data` | `IP_DATA_FILE` | `WALLET_PROXY_IP_DATA` |
+| `--ip-data-v1` | `IP_DATA_FILE_V1` | `WALLET_PROXY_IP_DATA_V1` |
+| `--ip-data-v2` | `IP_DATA_FILE_V2` | `WALLET_PROXY_IP_DATA_V2` |
+| `--log-level` | `LOG_LEVEL` | `WALLET_PROXY_LOG_FILTER` |
+| `--enable-public-cors` | `ENABLE_PUBLIC_CORS` | `WALLET_PROXY_ENABLE_PUBLIC_CORS` |
+
+### Convert values
+
+1. Set the node endpoint explicitly, for example `https://node.example:20000`.
+   Use `https://` for `USE_TLS=true`; otherwise, use `http://`. There is no default endpoint.
+2. Set the listen address and port, for example `0.0.0.0:3000`, not just `3000`.
+3. Change log level `warning` to `warn`. Set the filter explicitly.
+   Rust defaults to `off`; the Haskell Docker entrypoint defaults to `debug`.
+4. Keep time values in seconds and CORS values as `true` or `false`.
+5. Reuse the catalogue files and database. No data conversion or schema migration is required.
+
+### Convert the database URL
+
+Convert the libpq connection string:
+
+```text
+host=db.example port=5432 user=wallet password=p@ssword dbname=transaction-outcome
+```
+
+Use this PostgreSQL URL:
+
+```text
+postgresql://wallet:p%40ssword@db.example:5432/transaction-outcome
+```
+
+Percent-encode reserved characters in credentials and database names.
+Check SQLx support for any additional connection options. Store the complete URL
+in a deployment secret. Supply it through `WALLET_PROXY_DATABASE_URL`.
+Do not use a URL file or separate `DB_*` variables. `DATABASE_URL` is for tests and
+query tools, not the service.
+
+### Check unsupported settings
+
+Do not replace Haskell if your deployment requires these unsupported options:
+
+- `--grpc-target`: Rust rejects the node target. See the compatibility issues below.
+- `--drop-account`, `--drop-amount`: no CCD-drop service.
+- `--forced-update-config-v0`, `--forced-update-config-v1`: no wallet-update service.
+- `--tc-version`, `--tc-url`: no terms-and-conditions service.
+- `--transak-config`: no Transak purchase-session service.
+
+If you use `REPORTERS_JSON` and `K8S_POD_NAME`, select the node and database in the
+deployment configuration. Rust does not perform this per-pod selection.
+
+## Known compatibility issues
+
+- **Node selection:** Haskell supports a gRPC `target` header. Rust rejects
+  `--node-target` and `WALLET_PROXY_NODE_TARGET` because the SDK does not expose
+  custom request metadata.
+- **Node cookies:** Haskell forwards request cookies to the node and node
+  `set-cookie` headers to the wallet. Rust does neither because the SDK does not
+  expose the required metadata.
+- **Malformed node responses:** During health checks, some SDK response-conversion
+  failures cannot be distinguished from remote RPC errors. Rust can return HTTP
+  200 with `healthy: false` where Haskell would return HTTP 500.
+
+## Tests
+
+```sh
 cargo test --locked --all-targets
 ```
 
-The normal suite includes in-process HTTP fixtures and a local HTTP/2 gRPC test
-server exercised through the actual SDK. It requires permission to bind loopback
-listeners; socket failures are not silently skipped. No Haskell executable, public
-node, production database, or real Transak session is used.
-
-PostgreSQL tests are explicitly ignored by default because they create isolated
-test databases. Run them only against disposable PostgreSQL with a role permitted
-to create databases:
+PostgreSQL tests are ignored by default because they create isolated databases.
+Run them against a disposable server with a role permitted to create databases:
 
 ```sh
 export DATABASE_URL=postgres://postgres:postgres@localhost:5432/wallet_proxy_test
 cargo test --locked --all-targets -- --include-ignored
 ```
 
-The SQL schema fixture is test-only and currently covers the legacy health tables
-and relevant index. It is not a production migration. Integration tests cover
-empty/populated tables, decoding/schema failures, actual SDK plus PostgreSQL plus
-HTTP startup, and required startup-query failure.
+The [test schema](tests/fixtures/schema.sql) contains the health-query tables and
+index. It is not a production migration. Integration tests cover empty/populated
+tables, decoding/schema failures, SDK and HTTP startup, and catalogue responses.
+
+## Database query checking
 
 Application queries use SQLx compile-time checking and committed offline metadata.
-Normal builds use `SQLX_OFFLINE=true` through Cargo configuration. The initial
-metadata cache is seeded from the test schema, **not yet regenerated or verified
-against a live PostgreSQL instance in this development environment**. CI is
-configured to validate it against real PostgreSQL; a passing offline compilation
-alone does not establish database correctness.
+Normal builds use `SQLX_OFFLINE=true` through Cargo configuration and do not need a
+live database. CI checks the metadata against PostgreSQL; an offline build alone
+does not establish database correctness.
 
-To regenerate/check metadata, install SQLx CLI 0.9.0, prepare a disposable database,
-and run from the project root:
+To regenerate and check metadata, install SQLx CLI 0.9.0 and prepare a fresh,
+disposable PostgreSQL database:
 
 ```sh
+export DATABASE_URL=postgres://postgres:postgres@localhost:5432/wallet_proxy_test
 cargo install sqlx-cli --version 0.9.0 --locked --no-default-features --features postgres,rustls
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f rust/tests/fixtures/schema.sql
 SQLX_OFFLINE=false cargo sqlx prepare -- --all-targets
 SQLX_OFFLINE=false cargo sqlx prepare --check -- --all-targets
 ```
-
-Use a fresh database for the schema-loading command. CI runs formatting, Clippy,
-all tests including PostgreSQL, and live metadata validation without a public
-node. The workflow has been added but has not yet been observed running.

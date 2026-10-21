@@ -1,4 +1,4 @@
-//! This module checks command-line settings, environment variables, and secret files.
+//! This module checks command-line settings and environment variables.
 //! It also checks that invalid settings and catalogue files are rejected.
 
 use clap::{CommandFactory, FromArgMatches};
@@ -200,7 +200,7 @@ fn help_hides_database_secret_and_no_longer_accepts_a_config_file() {
     assert!(output.status.success());
     let help = String::from_utf8_lossy(&output.stdout);
     assert!(help.contains("WALLET_PROXY_DATABASE_URL"));
-    assert!(help.contains("--database-url-file"));
+    assert!(!help.contains("--database-url-file"));
     assert!(!help.contains("PRIVATE_PASSWORD"));
     assert!(!help.contains("--config"));
     assert_eq!(
@@ -255,7 +255,7 @@ fn connection_source_and_catalogues_are_required() {
             .err()
             .unwrap()
             .kind(),
-        clap::error::ErrorKind::ArgumentConflict
+        clap::error::ErrorKind::UnknownArgument
     );
 }
 
@@ -303,36 +303,38 @@ fn database_pool_limit_is_positive_and_does_not_select_a_connection_source() {
 }
 
 #[test]
-fn secret_file_supplies_the_url_and_invalid_secrets_are_not_disclosed() {
-    let (dir, mut config) = config();
-    let secret = dir.path().join("db-secret");
-    config.database.url = None;
-    config.database.url_file = Some(secret.clone());
-    std::fs::write(&secret, "postgresql://localhost/wallet\r\n").unwrap();
+fn database_url_validation_does_not_disclose_secrets() {
+    let (_dir, mut config) = config();
     config.validate().unwrap();
-    assert_eq!(
-        config.database.connection_string().unwrap(),
-        "postgresql://localhost/wallet"
-    );
-    std::fs::write(&secret, "SUPER_SECRET_INVALID_URL").unwrap();
+    config.database.url = "SUPER_SECRET_INVALID_URL".into();
     let error = config.validate().unwrap_err();
     assert!(!format!("{error:#}").contains("SUPER_SECRET"));
-    std::fs::remove_file(secret).unwrap();
-    assert!(config.validate().is_err());
+    let output = command()
+        .env("WALLET_PROXY_DATABASE_URL", "SUPER_SECRET_INVALID_URL")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Invalid PostgreSQL connection URL"));
+    assert!(!stderr.contains("SUPER_SECRET"));
 }
 
 #[test]
-fn environment_can_select_a_secret_file() {
-    let dir = tempfile::tempdir().unwrap();
-    let secret = dir.path().join("db-url");
-    std::fs::write(&secret, "postgresql://localhost/wallet\n").unwrap();
+fn database_url_is_required_and_cannot_be_replaced_by_a_file_variable() {
     let output = command()
         .env_remove("WALLET_PROXY_DATABASE_URL")
-        .env("WALLET_PROXY_DATABASE_URL_FILE", secret)
-        .args(["--log-filter", "[broken"])
+        .env("WALLET_PROXY_DATABASE_URL_FILE", "unused-secret-file")
         .output()
         .unwrap();
-    assert!(String::from_utf8_lossy(&output.stderr).contains("Invalid log filter"));
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--database-url"));
+    assert!(stderr.contains("required"));
+    let output = command()
+        .env("WALLET_PROXY_DATABASE_URL", "")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
 }
 
 #[test]
