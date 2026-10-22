@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT address, credential_index, key_index, is_simple_account FROM account_public_key_bindings WHERE public_key = $1 AND (NOT $2::boolean OR is_simple_account = TRUE) ORDER BY credential_index ASC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "address",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "account_public_key_bindings",
+            "name": "address"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "credential_index",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "account_public_key_bindings",
+            "name": "credential_index"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "key_index",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "account_public_key_bindings",
+            "name": "key_index"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "is_simple_account",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "account_public_key_bindings",
+            "name": "is_simple_account"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f0f9debc4418e97e70d7af53e0dc4314e26c531941b7a3b6df95d3820c6a77c6"
+}

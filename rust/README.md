@@ -211,10 +211,6 @@ export DATABASE_URL=postgres://postgres:postgres@localhost:5432/wallet_proxy_tes
 cargo test --locked --all-targets -- --include-ignored
 ```
 
-The [test schema](tests/fixtures/schema.sql) contains the health-query tables and
-index. It is not a production migration. Integration tests cover empty/populated
-tables, decoding/schema failures, SDK and HTTP startup, and catalogue responses.
-
 ## Database query checking
 
 Application queries use SQLx compile-time checking and committed offline metadata.

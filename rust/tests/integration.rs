@@ -6,6 +6,7 @@ mod accounts_rpc;
 mod balances;
 mod catalogs;
 mod config;
+mod discovery;
 mod health;
 mod network;
 mod postgres;

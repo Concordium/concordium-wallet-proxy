@@ -8,6 +8,7 @@ mod compatibility;
 pub mod config;
 pub mod database;
 pub mod dependencies;
+pub mod discovery;
 pub mod health;
 pub mod http;
 pub mod network;

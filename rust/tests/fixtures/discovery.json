@@ -1,0 +1,34 @@
+[
+  {
+    "target": "/v0/keyAccounts/0?onlySimple=invalid",
+    "body": {"error": 1, "errorMessage": "Parsing input failed: Invalid verify key: invalid bytestring size"}
+  },
+  {
+    "target": "/v0/keyAccounts/zz",
+    "body": {"error": 1, "errorMessage": "Parsing input failed: Invalid verify key: invalid character at offset: 0"}
+  },
+  {
+    "target": "/v0/keyAccounts/0z",
+    "body": {"error": 1, "errorMessage": "Parsing input failed: Invalid verify key: invalid character at offset: 1"}
+  },
+  {
+    "target": "/v0/keyAccounts/00",
+    "body": {"error": 1, "errorMessage": "Parsing input failed: Invalid verify key: too few bytes\nFrom:\tdemandInput\n\n"}
+  },
+  {
+    "target": "/v0/keyAccounts/0202020202020202020202020202020202020202020202020202020202020202",
+    "body": {"error": 1, "errorMessage": "Parsing input failed: Invalid verify key: Failed reading: Cannot decode verification key.\nEmpty call stack\n"}
+  },
+  {
+    "target": "/v0/keyAccounts/0000000000000000000000000000000000000000000000000000000000000000?onlySimple=Y",
+    "body": {"error": 1, "errorMessage": "Parsing input failed: Invalid `onlySimple` parameter (should be `y` or `n`): Y"}
+  },
+  {
+    "target": "/v0/keyAccounts/0000000000000000000000000000000000000000000000000000000000000000?onlySimple=",
+    "body": {"error": 1, "errorMessage": "Parsing input failed: Invalid `onlySimple` parameter (should be `y` or `n`): "}
+  },
+  {
+    "target": "/v0/keyAccounts/0000000000000000000000000000000000000000000000000000000000000000zz",
+    "body": {"error": 1, "errorMessage": "Parsing input failed: Invalid verify key: invalid character at offset: 64"}
+  }
+]

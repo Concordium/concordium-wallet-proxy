@@ -25,7 +25,10 @@ async fn main() -> anyhow::Result<()> {
             application.catalogs,
             application.wallet,
             config.server.enable_public_cors,
-            concordium_wallet_proxy::accounts::routes(application.health.node.clone().into())
+            concordium_wallet_proxy::discovery::routes(application.health.history.clone())
+                .merge(concordium_wallet_proxy::accounts::routes(
+                    application.health.node.clone().into(),
+                ))
                 .merge(concordium_wallet_proxy::network::routes(
                     application.network,
                 ))

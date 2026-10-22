@@ -3,17 +3,108 @@
   "query": "SELECT a.id AS entry_id, a.account, a.summary AS entry_summary, s.id AS summary_id, s.block, s.timestamp, s.height, s.summary AS summary_json FROM ati AS a CROSS JOIN summaries AS s LIMIT 1",
   "describe": {
     "columns": [
-      { "ordinal": 0, "name": "entry_id", "type_info": "Int8" },
-      { "ordinal": 1, "name": "account", "type_info": "Bytea" },
-      { "ordinal": 2, "name": "entry_summary", "type_info": "Int8" },
-      { "ordinal": 3, "name": "summary_id", "type_info": "Int8" },
-      { "ordinal": 4, "name": "block", "type_info": "Bytea" },
-      { "ordinal": 5, "name": "timestamp", "type_info": "Int8" },
-      { "ordinal": 6, "name": "height", "type_info": "Int8" },
-      { "ordinal": 7, "name": "summary_json", "type_info": "Jsonb" }
+      {
+        "ordinal": 0,
+        "name": "entry_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ati",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "account",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "ati",
+            "name": "account"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "entry_summary",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ati",
+            "name": "summary"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "summary_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "summaries",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "block",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "summaries",
+            "name": "block"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "timestamp",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "summaries",
+            "name": "timestamp"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "height",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "summaries",
+            "name": "height"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "summary_json",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "summaries",
+            "name": "summary"
+          }
+        }
+      }
     ],
-    "parameters": { "Left": [] },
-    "nullable": [false, false, false, false, false, false, false, false]
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
   },
   "hash": "958713b6160d49d21332f6b7531b9c60eec88150348b98d85b26978031bbf6bb"
 }
