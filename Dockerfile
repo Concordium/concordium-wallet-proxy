@@ -1,5 +1,9 @@
-ARG base_image_tag
-FROM concordium/base:${base_image_tag} as build
+ARG base_image_tag=rust-1.82_ghc-9.10.2-2
+FROM concordium/base:${base_image_tag} AS build
+
+ARG rust_version=1.89
+RUN rustup toolchain install ${rust_version} --profile minimal
+ENV RUSTUP_TOOLCHAIN=${rust_version}
 
 # Build wallet-proxy binary.
 COPY . /build

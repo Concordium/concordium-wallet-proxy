@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+## [0.50.0-p11.0] - 2026-10-22
+
 - Report submission `outcome: "success"` for all successful Token Updates, including empty and multi-event results. Single-transfer fields remain conditional.
 - Remove unreleased Meta Update handling and migrate client conversions to current base/protobuf types.
 
