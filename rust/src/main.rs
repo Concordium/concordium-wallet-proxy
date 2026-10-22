@@ -23,6 +23,7 @@ async fn main() -> anyhow::Result<()> {
         router(
             application.health.clone(),
             application.catalogs,
+            application.wallet,
             config.server.enable_public_cors,
         ),
     )

@@ -18,6 +18,8 @@ pub struct Application {
     pub health: Health,
     /// These JSON values contain catalogues in version order: 0, 1, then 2.
     pub catalogs: [serde_json::Value; 3],
+    /// These settings supply wallet updates and terms.
+    pub wallet: crate::wallet::WalletSettings,
     /// These node parameters remain available without another startup query.
     pub cryptographic_parameters: CryptographicParameters,
 }
@@ -27,6 +29,7 @@ pub struct Application {
 pub async fn initialize(config: &Config) -> anyhow::Result<Application> {
     config.validate()?;
     let catalogs = load_catalogs(&config.catalogs)?;
+    let wallet = crate::wallet::WalletSettings::load(&config.wallet)?;
     let pool = PgPoolOptions::new()
         .max_connections(config.database.max_connections.get())
         .connect(&config.database.url)
@@ -42,6 +45,7 @@ pub async fn initialize(config: &Config) -> anyhow::Result<Application> {
             tolerance_seconds: config.server.health_tolerance_seconds,
         },
         catalogs,
+        wallet,
         cryptographic_parameters,
     })
 }

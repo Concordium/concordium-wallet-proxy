@@ -1,0 +1,11 @@
+{
+  "ios": {
+    "forceUpdateVersions": "-56",
+    "url": "https://apps.apple.com/dk/app/concordium-blockchain-wallet/id6444703764"
+  },
+  "android": {
+    "forceUpdateVersions": "-35",
+    "suggestUpdateVersions": "-38",
+    "url": "https://play.google.com/store/apps/details?id=software.concordium.mobilewallet.seedphrase.mainnet"
+  }
+}

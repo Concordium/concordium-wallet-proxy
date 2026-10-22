@@ -1,0 +1,14 @@
+{
+  "ios": {
+    "forceUpdateVersions": "-63",
+    "suggestUpdateVersions": "*",
+    "url": "https://developer.concordium.software/en/mainnet/net/installation/downloads-testnet.html#mw-gen1",
+    "suggestUrl": "https://developer.concordium.software/en/mainnet/net/installation/downloads-testnet.html#mw-gen2"
+  },
+  "android": {
+    "forceUpdateVersions": "-104",
+    "suggestUpdateVersions": "*",
+    "url": "https://developer.concordium.software/en/mainnet/net/installation/downloads-testnet.html#mw-gen1",
+    "suggestUrl": "https://developer.concordium.software/en/mainnet/net/installation/downloads-testnet.html#mw-gen2"
+  }
+}

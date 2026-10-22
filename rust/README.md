@@ -126,8 +126,28 @@ Use `--help` to check which flags Rust accepts.
 | `--ip-data` | `IP_DATA_FILE` | `WALLET_PROXY_IP_DATA` |
 | `--ip-data-v1` | `IP_DATA_FILE_V1` | `WALLET_PROXY_IP_DATA_V1` |
 | `--ip-data-v2` | `IP_DATA_FILE_V2` | `WALLET_PROXY_IP_DATA_V2` |
+| `--forced-update-config-v0` | `FORCED_UPDATE_CONFIG_FILE_V0` | `WALLET_PROXY_FORCED_UPDATE_CONFIG_V0` |
+| `--forced-update-config-v1` | `FORCED_UPDATE_CONFIG_FILE_V1` | `WALLET_PROXY_FORCED_UPDATE_CONFIG_V1` |
+| `--tc-version` | `TC_VERSION` | `WALLET_PROXY_TC_VERSION` |
+| `--tc-url` | `TC_URL` | `WALLET_PROXY_TC_URL` |
 | `--log-level` | `LOG_LEVEL` | `WALLET_PROXY_LOG_FILTER` |
 | `--enable-public-cors` | `ENABLE_PUBLIC_CORS` | `WALLET_PROXY_ENABLE_PUBLIC_CORS` |
+
+### Wallet updates and terms
+
+Supply optional update JSON files with `--forced-update-config-v0` and
+`--forced-update-config-v1`. Each file can contain `ios` and `android` objects
+with `forceUpdateVersions`, `suggestUpdateVersions`, `url`, and `suggestUrl`.
+Version ranges use decimal integers from 0 through 18446744073709551615:
+`5,8,10-17`, `-64`, or `64-`. Bounds are inclusive. `*` matches every
+version; an empty string matches none. Commas combine ranges. Whitespace,
+empty comma-separated entries, reversed bounds, overflow, and trailing junk
+are rejected. A bare `-` is invalid.
+Non-empty ranges require `url`; `suggestUrl` defaults to `url`.
+Files are loaded before dependency connections and must be readable JSON.
+
+Set both `--tc-version` and `--tc-url` to enable
+`/v0/termsAndConditionsVersion`. With either field absent, this route returns 404.
 
 ### Convert values
 
@@ -165,14 +185,16 @@ Do not replace Haskell if your deployment requires these unsupported options:
 
 - `--grpc-target`: Rust rejects the node target. See the compatibility issues below.
 - `--drop-account`, `--drop-amount`: no CCD-drop service.
-- `--forced-update-config-v0`, `--forced-update-config-v1`: no wallet-update service.
-- `--tc-version`, `--tc-url`: no terms-and-conditions service.
 - `--transak-config`: no Transak purchase-session service.
 
 If you use `REPORTERS_JSON` and `K8S_POD_NAME`, select the node and database in the
 deployment configuration. Rust does not perform this per-pod selection.
 
 ## Known compatibility issues
+
+- **Update range validation:** Rust requires complete, valid range expressions.
+  It rejects whitespace and trailing junk instead of accepting partial input or
+  silently treating unrecognized input as an empty range set.
 
 - **Node selection:** Haskell supports a gRPC `target` header. Rust rejects
   `--node-target` and `WALLET_PROXY_NODE_TARGET` because the SDK does not expose

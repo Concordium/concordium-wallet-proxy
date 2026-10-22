@@ -81,7 +81,12 @@ fn app(node: &str, fail: bool, cors: bool) -> (axum::Router, Arc<AtomicUsize>) {
         tolerance_seconds: 300,
     };
     (
-        router(health, std::array::from_fn(|_| serde_json::json!([])), cors),
+        router(
+            health,
+            std::array::from_fn(|_| serde_json::json!([])),
+            Default::default(),
+            cors,
+        ),
         calls,
     )
 }

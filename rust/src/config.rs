@@ -26,6 +26,9 @@ pub struct Config {
     /// These paths identify the three identity-provider catalogues.
     #[command(flatten, next_help_heading = "Catalogues")]
     pub catalogs: CatalogConfig,
+    /// These settings supply wallet updates and terms.
+    #[command(flatten, next_help_heading = "Wallet")]
+    pub wallet: WalletConfig,
 }
 
 /// This type contains the HTTP server settings.
@@ -129,6 +132,32 @@ pub struct CatalogConfig {
     /// This file supplies the version 2 catalogue.
     #[arg(long = "ip-data-v2", env = "WALLET_PROXY_IP_DATA_V2")]
     pub v2: PathBuf,
+}
+
+/// These settings supply optional update files and independent terms fields.
+#[derive(Clone, Default, Args)]
+#[group(skip)]
+pub struct WalletConfig {
+    /// This file supplies generation 0 updates.
+    #[arg(
+        id = "updates-v0",
+        long = "forced-update-config-v0",
+        env = "WALLET_PROXY_FORCED_UPDATE_CONFIG_V0"
+    )]
+    pub v0: Option<PathBuf>,
+    /// This file supplies generation 1 updates.
+    #[arg(
+        id = "updates-v1",
+        long = "forced-update-config-v1",
+        env = "WALLET_PROXY_FORCED_UPDATE_CONFIG_V1"
+    )]
+    pub v1: Option<PathBuf>,
+    /// This value identifies the terms version.
+    #[arg(long, env = "WALLET_PROXY_TC_VERSION")]
+    pub tc_version: Option<String>,
+    /// This URL points to the terms.
+    #[arg(long, env = "WALLET_PROXY_TC_URL")]
+    pub tc_url: Option<String>,
 }
 
 impl Config {

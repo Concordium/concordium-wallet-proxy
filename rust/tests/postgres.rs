@@ -84,8 +84,13 @@ async fn configured_startup_and_http_routes_use_real_postgres_and_sdk(pool: PgPo
         application.cryptographic_parameters.genesis_string,
         "test-network"
     );
-    let server =
-        support::serve_router(router(application.health, application.catalogs, false)).await;
+    let server = support::serve_router(router(
+        application.health,
+        application.catalogs,
+        application.wallet,
+        false,
+    ))
+    .await;
     let http = reqwest::Client::builder().no_proxy().build().unwrap();
     for version in 0..3 {
         let response = http

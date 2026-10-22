@@ -7,3 +7,5 @@ mod health;
 mod postgres;
 mod sdk;
 mod support;
+
+mod wallet;

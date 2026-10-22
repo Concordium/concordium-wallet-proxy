@@ -20,11 +20,17 @@ use tower_http::trace::TraceLayer;
 
 /// Build the health and catalogue routes with the existing error and header formats.
 /// Enable public CORS handling only when `public_cors` is true.
-pub fn router(health: Health, catalogs: [Value; 3], public_cors: bool) -> Router {
+pub fn router(
+    health: Health,
+    catalogs: [Value; 3],
+    wallet: crate::wallet::WalletSettings,
+    public_cors: bool,
+) -> Router {
     Router::new()
         .route("/v0/health", get(check_health))
         .with_state(health)
         .merge(catalogs::routes(catalogs))
+        .merge(crate::wallet::routes(wallet))
         .fallback(|| async { error(StatusCode::NOT_FOUND, 1, "Not found") })
         .method_not_allowed_fallback(|| async {
             error(StatusCode::METHOD_NOT_ALLOWED, 1, "Bad method")
@@ -56,7 +62,7 @@ async fn check_health(State(health): State<Health>) -> Response {
 
 /// Format an error in English and set the response language header.
 /// English is the only supported language, regardless of the requested language.
-fn error(status: StatusCode, code: u8, message: &str) -> Response {
+pub(crate) fn error(status: StatusCode, code: u8, message: &str) -> Response {
     let mut response = (
         status,
         Json(json!({"error": code, "errorMessage": message})),

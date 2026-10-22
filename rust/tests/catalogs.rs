@@ -19,7 +19,7 @@ use std::sync::Arc;
 use tower::ServiceExt;
 
 /// This type stops a test if a catalogue request uses an external dependency or the clock.
-struct UnusedDependencies;
+pub(super) struct UnusedDependencies;
 
 #[async_trait]
 impl Node for UnusedDependencies {
@@ -72,7 +72,7 @@ fn configured_app(catalogs: &[Value; 3], cors: bool) -> (tempfile::TempDir, Rout
         clock: dependency,
         tolerance_seconds: 300,
     };
-    (dir, router(health, loaded, cors))
+    (dir, router(health, loaded, Default::default(), cors))
 }
 
 async fn body(response: Response) -> Value {
