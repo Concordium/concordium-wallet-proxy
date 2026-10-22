@@ -6,7 +6,7 @@ use concordium_wallet_proxy::{
     config::WalletConfig, health::Health, http::router, wallet::WalletSettings,
 };
 use http_body_util::BodyExt;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use tower::ServiceExt;
 
@@ -93,13 +93,31 @@ async fn exact_legacy_errors_and_disabled_defaults() {
     let config = WalletConfig::default();
     for generation in 0..=1 {
         for (query, message) in [
-            ("", "'platform' field is not present and 'version' field is either not present or not readable."),
+            (
+                "",
+                "'platform' field is not present and 'version' field is either not present or not readable.",
+            ),
             ("appVersion=1", "'platform' field is not present."),
-            ("platform=ios", "'version' parameter is not present or readable. It must be a non-negative integer."),
-            ("platform=ios&appVersion=1.2", "'version' parameter is not present or readable. It must be a non-negative integer."),
-            ("platform=other&appVersion=1", "'param' should either be 'android' or 'ios'"),
+            (
+                "platform=ios",
+                "'version' parameter is not present or readable. It must be a non-negative integer.",
+            ),
+            (
+                "platform=ios&appVersion=1.2",
+                "'version' parameter is not present or readable. It must be a non-negative integer.",
+            ),
+            (
+                "platform=other&appVersion=1",
+                "'param' should either be 'android' or 'ios'",
+            ),
         ] {
-            assert_eq!(request(&config,&format!("/v{generation}/appSettings?{query}")).await,(400,json!({"error":1,"errorMessage":format!("Parsing input failed: {message}")})));
+            assert_eq!(
+                request(&config, &format!("/v{generation}/appSettings?{query}")).await,
+                (
+                    400,
+                    json!({"error":1,"errorMessage":format!("Parsing input failed: {message}")})
+                )
+            );
         }
         for platform in ["ios", "android"] {
             assert_eq!(
@@ -164,11 +182,13 @@ fn invalid_files_and_missing_required_links_fail_loading() {
         json!({"android":{"suggestUrl":"unused"}}),
     ] {
         std::fs::write(&path, value.to_string()).unwrap();
-        assert!(WalletSettings::load(&WalletConfig {
-            v0: Some(path.clone()),
-            ..Default::default()
-        })
-        .is_ok());
+        assert!(
+            WalletSettings::load(&WalletConfig {
+                v0: Some(path.clone()),
+                ..Default::default()
+            })
+            .is_ok()
+        );
     }
 }
 

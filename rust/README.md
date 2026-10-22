@@ -37,6 +37,12 @@ See the known compatibility issues below for differences from the Haskell servic
 
 ## Build and run
 
+Initialize the pinned SDK submodule and its dependencies before building:
+
+```sh
+git submodule update --init --recursive
+```
+
 Run the following commands from the project root:
 
 ```sh

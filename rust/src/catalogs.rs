@@ -1,7 +1,7 @@
 //! This module serves the configured identity-provider catalogues.
 //! Each API version returns its JSON value without changes to provider data.
 
-use axum::{extract::State, routing::get, Json, Router};
+use axum::{Json, Router, extract::State, routing::get};
 use serde_json::Value;
 use std::sync::Arc;
 

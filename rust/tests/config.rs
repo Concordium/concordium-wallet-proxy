@@ -2,7 +2,7 @@
 //! It also checks that invalid settings and catalogue files are rejected.
 
 use clap::{CommandFactory, FromArgMatches};
-use concordium_wallet_proxy::config::{load_catalogs, Config};
+use concordium_wallet_proxy::config::{Config, load_catalogs};
 use std::{ffi::OsString, path::PathBuf, process::Command};
 
 /// Create test settings and three empty catalogue files in a temporary directory.

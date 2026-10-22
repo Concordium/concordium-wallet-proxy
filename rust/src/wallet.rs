@@ -1,13 +1,13 @@
 //! This module loads wallet update ranges and serves wallet settings and terms.
 //! Version numbers are unsigned integers, not semantic versions.
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use axum::{
+    Json, Router,
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
-    Json, Router,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -165,10 +165,16 @@ fn settings_response(platforms: &Platforms, query: HashMap<String, String>) -> R
         .get("appVersion")
         .and_then(|v| v.trim().parse::<u64>().ok());
     let message = match (platform, version) {
-        (None, None) => Some("'platform' field is not present and 'version' field is either not present or not readable."),
+        (None, None) => Some(
+            "'platform' field is not present and 'version' field is either not present or not readable.",
+        ),
         (None, Some(_)) => Some("'platform' field is not present."),
-        (Some(_), None) => Some("'version' parameter is not present or readable. It must be a non-negative integer."),
-        (Some(p), Some(_)) if p != "android" && p != "ios" => Some("'param' should either be 'android' or 'ios'"),
+        (Some(_), None) => Some(
+            "'version' parameter is not present or readable. It must be a non-negative integer.",
+        ),
+        (Some(p), Some(_)) if p != "android" && p != "ios" => {
+            Some("'param' should either be 'android' or 'ios'")
+        }
         _ => None,
     };
     if let Some(message) = message {

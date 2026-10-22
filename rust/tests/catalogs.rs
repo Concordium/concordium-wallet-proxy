@@ -1,7 +1,7 @@
 //! This module checks catalogue files and their versioned HTTP responses.
 //! Tests reject requests to external dependencies and use source-derived JSON fixtures.
 
-use axum::{body::Body, http::Request, response::Response, Router};
+use axum::{Router, body::Body, http::Request, response::Response};
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::types::CryptographicParameters;
 use concordium_wallet_proxy::{
@@ -13,7 +13,7 @@ use concordium_wallet_proxy::{
     startup::initialize,
 };
 use http_body_util::BodyExt;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use tower::ServiceExt;
 
@@ -129,13 +129,15 @@ async fn source_derived_request_response_contracts() {
             }
         }
         if expected["emptyBody"].as_bool().unwrap_or(false) {
-            assert!(response
-                .into_body()
-                .collect()
-                .await
-                .unwrap()
-                .to_bytes()
-                .is_empty());
+            assert!(
+                response
+                    .into_body()
+                    .collect()
+                    .await
+                    .unwrap()
+                    .to_bytes()
+                    .is_empty()
+            );
         } else if let Some(version) = expected["bodyCatalog"].as_u64() {
             assert_eq!(
                 body(response).await,
@@ -170,13 +172,15 @@ async fn every_version_accepts_head_and_rejects_writes() {
             response.headers()["content-type"],
             "application/json; charset=utf-8"
         );
-        assert!(response
-            .into_body()
-            .collect()
-            .await
-            .unwrap()
-            .to_bytes()
-            .is_empty());
+        assert!(
+            response
+                .into_body()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes()
+                .is_empty()
+        );
         for method in ["POST", "PUT", "DELETE"] {
             let response = app
                 .clone()

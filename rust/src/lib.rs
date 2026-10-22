@@ -1,7 +1,9 @@
-//! This library supplies startup, health checks, and identity-provider catalogues for the Wallet Proxy.
+//! This library supplies startup and wallet-facing HTTP features for the Wallet Proxy.
 //! The existing Haskell service remains available during development.
 
+pub mod balances;
 pub mod catalogs;
+mod compatibility;
 pub mod config;
 pub mod database;
 pub mod dependencies;

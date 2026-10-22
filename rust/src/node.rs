@@ -1,5 +1,7 @@
 //! This module connects to the Concordium node through the Rust SDK.
-//! It supplies cryptographic parameters and the time of the last finalized block.
+//! It supplies startup parameters, health checks, and live chain and account queries.
+
+mod balances;
 
 use crate::{
     config::NodeConfig,
@@ -9,7 +11,7 @@ use anyhow::Context;
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::{
     endpoints::{QueryError, RPCError},
-    types::{queries::ConsensusInfo, CryptographicParameters},
+    types::{CryptographicParameters, queries::ConsensusInfo},
     v2::{BlockIdentifier, Client},
 };
 use std::{error::Error, future::Future, time::Duration};
@@ -76,19 +78,40 @@ impl SdkNode {
         })
     }
 
-    async fn query_consensus(&self, mut client: Client) -> Result<ConsensusInfo, NetworkFailure> {
-        let result = tokio::time::timeout(self.timeout, client.get_consensus_info())
-            .await
-            .map_err(|_| NetworkFailure::Status(tonic::Status::deadline_exceeded("")))?;
-        match result {
-            Ok(info) => Ok(info),
-            Err(QueryError::RPCError(RPCError::CallError(status))) if status.source().is_some() => {
-                Err(NetworkFailure::Transport)
+    async fn query<T, F, Fut>(&self, operation: F) -> Result<T, NetworkFailure>
+    where
+        F: Fn(Client) -> Fut + Send + Sync,
+        Fut: Future<Output = Result<T, QueryError>> + Send,
+        T: Send,
+    {
+        let attempt = |client| async {
+            match tokio::time::timeout(self.timeout, operation(client)).await {
+                Err(_) => Err(NetworkFailure::Status(
+                    tonic::Status::deadline_exceeded("").into(),
+                )),
+                Ok(Ok(value)) => Ok(value),
+                Ok(Err(QueryError::RPCError(RPCError::CallError(status))))
+                    if status.source().is_some() =>
+                {
+                    Err(NetworkFailure::Transport)
+                }
+                Ok(Err(QueryError::RPCError(RPCError::CallError(status)))) => {
+                    Err(NetworkFailure::Status(status.into()))
+                }
+                Ok(Err(QueryError::NotFound)) => {
+                    Err(NetworkFailure::Status(tonic::Status::not_found("").into()))
+                }
+                Ok(Err(_)) => Err(NetworkFailure::InvalidResponse),
             }
-            Err(QueryError::RPCError(RPCError::CallError(status))) => {
-                Err(NetworkFailure::Status(status))
+        };
+        match attempt(self.client.clone()).await {
+            Err(NetworkFailure::Transport) => {
+                let client = connect_with_retries(&self.endpoint, self.retries)
+                    .await
+                    .map_err(|_| NetworkFailure::Transport)?;
+                attempt(client).await
             }
-            Err(_) => Err(NetworkFailure::InvalidResponse),
+            result => result,
         }
     }
 
@@ -122,15 +145,8 @@ impl SdkNode {
 
 impl NetworkNode for SdkNode {
     async fn consensus_info(&self) -> Result<ConsensusInfo, NetworkFailure> {
-        match self.query_consensus(self.client.clone()).await {
-            Err(NetworkFailure::Transport) => {
-                let client = connect_with_retries(&self.endpoint, self.retries)
-                    .await
-                    .map_err(|_| NetworkFailure::Transport)?;
-                self.query_consensus(client).await
-            }
-            result => result,
-        }
+        self.query(|mut client| async move { client.get_consensus_info().await })
+            .await
     }
 }
 

@@ -2,11 +2,11 @@
 //! The gRPC server returns controlled responses through the actual SDK transport.
 
 use axum::{
+    Router,
     body::Body,
     extract::{Request, State},
     response::Response,
     routing::post,
-    Router,
 };
 use concordium_rust_sdk::{
     common::to_bytes, types::CryptographicParameters, v2::generated as proto,
@@ -15,8 +15,8 @@ use std::{
     future::Future,
     pin::Pin,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };

@@ -5,7 +5,7 @@ use super::support::{self, RpcState};
 use axum::{body::Body, http::Request};
 use concordium_rust_sdk::{
     common::to_bytes,
-    types::{queries::ConsensusInfo, CryptographicParameters},
+    types::{CryptographicParameters, queries::ConsensusInfo},
 };
 use concordium_wallet_proxy::{
     config::NodeConfig,
@@ -13,10 +13,10 @@ use concordium_wallet_proxy::{
     node::SdkNode,
 };
 use http_body_util::BodyExt;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
     Arc,
+    atomic::{AtomicUsize, Ordering},
 };
 use tower::ServiceExt;
 
@@ -34,10 +34,9 @@ impl NetworkNode for TestNode {
     async fn consensus_info(&self) -> Result<ConsensusInfo, NetworkFailure> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         if let Some(code) = self.failure {
-            return Err(NetworkFailure::Status(tonic::Status::new(
-                code,
-                "controlled",
-            )));
+            return Err(NetworkFailure::Status(
+                tonic::Status::new(code, "controlled").into(),
+            ));
         }
         Ok(support::consensus_info(self.bft).try_into().unwrap())
     }
@@ -288,13 +287,15 @@ async fn network_routes_keep_shared_http_behavior() {
         .await
         .unwrap();
     assert_eq!(response.status(), 200);
-    assert!(response
-        .into_body()
-        .collect()
-        .await
-        .unwrap()
-        .to_bytes()
-        .is_empty());
+    assert!(
+        response
+            .into_body()
+            .collect()
+            .await
+            .unwrap()
+            .to_bytes()
+            .is_empty()
+    );
 }
 
 #[tokio::test]
@@ -311,7 +312,7 @@ async fn finalized_timestamp_is_present_when_the_node_supplies_it() {
 
 #[tokio::test]
 async fn sdk_consensus_protocol_variants_and_failures() {
-    for protocol in 1..=10 {
+    for protocol in 1..=11 {
         let bft = protocol >= 6;
         let mut consensus = support::consensus_info(bft);
         consensus.protocol_version = protocol - 1;

@@ -1,7 +1,7 @@
 //! This module reads command-line arguments and environment variables for startup.
 //! It checks settings and loads the identity-provider catalogue files.
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use clap::{Args, Parser};
 use std::{
     net::SocketAddr,
@@ -169,7 +169,9 @@ impl Config {
             bail!("Node timeout must be positive");
         }
         if self.node.target.is_some() {
-            bail!("The node target header is not supported by SDK 10; see rust/README.md compatibility issues");
+            bail!(
+                "The node target header is not supported by the SDK; see rust/README.md compatibility issues"
+            );
         }
         let uri: http::Uri = self
             .node

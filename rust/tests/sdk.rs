@@ -78,10 +78,12 @@ async fn unreachable_node_prevents_initialization() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
     drop(listener);
-    assert!(SdkNode::connect(&NodeConfig {
-        timeout_seconds: 1,
-        ..NodeConfig::new(endpoint)
-    })
-    .await
-    .is_err());
+    assert!(
+        SdkNode::connect(&NodeConfig {
+            timeout_seconds: 1,
+            ..NodeConfig::new(endpoint)
+        })
+        .await
+        .is_err()
+    );
 }

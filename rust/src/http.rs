@@ -1,4 +1,4 @@
-//! This module serves health and catalogue routes and formats HTTP errors.
+//! This module combines wallet-facing routes and formats HTTP errors.
 //! It applies path redirects, response headers, and optional public CORS handling.
 
 use crate::{
@@ -9,15 +9,15 @@ use crate::{
     node::{Node, NodeFailure},
 };
 use axum::{
+    Json, Router,
     body::Body,
     extract::{Request, State},
-    http::{header, HeaderValue, Method, StatusCode},
+    http::{HeaderValue, Method, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
-    Json, Router,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tower_http::trace::TraceLayer;
 
 /// Build the health and catalogue routes with the existing error and header formats.
@@ -36,7 +36,7 @@ where
     router_with_network(health, catalogs, wallet, public_cors, Router::new())
 }
 
-/// Build all routes with the startup-acquired network service.
+/// Build all routes with the supplied node-backed feature routes.
 pub fn router_with_network<D: Dependencies + 'static>(
     health: Health<D>,
     catalogs: [Value; 3],

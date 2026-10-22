@@ -2,7 +2,7 @@
 //! Startup stops if a catalogue, database connection, or required node query fails.
 
 use crate::{
-    config::{load_catalogs, Config},
+    config::{Config, load_catalogs},
     database::PostgresHistory,
     dependencies::Production,
     health::{Health, SystemClock},
@@ -14,6 +14,8 @@ use std::sync::Arc;
 
 /// This type contains the resources acquired during startup.
 pub struct Application {
+    /// This service supplies the CCD account balance routes.
+    pub balances: crate::balances::Balances<Production>,
     /// This service shares the node, database pool, and clock for health checks.
     pub health: Health<Production>,
     /// These JSON values contain catalogues in version order: 0, 1, then 2.
@@ -38,6 +40,7 @@ pub async fn initialize(config: &Config) -> anyhow::Result<Application> {
     let node = SdkNode::connect(&config.node).await?;
     let cryptographic_parameters = node.cryptographic_parameters().await?;
     Ok(Application {
+        balances: crate::balances::Balances { node: node.clone() },
         health: Health {
             node: node.clone(),
             history: Arc::new(PostgresHistory(pool)),

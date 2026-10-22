@@ -3,14 +3,14 @@
 
 use crate::{dependencies::Dependencies, http::error};
 use axum::{
+    Json, Router,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
-    Json, Router,
 };
-use concordium_rust_sdk::types::{queries::ConsensusInfo, CryptographicParameters};
-use serde_json::{json, Value};
+use concordium_rust_sdk::types::{CryptographicParameters, queries::ConsensusInfo};
+use serde_json::{Value, json};
 use std::{future::Future, sync::Arc};
 
 /// This interface supplies live consensus information.
@@ -29,7 +29,7 @@ pub enum NetworkFailure {
     /// The node returned a non-OK RPC status.
     Status(
         /// This status contains the node's code and message.
-        tonic::Status,
+        Box<tonic::Status>,
     ),
 }
 
@@ -133,8 +133,12 @@ pub fn consensus_value(info: &ConsensusInfo) -> Value {
 }
 
 impl NetworkFailure {
-    fn response(self) -> Response {
-        tracing::warn!(failure = ?self, "Network-information query failed");
+    pub(crate) fn is_not_found(&self) -> bool {
+        matches!(self, Self::Status(status) if status.code() == tonic::Code::NotFound)
+    }
+
+    pub(crate) fn response(self) -> Response {
+        tracing::warn!(failure = ?self, "Node query failed");
         match self {
             Self::Transport => error(
                 StatusCode::BAD_GATEWAY,

@@ -13,8 +13,8 @@ use concordium_wallet_proxy::{
 use http_body_util::BodyExt;
 use serde_json::Value;
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
     Arc,
+    atomic::{AtomicUsize, Ordering},
 };
 use tower::ServiceExt;
 
@@ -228,9 +228,11 @@ async fn public_cors_is_optional_and_does_not_cover_transak() {
         )
         .await
         .unwrap();
-    assert!(!response
-        .headers()
-        .contains_key("access-control-allow-origin"));
+    assert!(
+        !response
+            .headers()
+            .contains_key("access-control-allow-origin")
+    );
 }
 
 #[tokio::test]
@@ -247,11 +249,13 @@ async fn head_has_no_response_body() {
         .await
         .unwrap();
     assert_eq!(response.status(), 200);
-    assert!(response
-        .into_body()
-        .collect()
-        .await
-        .unwrap()
-        .to_bytes()
-        .is_empty());
+    assert!(
+        response
+            .into_body()
+            .collect()
+            .await
+            .unwrap()
+            .to_bytes()
+            .is_empty()
+    );
 }

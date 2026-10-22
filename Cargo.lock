@@ -722,9 +722,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-contracts-common"
-version = "10.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1611936908ab3e60c8e08c18a702f259051699919ad59e2aff6d58e2c0425d7"
+version = "9.2.0"
 dependencies = [
  "base64 0.21.7",
  "bs58",
@@ -744,9 +742,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-contracts-common-derive"
-version = "5.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0f9f29d08ea4f8c57f700d8c550040794ae18192fed53b52de8ebfebc494773"
+version = "4.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -755,9 +751,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-rust-sdk"
-version = "10.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d3cfbbe632c606cf4f9da382041bea4bec1458982ca46cbbc3fa944d042098f"
+version = "9.0.1"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -789,9 +783,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-smart-contract-engine"
-version = "7.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "518e066a3a1dd3342224a56e13afebf5dd7f33d425fac59b7258840c09be6141"
+version = "6.1.0"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -823,6 +815,8 @@ dependencies = [
  "concordium-rust-sdk",
  "http",
  "http-body-util",
+ "prost",
+ "rand 0.8.8",
  "reqwest",
  "serde",
  "serde_json",
@@ -840,9 +834,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-wasm"
-version = "6.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31ed154eeb80e49165a07b7ce2e38431e5852c16aa684d05c6cb36cd418479be"
+version = "5.1.0"
 dependencies = [
  "anyhow",
  "concordium-contracts-common",
@@ -853,9 +845,7 @@ dependencies = [
 
 [[package]]
 name = "concordium_base"
-version = "11.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02e753a369cf5affbe83d056a091341526cd50db8afcfdb5fe0dfd10fa41c771"
+version = "10.0.0"
 dependencies = [
  "aes",
  "anyhow",
@@ -905,8 +895,6 @@ dependencies = [
 [[package]]
 name = "concordium_base_derive"
 version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "506ed3d99b3ee6c674cc0c1e8ce95fa49fafd08b96754a6a83fc6cc34f9c373c"
 dependencies = [
  "convert_case 0.8.0",
  "darling 0.20.11",

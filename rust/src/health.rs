@@ -2,6 +2,7 @@
 //! It compares block age with the configured limit and prepares the HTTP response data.
 
 use crate::{
+    compatibility::format_time,
     database::History,
     dependencies::Dependencies,
     node::{Node, NodeFailure},
@@ -69,19 +70,6 @@ pub enum HealthError {
         #[from]
         anyhow::Error,
     ),
-}
-
-// Aeson's UTCTime rendering omits trailing fractional zeros; Chrono's
-// default serializer instead groups fractional digits in threes.
-fn format_time(time: DateTime<Utc>) -> String {
-    let mut value = time.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true);
-    while value.ends_with("0Z") {
-        value.remove(value.len() - 2);
-    }
-    if value.ends_with(".Z") {
-        value.remove(value.len() - 2);
-    }
-    value
 }
 
 impl<D: Dependencies> Clone for Health<D> {
