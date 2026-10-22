@@ -817,7 +817,6 @@ name = "concordium-wallet-proxy"
 version = "0.50.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "axum 0.8.9",
  "chrono",
  "clap",

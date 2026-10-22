@@ -32,6 +32,10 @@ pub struct RpcState {
     pub block_status: Option<Code>,
     /// This optional status replaces the cryptographic-parameter response with an RPC error.
     pub crypto_status: Option<Code>,
+    /// This optional status replaces the consensus response.
+    pub consensus_status: Option<Code>,
+    /// This response supplies the consensus protocol variant.
+    pub consensus: proto::ConsensusInfo,
     /// This duration delays each block response.
     pub delay: Duration,
     /// This shared counter records block queries.
@@ -44,6 +48,8 @@ impl Default for RpcState {
         Self {
             block_status: None,
             crypto_status: None,
+            consensus_status: None,
+            consensus: consensus_info(false),
             delay: Duration::ZERO,
             calls: Arc::new(AtomicUsize::new(0)),
             slot_millis: 1_767_225_899_000,
@@ -73,6 +79,7 @@ pub async fn serve(state: RpcState) -> Server {
             "/concordium.v2.Queries/GetCryptographicParameters",
             post(crypto),
         )
+        .route("/concordium.v2.Queries/GetConsensusInfo", post(consensus))
         .with_state(state);
     serve_router(app).await
 }
@@ -176,6 +183,66 @@ async fn block(State(state): State<RpcState>, request: Request) -> Response {
         .await;
     response.map(Body::new)
 }
+/// Build a controlled consensus response with distinct hashes and exact integers.
+pub fn consensus_info(bft: bool) -> proto::ConsensusInfo {
+    proto::ConsensusInfo {
+        best_block: Some(proto::BlockHash { value: vec![1; 32] }),
+        genesis_block: Some(proto::BlockHash { value: vec![2; 32] }),
+        last_finalized_block: Some(proto::BlockHash { value: vec![3; 32] }),
+        current_era_genesis_block: Some(proto::BlockHash { value: vec![4; 32] }),
+        genesis_time: Some(proto::Timestamp {
+            value: 1_767_225_600_123,
+        }),
+        current_era_genesis_time: Some(proto::Timestamp {
+            value: 1_767_225_600_000,
+        }),
+        best_block_height: Some(proto::AbsoluteBlockHeight {
+            value: 9_007_199_254_740_993,
+        }),
+        last_finalized_block_height: Some(proto::AbsoluteBlockHeight { value: 42 }),
+        epoch_duration: Some(proto::Duration { value: 3_600_000 }),
+        slot_duration: (!bft).then_some(proto::Duration { value: 250 }),
+        protocol_version: if bft { 5 } else { 4 },
+        genesis_index: Some(proto::GenesisIndex { value: 2 }),
+        current_timeout_duration: bft.then_some(proto::Duration { value: 1250 }),
+        current_round: bft.then_some(proto::Round {
+            value: 9_007_199_254_740_995,
+        }),
+        current_epoch: bft.then_some(proto::Epoch { value: 8 }),
+        trigger_block_time: bft.then_some(proto::Timestamp {
+            value: 1_767_225_600_500,
+        }),
+        ..Default::default()
+    }
+}
+
+/// This type serves a controlled consensus response through the SDK transport.
+struct ConsensusRpc(
+    /// These settings select the response or failure.
+    RpcState,
+);
+impl tonic::server::UnaryService<proto::Empty> for ConsensusRpc {
+    type Response = proto::ConsensusInfo;
+    type Future = RpcFuture<Self::Response>;
+    fn call(&mut self, _: tonic::Request<proto::Empty>) -> Self::Future {
+        let state = self.0.clone();
+        Box::pin(async move {
+            tokio::time::sleep(state.delay).await;
+            match state.consensus_status {
+                Some(code) => Err(Status::new(code, "Controlled consensus failure")),
+                None => Ok(tonic::Response::new(state.consensus)),
+            }
+        })
+    }
+}
+
+async fn consensus(State(state): State<RpcState>, request: Request) -> Response {
+    tonic::server::Grpc::new(tonic::codec::ProstCodec::default())
+        .unary(ConsensusRpc(state), request)
+        .await
+        .map(Body::new)
+}
+
 async fn crypto(State(state): State<RpcState>, request: Request) -> Response {
     let response = tonic::server::Grpc::new(tonic::codec::ProstCodec::default())
         .unary(CryptoRpc(state), request)

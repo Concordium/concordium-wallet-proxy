@@ -4,10 +4,10 @@
 pub mod catalogs;
 pub mod config;
 pub mod database;
+pub mod dependencies;
 pub mod health;
 pub mod http;
+pub mod network;
 pub mod node;
 pub mod startup;
-
-/// This module serves wallet update guidance and terms.
 pub mod wallet;

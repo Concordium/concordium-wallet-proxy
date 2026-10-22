@@ -5,7 +5,7 @@ use clap::Parser;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    use concordium_wallet_proxy::{config::Config, http::router, startup::initialize};
+    use concordium_wallet_proxy::{config::Config, http::router_with_network, startup::initialize};
     let config = Config::parse();
     config.validate()?;
     tracing_subscriber::fmt()
@@ -20,11 +20,12 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(address = %listener.local_addr()?, "Wallet Proxy listening");
     axum::serve(
         listener,
-        router(
+        router_with_network(
             application.health.clone(),
             application.catalogs,
             application.wallet,
             config.server.enable_public_cors,
+            concordium_wallet_proxy::network::routes(application.network),
         ),
     )
     .with_graceful_shutdown(shutdown())

@@ -1,16 +1,18 @@
 //! This module connects to the Concordium node through the Rust SDK.
 //! It supplies cryptographic parameters and the time of the last finalized block.
 
-use crate::config::NodeConfig;
+use crate::{
+    config::NodeConfig,
+    network::{NetworkFailure, NetworkNode},
+};
 use anyhow::Context;
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::{
     endpoints::{QueryError, RPCError},
-    types::CryptographicParameters,
+    types::{queries::ConsensusInfo, CryptographicParameters},
     v2::{BlockIdentifier, Client},
 };
-use std::{error::Error, time::Duration};
+use std::{error::Error, future::Future, time::Duration};
 use tonic::transport::{ClientTlsConfig, Endpoint};
 
 /// This type identifies node failures that prevent a health result.
@@ -25,14 +27,17 @@ pub enum NodeFailure {
 }
 
 /// This interface supplies the node operations for startup and health checks.
-#[async_trait]
 pub trait Node: Send + Sync {
     /// Get cryptographic parameters from the last finalized block.
     /// A failure must stop startup.
-    async fn cryptographic_parameters(&self) -> anyhow::Result<CryptographicParameters>;
+    fn cryptographic_parameters(
+        &self,
+    ) -> impl Future<Output = anyhow::Result<CryptographicParameters>> + Send;
     /// Get the last finalized block time in UTC.
     /// Return `None` if the health query has no usable RPC result.
-    async fn last_final_time(&self) -> Result<Option<DateTime<Utc>>, NodeFailure>;
+    fn last_final_time(
+        &self,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, NodeFailure>> + Send;
 }
 
 /// This type supplies node operations through the SDK.
@@ -71,6 +76,22 @@ impl SdkNode {
         })
     }
 
+    async fn query_consensus(&self, mut client: Client) -> Result<ConsensusInfo, NetworkFailure> {
+        let result = tokio::time::timeout(self.timeout, client.get_consensus_info())
+            .await
+            .map_err(|_| NetworkFailure::Status(tonic::Status::deadline_exceeded("")))?;
+        match result {
+            Ok(info) => Ok(info),
+            Err(QueryError::RPCError(RPCError::CallError(status))) if status.source().is_some() => {
+                Err(NetworkFailure::Transport)
+            }
+            Err(QueryError::RPCError(RPCError::CallError(status))) => {
+                Err(NetworkFailure::Status(status))
+            }
+            Err(_) => Err(NetworkFailure::InvalidResponse),
+        }
+    }
+
     async fn query_time(&self, mut client: Client) -> Result<Option<DateTime<Utc>>, NodeFailure> {
         match tokio::time::timeout(
             self.timeout,
@@ -99,6 +120,20 @@ impl SdkNode {
     }
 }
 
+impl NetworkNode for SdkNode {
+    async fn consensus_info(&self) -> Result<ConsensusInfo, NetworkFailure> {
+        match self.query_consensus(self.client.clone()).await {
+            Err(NetworkFailure::Transport) => {
+                let client = connect_with_retries(&self.endpoint, self.retries)
+                    .await
+                    .map_err(|_| NetworkFailure::Transport)?;
+                self.query_consensus(client).await
+            }
+            result => result,
+        }
+    }
+}
+
 async fn connect_with_retries(endpoint: &Endpoint, retries: u32) -> anyhow::Result<Client> {
     for attempt in 0..=retries {
         match Client::new(endpoint.clone()).await {
@@ -116,7 +151,6 @@ async fn connect_with_retries(endpoint: &Endpoint, retries: u32) -> anyhow::Resu
     unreachable!("At least one connection attempt is made")
 }
 
-#[async_trait]
 impl Node for SdkNode {
     async fn cryptographic_parameters(&self) -> anyhow::Result<CryptographicParameters> {
         let mut client = self.client.clone();

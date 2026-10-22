@@ -1,15 +1,14 @@
 //! This module checks access to the existing transaction-history tables.
 //! It reads existing records and does not change the database schema.
 
-use async_trait::async_trait;
 use sqlx::PgPool;
+use std::future::Future;
 
 /// This interface checks transaction-history access for the health service.
-#[async_trait]
 pub trait History: Send + Sync {
     /// Check table access and decode a record if data is present.
     /// Empty tables are not an error.
-    async fn check(&self) -> anyhow::Result<()>;
+    fn check(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 /// This type checks the transaction-history tables through PostgreSQL.
@@ -18,7 +17,6 @@ pub struct PostgresHistory(
     pub PgPool,
 );
 
-#[async_trait]
 impl History for PostgresHistory {
     async fn check(&self) -> anyhow::Result<()> {
         // Preserve the Haskell health probe: decode at most one row from the

@@ -1,7 +1,6 @@
 //! This module checks health HTTP responses against source-derived fixtures.
 //! It also checks errors, language headers, path redirects, and public CORS handling.
 
-use async_trait::async_trait;
 use axum::{body::Body, http::Request};
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::types::CryptographicParameters;
@@ -20,11 +19,11 @@ use std::sync::{
 use tower::ServiceExt;
 
 /// This test node returns the result selected by a fixture.
+#[derive(Clone)]
 struct TestNode(
     /// This string supplies a UTC block time or selects a failure case.
     String,
 );
-#[async_trait]
 impl Node for TestNode {
     async fn cryptographic_parameters(&self) -> anyhow::Result<CryptographicParameters> {
         anyhow::bail!("Unexpected startup query")
@@ -45,7 +44,6 @@ struct TestHistory {
     /// This shared counter records the number of checks.
     calls: Arc<AtomicUsize>,
 }
-#[async_trait]
 impl History for TestHistory {
     async fn check(&self) -> anyhow::Result<()> {
         self.calls.fetch_add(1, Ordering::SeqCst);
@@ -64,13 +62,22 @@ impl Clock for TestClock {
     }
 }
 
+/// This type selects only the capabilities required by health checks.
+struct TestDependencies;
+
+impl concordium_wallet_proxy::dependencies::Dependencies for TestDependencies {
+    type Node = TestNode;
+    type History = TestHistory;
+    type Clock = TestClock;
+}
+
 fn fixture() -> Value {
     serde_json::from_str(include_str!("fixtures/health.json")).unwrap()
 }
 fn app(node: &str, fail: bool, cors: bool) -> (axum::Router, Arc<AtomicUsize>) {
     let calls = Arc::new(AtomicUsize::new(0));
-    let health = Health {
-        node: Arc::new(TestNode(node.into())),
+    let health = Health::<TestDependencies> {
+        node: TestNode(node.into()),
         history: Arc::new(TestHistory {
             fail,
             calls: calls.clone(),

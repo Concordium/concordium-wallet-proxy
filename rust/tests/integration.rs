@@ -4,6 +4,7 @@
 mod catalogs;
 mod config;
 mod health;
+mod network;
 mod postgres;
 mod sdk;
 mod support;

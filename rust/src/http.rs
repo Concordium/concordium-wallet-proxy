@@ -3,8 +3,10 @@
 
 use crate::{
     catalogs,
-    health::{Health, HealthError},
-    node::NodeFailure,
+    database::History,
+    dependencies::Dependencies,
+    health::{Clock, Health, HealthError},
+    node::{Node, NodeFailure},
 };
 use axum::{
     body::Body,
@@ -20,17 +22,39 @@ use tower_http::trace::TraceLayer;
 
 /// Build the health and catalogue routes with the existing error and header formats.
 /// Enable public CORS handling only when `public_cors` is true.
-pub fn router(
-    health: Health,
+pub fn router<D: Dependencies + 'static>(
+    health: Health<D>,
     catalogs: [Value; 3],
     wallet: crate::wallet::WalletSettings,
     public_cors: bool,
-) -> Router {
+) -> Router
+where
+    D::Node: Node + 'static,
+    D::History: History + 'static,
+    D::Clock: Clock + 'static,
+{
+    router_with_network(health, catalogs, wallet, public_cors, Router::new())
+}
+
+/// Build all routes with the startup-acquired network service.
+pub fn router_with_network<D: Dependencies + 'static>(
+    health: Health<D>,
+    catalogs: [Value; 3],
+    wallet: crate::wallet::WalletSettings,
+    public_cors: bool,
+    network_routes: Router,
+) -> Router
+where
+    D::Node: Node + 'static,
+    D::History: History + 'static,
+    D::Clock: Clock + 'static,
+{
     Router::new()
-        .route("/v0/health", get(check_health))
+        .route("/v0/health", get(check_health::<D>))
         .with_state(health)
         .merge(catalogs::routes(catalogs))
         .merge(crate::wallet::routes(wallet))
+        .merge(network_routes)
         .fallback(|| async { error(StatusCode::NOT_FOUND, 1, "Not found") })
         .method_not_allowed_fallback(|| async {
             error(StatusCode::METHOD_NOT_ALLOWED, 1, "Bad method")
@@ -39,7 +63,12 @@ pub fn router(
         .layer(TraceLayer::new_for_http())
 }
 
-async fn check_health(State(health): State<Health>) -> Response {
+async fn check_health<D: Dependencies>(State(health): State<Health<D>>) -> Response
+where
+    D::Node: Node,
+    D::History: History,
+    D::Clock: Clock,
+{
     match health.check().await {
         Ok(value) => Json(value).into_response(),
         Err(err) => {

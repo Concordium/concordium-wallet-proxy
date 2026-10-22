@@ -205,6 +205,12 @@ deployment configuration. Rust does not perform this per-pod selection.
 - **Malformed node responses:** During health checks, some SDK response-conversion
   failures cannot be distinguished from remote RPC errors. Rust can return HTTP
   200 with `healthy: false` where Haskell would return HTTP 500.
+  The consensus SDK method also collapses local conversion errors into RPC
+  statuses. For example, missing required consensus fields produce HTTP 502
+  (`INVALID_ARGUMENT`) rather than Haskell's HTTP 500. Do not infer provenance from
+  status-message text. This remains a release blocker, as does node-cookie
+  forwarding for the live network routes. Unsupported future protocol variants
+  are not claimed compatible until SDK support and fixtures establish parity.
 
 ## Tests
 

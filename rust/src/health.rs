@@ -3,6 +3,7 @@
 
 use crate::{
     database::History,
+    dependencies::Dependencies,
     node::{Node, NodeFailure},
 };
 use chrono::{DateTime, Utc};
@@ -24,14 +25,13 @@ impl Clock for SystemClock {
 }
 
 /// This type contains the resources and age limit for a health check.
-#[derive(Clone)]
-pub struct Health {
+pub struct Health<D: Dependencies> {
     /// This interface supplies the last finalized block time.
-    pub node: Arc<dyn Node>,
+    pub node: D::Node,
     /// This interface checks access to transaction-history records.
-    pub history: Arc<dyn History>,
+    pub history: Arc<D::History>,
     /// This clock supplies the current UTC time.
-    pub clock: Arc<dyn Clock>,
+    pub clock: Arc<D::Clock>,
     /// This validated limit sets the maximum block age, in seconds. A block at the limit is stale.
     pub tolerance_seconds: i64,
 }
@@ -84,7 +84,23 @@ fn format_time(time: DateTime<Utc>) -> String {
     value
 }
 
-impl Health {
+impl<D: Dependencies> Clone for Health<D> {
+    fn clone(&self) -> Self {
+        Self {
+            node: self.node.clone(),
+            history: self.history.clone(),
+            clock: self.clock.clone(),
+            tolerance_seconds: self.tolerance_seconds,
+        }
+    }
+}
+
+impl<D: Dependencies> Health<D>
+where
+    D::Node: Node,
+    D::History: History,
+    D::Clock: Clock,
+{
     /// Check the node, then the database, then the block age.
     /// Do not check the database when the node supplies no block result.
     pub async fn check(&self) -> Result<HealthResponse, HealthError> {

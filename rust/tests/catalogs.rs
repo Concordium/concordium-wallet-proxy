@@ -1,7 +1,6 @@
 //! This module checks catalogue files and their versioned HTTP responses.
 //! Tests reject requests to external dependencies and use source-derived JSON fixtures.
 
-use async_trait::async_trait;
 use axum::{body::Body, http::Request, response::Response, Router};
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::types::CryptographicParameters;
@@ -19,9 +18,18 @@ use std::sync::Arc;
 use tower::ServiceExt;
 
 /// This type stops a test if a catalogue request uses an external dependency or the clock.
+#[derive(Clone)]
 pub(super) struct UnusedDependencies;
 
-#[async_trait]
+/// This type selects dependencies that reject external access in HTTP tests.
+pub(super) struct TestDependencies;
+
+impl concordium_wallet_proxy::dependencies::Dependencies for TestDependencies {
+    type Node = UnusedDependencies;
+    type History = UnusedDependencies;
+    type Clock = UnusedDependencies;
+}
+
 impl Node for UnusedDependencies {
     async fn cryptographic_parameters(&self) -> anyhow::Result<CryptographicParameters> {
         panic!("Catalogue requests must not query node parameters");
@@ -32,7 +40,6 @@ impl Node for UnusedDependencies {
     }
 }
 
-#[async_trait]
 impl History for UnusedDependencies {
     async fn check(&self) -> anyhow::Result<()> {
         panic!("Catalogue requests must not query PostgreSQL");
@@ -66,8 +73,8 @@ fn configured_app(catalogs: &[Value; 3], cors: bool) -> (tempfile::TempDir, Rout
     }
     let loaded = load_catalogs(&config.catalogs).unwrap();
     let dependency = Arc::new(UnusedDependencies);
-    let health = Health {
-        node: dependency.clone(),
+    let health = Health::<TestDependencies> {
+        node: UnusedDependencies,
         history: dependency.clone(),
         clock: dependency,
         tolerance_seconds: 300,

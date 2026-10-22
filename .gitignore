@@ -21,3 +21,14 @@ stack.yaml.lock
 
 *.cabal
 *.aes
+.bash_profile
+.bashrc
+.claude/
+.gitconfig
+.mcp.json
+.profile
+.ripgreprc
+.stack-root/
+.vscode
+.zprofile
+.zshrc

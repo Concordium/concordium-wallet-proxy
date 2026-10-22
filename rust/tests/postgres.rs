@@ -81,7 +81,7 @@ async fn configured_startup_and_http_routes_use_real_postgres_and_sdk(pool: PgPo
     }
     let application = initialize(&config).await.unwrap();
     assert_eq!(
-        application.cryptographic_parameters.genesis_string,
+        application.network.parameters.genesis_string,
         "test-network"
     );
     let server = support::serve_router(router(

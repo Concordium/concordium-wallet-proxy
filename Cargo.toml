@@ -1,8 +1,7 @@
 [package]
 name = "concordium-wallet-proxy"
 version = "0.50.0"
-edition = "2021"
-rust-version = "1.94"
+edition = "2024"
 license = "Apache-2.0"
 publish = false
 description = "Wallet-facing HTTP backend for Concordium"
@@ -20,7 +19,6 @@ path = "rust/tests/integration.rs"
 
 [dependencies]
 anyhow = "1.0.104"
-async-trait = "0.1.92"
 axum = { version = "0.8.9", features = ["http2"] }
 chrono = { version = "0.4.45", features = ["serde"] }
 clap = { version = "4.6.7", features = ["derive", "env"] }

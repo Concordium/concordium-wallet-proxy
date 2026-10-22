@@ -12,8 +12,8 @@ use tower::ServiceExt;
 
 async fn request(config: &WalletConfig, uri: &str) -> (u16, Value) {
     let dependencies = Arc::new(super::catalogs::UnusedDependencies);
-    let health = Health {
-        node: dependencies.clone(),
+    let health = Health::<super::catalogs::TestDependencies> {
+        node: super::catalogs::UnusedDependencies,
         history: dependencies.clone(),
         clock: dependencies,
         tolerance_seconds: 300,
