@@ -1,6 +1,7 @@
 //! This module connects to the Concordium node through the Rust SDK.
 //! It supplies startup parameters, health checks, and live chain and account queries.
 
+mod accounts;
 mod balances;
 
 use crate::{

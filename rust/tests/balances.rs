@@ -1,7 +1,7 @@
 //! This module checks CCD balances against source-derived HTTP expectations.
 //! Controlled adapters verify query order, block selectors, and staking boundaries.
 
-mod fixtures;
+pub(super) mod fixtures;
 mod rpc;
 mod tokens;
 
