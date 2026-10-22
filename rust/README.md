@@ -4,27 +4,6 @@ The Wallet Proxy provides a wallet-facing HTTP API for Concordium. It connects t
 a Concordium node and the existing transaction-history database, and serves
 identity-provider information used by wallet issuance and recovery flows.
 
-## Overview
-
-The service exposes these endpoints:
-
-- `GET /v0/health`: check node access, transaction-history database access, and
-  the age of the last finalized block.
-- `GET /v0/ip_info`: get the identity-provider catalogue for the initial-account
-  issuance flow.
-- `GET /v1/ip_info`: get the configured identity-provider catalogue for issuance
-  and recovery without initial accounts.
-- `GET /v2/ip_info`: get the configured identity-provider catalogue, including
-  company identity flows.
-
-Errors use the existing wallet-facing JSON format:
-
-```json
-{"error": 0, "errorMessage": "Internal server error"}
-```
-
-See the known compatibility issues below for differences from the Haskell service.
-
 ## Dependencies
 
 ### Runtime dependencies

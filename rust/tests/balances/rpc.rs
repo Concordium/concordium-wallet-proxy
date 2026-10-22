@@ -124,6 +124,22 @@ async fn tokenomics(State(node): State<TestNode>, request: RpcRequest) -> Respon
     })
     .await
 }
+async fn token_info(State(node): State<TestNode>, request: RpcRequest) -> Response {
+    dispatch(node, request, |node, input: p::TokenInfoRequest| {
+        assert!(matches!(
+            input.block_hash.unwrap().block_hash_input,
+            Some(p::block_hash_input::BlockHashInput::LastFinal(_))
+        ));
+        let id = input.token_id.unwrap().value;
+        record(node, &format!("token:{id}"))?;
+        node.token_infos
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| tonic::Status::not_found("controlled").into())
+    })
+    .await
+}
+
 async fn parameters(State(node): State<TestNode>, request: RpcRequest) -> Response {
     dispatch(node, request, |node, input: p::BlockHashInput| {
         assert_eq!(block(input), "finalized");
@@ -142,13 +158,15 @@ async fn parameters(State(node): State<TestNode>, request: RpcRequest) -> Respon
     })
     .await
 }
-async fn server(node: TestNode) -> crate::support::Server {
+/// Serve balance queries through the local SDK transport.
+pub(super) async fn server(node: TestNode) -> crate::support::Server {
     crate::support::serve_router(
         Router::new()
             .route("/concordium.v2.Queries/GetConsensusInfo", post(consensus))
             .route("/concordium.v2.Queries/GetAccountInfo", post(account))
             .route("/concordium.v2.Queries/GetPoolInfo", post(pool))
             .route("/concordium.v2.Queries/GetTokenomicsInfo", post(tokenomics))
+            .route("/concordium.v2.Queries/GetTokenInfo", post(token_info))
             .route(
                 "/concordium.v2.Queries/GetBlockChainParameters",
                 post(parameters),

@@ -1,0 +1,12 @@
+[
+  {"cbor":"a0","module":{},"account":{}},
+  {"cbor":"a1646e616d6563544b31","module":{"name":"TK1"},"account":{}},
+  {"cbor":"a169616c6c6f774c697374f4","module":{"allowList":false},"account":{"allowList":false}},
+  {"cbor":"a169616c6c6f774c697374f5","module":{"allowList":true},"account":{"allowList":true}},
+  {"cbor":"a169616c6c6f774c697374f6","module":"a169616c6c6f774c697374f6","account":"a169616c6c6f774c697374f6"},
+  {"cbor":"a0ff","module":"a0ff","account":"a0ff"},
+  {"cbor":"a1656c6f636b7380","module":{},"account":{}},
+  {"cbor":"bf646e616d657f61616162ffff","module":{"name":"ab"},"account":{}},
+  {"cbor":"a1625f78a2616201616102","module":{},"account":{}},
+  {"cbor":"ff","module":"ff","account":"ff"}
+]

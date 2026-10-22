@@ -89,7 +89,7 @@ pub(super) fn balance(
         "accountReleaseSchedule": {"total": account.account_release_schedule.total.micro_ccd.to_string(), "schedule": schedule},
         "accountEncryptedAmount": encrypted_value,
     });
-    if version == Version::Current {
+    if version != Version::Legacy {
         let cooldowns = account.cooldowns.iter().map(|cooldown| {
             let status = match &cooldown.status {
                 Upward::Known(CooldownStatus::Cooldown) => "cooldown",

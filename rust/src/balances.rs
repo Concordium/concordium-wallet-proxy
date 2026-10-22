@@ -1,6 +1,8 @@
-//! This module serves the legacy and current CCD account balance routes.
-//! It preserves the order and block selection of account and staking queries.
+//! This module serves CCD and token-inclusive account balance routes.
+//! It preserves the order and block selection of account, staking, and token queries.
 
+mod token_state;
+mod tokens;
 mod view;
 
 use crate::{
@@ -18,13 +20,14 @@ use axum::{
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::{
     id::types::AccountAddress,
+    protocol_level_tokens::{TokenId, TokenInfo},
     types::{AccountInfo, AccountStakingInfo, BakerId, BakerPoolStatus, DelegationTarget},
     v2::{BlockIdentifier, Upward},
 };
 use serde_json::{Value, json};
 use std::future::Future;
 
-/// This interface supplies the account and staking queries required by balances.
+/// This interface supplies account, staking, and token queries for balances.
 pub trait BalanceNode: NetworkNode {
     /// Read account state at the specified block.
     fn account_info(
@@ -38,6 +41,12 @@ pub trait BalanceNode: NetworkNode {
         baker: BakerId,
         block: BlockIdentifier,
     ) -> impl Future<Output = Result<BakerPoolStatus, NetworkFailure>> + Send;
+    /// Read token information at the specified block selector.
+    fn token_info(
+        &self,
+        id: TokenId,
+        block: BlockIdentifier,
+    ) -> impl Future<Output = Result<TokenInfo, NetworkFailure>> + Send;
     /// Read the next payday at the specified block, if the protocol has paydays.
     fn next_payday(
         &self,
@@ -71,9 +80,11 @@ enum Version {
     Legacy,
     /// This version includes finalized state, cooldowns, and available balance.
     Current,
+    /// This version adds protocol-level token holdings to finalized CCD state.
+    Tokens,
 }
 
-/// Build the two CCD balance routes. The token-inclusive version is separate.
+/// Build the legacy, current, and token-inclusive balance routes.
 pub fn routes<D: Dependencies + 'static>(balances: Balances<D>) -> Router
 where
     D::Node: BalanceNode + 'static,
@@ -81,6 +92,7 @@ where
     Router::new()
         .route("/v0/accBalance/{address}", get(legacy::<D>))
         .route("/v1/accBalance/{address}", get(current::<D>))
+        .route("/v2/accBalance/{address}", get(token_inclusive::<D>))
         .with_state(balances)
 }
 
@@ -102,6 +114,16 @@ where
     D::Node: BalanceNode,
 {
     balances.response(&address, Version::Current).await
+}
+
+async fn token_inclusive<D: Dependencies>(
+    State(balances): State<Balances<D>>,
+    Path(address): Path<String>,
+) -> Response
+where
+    D::Node: BalanceNode,
+{
+    balances.response(&address, Version::Tokens).await
 }
 
 /// This type joins an account to the pool state queried at the same block selector.
@@ -185,6 +207,29 @@ where
             None
         };
         let next = self.node.next_payday(finalized).await?;
+        // Haskell resolves each token sequentially at LastFinal, not the pinned
+        // account block, and does this before querying pending-change parameters.
+        let token_values = if version == Version::Tokens {
+            let mut infos = Vec::with_capacity(last.account.tokens.len());
+            for holding in &last.account.tokens {
+                infos.push(
+                    self.node
+                        .token_info(holding.token_id.clone(), BlockIdentifier::LastFinal)
+                        .await?,
+                );
+            }
+            // Complete all lookups before projecting CBOR, as Haskell's forM does.
+            Some(
+                last.account
+                    .tokens
+                    .iter()
+                    .zip(&infos)
+                    .map(|(holding, info)| tokens::holding(holding, info))
+                    .collect::<Vec<_>>(),
+            )
+        } else {
+            None
+        };
         let pending = view::has_pending(&last.account)
             || best
                 .as_ref()
@@ -200,6 +245,9 @@ where
             epochs,
         };
         let mut value = json!({"finalizedBalance": view::balance(&last.account, last.pool.as_ref(), version, &payday)?});
+        if let Some(tokens) = token_values {
+            value["finalizedBalance"]["accountTokens"] = json!(tokens);
+        }
         if let Some(best) = best {
             value["currentBalance"] =
                 view::balance(&best.account, best.pool.as_ref(), version, &payday)?;

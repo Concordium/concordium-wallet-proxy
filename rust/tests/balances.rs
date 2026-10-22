@@ -3,6 +3,7 @@
 
 mod fixtures;
 mod rpc;
+mod tokens;
 
 use axum::{body::Body, http::Request};
 use chrono::{DateTime, Utc};
@@ -33,6 +34,8 @@ struct TestNode {
     best: Option<p::AccountInfo>,
     /// This state is used for validator and delegation-target pool queries.
     pool: Option<p::PoolInfoResponse>,
+    /// These responses supply global information by token identifier.
+    token_infos: std::collections::BTreeMap<String, p::TokenInfo>,
     /// This value is the zero-based protobuf protocol version.
     protocol: i32,
     /// This flag selects whether tokenomics supplies a next payday.
@@ -50,6 +53,7 @@ impl Default for TestNode {
             finalized: Some(fixtures::account()),
             best: Some(fixtures::account()),
             pool: Some(fixtures::pool(Some(false), Some(true))),
+            token_infos: Default::default(),
             protocol: 10,
             payday: true,
             epochs: Some(2),
@@ -124,6 +128,20 @@ impl BalanceNode for TestNode {
         self.record(&format!("pool:{}", Self::block(block)))?;
         self.pool
             .clone()
+            .ok_or_else(|| status(tonic::Code::NotFound))?
+            .try_into()
+            .map_err(|_| NetworkFailure::InvalidResponse)
+    }
+    async fn token_info(
+        &self,
+        id: concordium_rust_sdk::protocol_level_tokens::TokenId,
+        block: BlockIdentifier,
+    ) -> Result<concordium_rust_sdk::protocol_level_tokens::TokenInfo, NetworkFailure> {
+        assert_eq!(block, BlockIdentifier::LastFinal);
+        self.record(&format!("token:{id}"))?;
+        self.token_infos
+            .get(&id.to_string())
+            .cloned()
             .ok_or_else(|| status(tonic::Code::NotFound))?
             .try_into()
             .map_err(|_| NetworkFailure::InvalidResponse)
@@ -623,7 +641,7 @@ async fn unsupported_staking_and_cooldown_variants_are_not_silently_omitted() {
 }
 
 #[tokio::test]
-async fn shared_http_behavior_and_token_version_scope() {
+async fn shared_http_behavior_and_unknown_version_scope() {
     let app = app::<TestDependencies>(TestNode::default());
     let response = app
         .clone()
@@ -652,7 +670,7 @@ async fn shared_http_behavior_and_token_version_scope() {
             .to_bytes()
             .is_empty()
     );
-    for (method, url, status) in [("POST", path(1), 405), ("GET", path(2), 404)] {
+    for (method, url, status) in [("POST", path(1), 405), ("GET", path(3), 404)] {
         let response = app
             .clone()
             .oneshot(

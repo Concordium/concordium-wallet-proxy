@@ -6,6 +6,7 @@ use crate::{balances::BalanceNode, network::NetworkFailure};
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::{
     id::types::AccountAddress,
+    protocol_level_tokens::{TokenId, TokenInfo},
     types::{AccountInfo, BakerId, BakerPoolStatus, RewardsOverview},
     v2::{AccountIdentifier, BlockIdentifier},
 };
@@ -35,6 +36,23 @@ impl BalanceNode for SdkNode {
                 .get_pool_info(block, baker)
                 .await
                 .map(|response| response.response)
+        })
+        .await
+    }
+
+    async fn token_info(
+        &self,
+        id: TokenId,
+        block: BlockIdentifier,
+    ) -> Result<TokenInfo, NetworkFailure> {
+        self.query(move |mut client| {
+            let id = id.clone();
+            async move {
+                client
+                    .get_token_info(id, block)
+                    .await
+                    .map(|response| response.response)
+            }
         })
         .await
     }
