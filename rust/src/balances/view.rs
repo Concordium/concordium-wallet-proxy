@@ -2,13 +2,13 @@
 //! It preserves legacy encrypted aggregation, staking fields, and payday estimates.
 
 use super::Version;
-use crate::{compatibility::format_time, network::NetworkFailure};
+use crate::{
+    compatibility::{first_payday, format_time, fraction},
+    network::NetworkFailure,
+};
 use chrono::{DateTime, TimeDelta, Utc};
 use concordium_rust_sdk::{
-    types::{
-        AccountInfo, AccountStakingInfo, AmountFraction, BakerPoolStatus, CooldownStatus,
-        PartsPerHundredThousands, StakePendingChange,
-    },
+    types::{AccountInfo, AccountStakingInfo, BakerPoolStatus, CooldownStatus, StakePendingChange},
     v2::Upward,
 };
 use serde_json::{Value, json};
@@ -166,17 +166,6 @@ pub(super) fn balance(
     Ok(value)
 }
 
-// Keep the decimal exact without the SDK serializer's fixed trailing zeros.
-fn fraction(value: AmountFraction) -> serde_json::Number {
-    let parts: PartsPerHundredThousands = value.into();
-    let parts: u32 = parts.into();
-    let text = format!("{}.{:05}", parts / 100_000, parts % 100_000);
-    text.trim_end_matches('0')
-        .trim_end_matches('.')
-        .parse()
-        .expect("Integer parts produce a valid JSON decimal")
-}
-
 fn pending_value(change: &StakePendingChange, payday: &Payday) -> Result<Value, NetworkFailure> {
     let effective = change.effective_time();
     let mut value = match change {
@@ -188,22 +177,7 @@ fn pending_value(change: &StakePendingChange, payday: &Payday) -> Result<Value, 
         }
     };
     if let (Some(next), Some(epochs)) = (payday.next, payday.epochs) {
-        let estimated = if effective <= next {
-            next
-        } else {
-            let length = i128::from(payday.epoch_duration.num_milliseconds()) * i128::from(epochs);
-            if length <= 0 {
-                return Err(NetworkFailure::InvalidResponse);
-            }
-            let delta = i128::from(effective.signed_duration_since(next).num_milliseconds());
-            let intervals = (delta + length - 1) / length;
-            let millis =
-                i64::try_from(intervals * length).map_err(|_| NetworkFailure::InvalidResponse)?;
-            next.checked_add_signed(
-                TimeDelta::try_milliseconds(millis).ok_or(NetworkFailure::InvalidResponse)?,
-            )
-            .ok_or(NetworkFailure::InvalidResponse)?
-        };
+        let estimated = first_payday(next, effective, payday.epoch_duration, epochs)?;
         value["estimatedChangeTime"] = json!(format_time(estimated));
     }
     Ok(value)

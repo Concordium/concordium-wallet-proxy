@@ -11,6 +11,7 @@ mod health;
 mod network;
 mod postgres;
 mod sdk;
+mod staking;
 mod support;
 
 mod wallet;

@@ -1,0 +1,50 @@
+{
+  "pool": {
+    "poolType": "BakerPool",
+    "bakerId": 42,
+    "bakerAddress": "2xBpaHottqhwFZURMZW4uZduQvpxNDSy46iXMYs9kceNGaPpZX",
+    "allPoolTotalCapital": "10000",
+    "bakerEquityCapital": "2000",
+    "delegatedCapital": "100",
+    "delegatedCapitalCap": "500",
+    "poolInfo": {
+      "openStatus": "openForAll",
+      "metadataUrl": "https://pool.example",
+      "commissionRates": {"finalizationCommission": 0.1, "bakingCommission": 0.2, "transactionCommission": 0.3}
+    },
+    "bakerStakePendingChange": {"pendingChangeType": "NoChange"},
+    "currentPaydayStatus": {
+      "blocksBaked": 1, "finalizationLive": true, "transactionFeesEarned": "0",
+      "effectiveStake": "2100", "lotteryPower": 0.5, "bakerEquityCapital": "2000", "delegatedCapital": "100",
+      "commissionRates": {"finalizationCommission": 0.1, "bakingCommission": 0.2, "transactionCommission": 0.3}
+    }
+  },
+  "passive": {
+    "delegatedCapital": "100", "currentPaydayTransactionFeesEarned": "0", "currentPaydayDelegatedCapital": "2000", "allPoolTotalCapital": "18446744073709551615",
+    "commissionRates": {"finalizationCommission": 0.1, "bakingCommission": 0.2, "transactionCommission": 0.3}
+  },
+  "chain0": {
+    "electionDifficulty": 0.25000,
+    "euroPerEnergy": {"numerator": 1, "denominator": 10},
+    "microGTUPerEuro": {"numerator": 500, "denominator": 1},
+    "accountCreationLimit": 5, "foundationAccountIndex": 42,
+    "bakerCooldownEpochs": 8, "minimumThresholdForBaking": "18446744073709551615",
+    "rewardParameters": {
+      "mintDistribution": {"bakingReward": 0.2, "finalizationReward": 0.3, "mintPerSlot": 0.0001},
+      "transactionFeeDistribution": {"baker": 0.4, "gasAccount": 0.5},
+      "gASRewards": {"baker": 0.1, "finalizationProof": 0.2, "accountCreation": 0.3, "chainUpdate": 0.4}
+    }
+  },
+  "delegationFields": {
+    "poolOwnerCooldown": 3600, "delegatorCooldown": 7200,
+    "passiveFinalizationCommission": 0.1, "passiveBakingCommission": 0.2, "passiveTransactionCommission": 0.3,
+    "finalizationCommissionRange": {"min": 0, "max": 1}, "bakingCommissionRange": {"min": 0, "max": 1}, "transactionCommissionRange": {"min": 0, "max": 1},
+    "minimumEquityCapital": "18446744073709551615", "capitalBound": 0.25, "leverageBound": {"numerator": 3, "denominator": 1},
+    "rewardPeriodLength": 2, "mintPerPayday": 0.0025
+  },
+  "bftFields": {
+    "timeoutBase": 1000, "timeoutIncrease": {"numerator": 3, "denominator": 2}, "timeoutDecrease": {"numerator": 3, "denominator": 4},
+    "minBlockTime": 500, "blockEnergyLimit": 9007199254740995,
+    "minimumFinalizers": 2, "maximumFinalizers": 10, "finalizerRelativeStakeThreshold": 0.25
+  }
+}

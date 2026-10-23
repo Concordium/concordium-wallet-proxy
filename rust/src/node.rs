@@ -3,6 +3,7 @@
 
 mod accounts;
 mod balances;
+mod staking;
 
 use crate::{
     config::NodeConfig,

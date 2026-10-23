@@ -187,6 +187,9 @@ deployment configuration. Rust does not perform this per-pod selection.
 - **Node cookies:** Haskell forwards request cookies to the node and node
   `set-cookie` headers to the wallet. Rust does neither because the SDK does not
   expose the required metadata.
+- **Timestamp range:** Computed payday estimates must fit Chrono's date range.
+  Synthetic parameters that yield a date outside this range return an internal
+  error; Haskell UTCTime can represent larger years. This limit is not waived.
 - **Malformed node responses:** During health checks, some SDK response-conversion
   failures cannot be distinguished from remote RPC errors. Rust can return HTTP
   200 with `healthy: false` where Haskell would return HTTP 500.
