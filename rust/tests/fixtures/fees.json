@@ -1,0 +1,21 @@
+[
+  {"query":"type=simpleTransfer","energy":501,"cost":"334"},
+  {"query":"type=encryptedTransfer","energy":29777,"cost":"19852"},
+  {"query":"type=transferToSecret&sponsored=false","energy":769,"cost":"513"},
+  {"query":"type=transferToPublic&sponsored=false","energy":16449,"cost":"10966"},
+  {"query":"type=registerDelegation","energy":481,"cost":"321"},
+  {"query":"type=registerDelegation&passive=false","energy":473,"cost":"316"},
+  {"query":"type=updateDelegation","energy":463,"cost":"309"},
+  {"query":"type=updateDelegation&amount=&restake=false&target=0","energy":481,"cost":"321"},
+  {"query":"type=updateDelegation&amount=bad&restake=&target=&passive=","energy":473,"cost":"316"},
+  {"query":"type=removeDelegation","energy":471,"cost":"314"},
+  {"query":"type=registerBaker","energy":6637,"cost":"4425"},
+  {"query":"type=registerBaker&metadataSize=0&sponsored=0","energy":4623,"cost":"3082"},
+  {"query":"type=updateBakerStake&amount=bad&restake=false","energy":472,"cost":"315"},
+  {"query":"type=updateBakerPool&metadataSize=10&openStatus=&transactionCommission=&bakerRewardCommission=&finalizationRewardCommission=","energy":488,"cost":"326"},
+  {"query":"type=updateBakerKeys&sponsored=true","energy":4565,"cost":"3044"},
+  {"query":"type=removeBaker&sponsored=true","energy":471,"cost":"314"},
+  {"query":"type=configureBaker&amount=&restake=&openStatus=&keys=false&metadataSize=10&transactionCommission=&bakerRewardCommission=&finalizationRewardCommission=&suspended=false&sponsored=true","energy":4600,"cost":"3067"},
+  {"query":"type=simpleTransfer&memoSize=0&numSignatures=2&sponsored=false","energy":637,"cost":"425"},
+  {"query":"type=simpleTransfer&type=bad&numSignatures=1&numSignatures=bad","energy":501,"cost":"334"}
+]

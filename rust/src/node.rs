@@ -4,6 +4,7 @@
 mod accounts;
 mod balances;
 mod blocks;
+mod fees;
 mod staking;
 
 use crate::{

@@ -816,6 +816,7 @@ dependencies = [
  "futures-util",
  "http",
  "http-body-util",
+ "num",
  "prost",
  "rand 0.8.8",
  "reqwest",

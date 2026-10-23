@@ -8,6 +8,7 @@ mod blocks;
 mod catalogs;
 mod config;
 mod discovery;
+mod fees;
 mod health;
 mod network;
 mod postgres;
