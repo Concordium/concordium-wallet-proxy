@@ -6,6 +6,7 @@ mod balances;
 mod blocks;
 mod fees;
 mod staking;
+mod submission;
 
 use crate::{
     config::NodeConfig,

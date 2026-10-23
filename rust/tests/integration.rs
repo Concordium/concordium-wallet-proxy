@@ -14,6 +14,7 @@ mod network;
 mod postgres;
 mod sdk;
 mod staking;
+mod submission;
 mod support;
 
 mod wallet;

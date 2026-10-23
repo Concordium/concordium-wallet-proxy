@@ -17,4 +17,5 @@ pub mod network;
 pub mod node;
 pub mod staking;
 pub mod startup;
+pub mod submission;
 pub mod wallet;
