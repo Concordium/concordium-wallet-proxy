@@ -1,31 +1,15 @@
 //! This module selects the Haskell chain-parameter response schema.
 //! It keeps legacy field names, version-dependent omissions, and exact mint rates.
 
-use crate::{compatibility::fraction, network::NetworkFailure};
-use concordium_rust_sdk::types::{MintRate, chain_parameters::ChainParameters};
+use crate::{
+    compatibility::{fraction, mint_rate as mint},
+    network::NetworkFailure,
+};
+use concordium_rust_sdk::types::chain_parameters::ChainParameters;
 use serde_json::{Value, json};
 
 fn required<T: Copy>(value: Option<T>) -> Result<T, NetworkFailure> {
     value.ok_or(NetworkFailure::InvalidResponse)
-}
-
-fn mint(rate: MintRate) -> serde_json::Number {
-    let digits = format!(
-        "{:0>width$}",
-        rate.mantissa,
-        width = usize::from(rate.exponent) + 1
-    );
-    let split = digits.len() - usize::from(rate.exponent);
-    let text = if rate.exponent == 0 {
-        digits
-    } else {
-        format!("{}.{}", &digits[..split], &digits[split..])
-            .trim_end_matches('0')
-            .trim_end_matches('.')
-            .to_string()
-    };
-    text.parse()
-        .expect("Integer mantissa and exponent produce a JSON decimal")
 }
 
 pub(super) fn value(p: &ChainParameters, foundation_index: u64) -> Result<Value, NetworkFailure> {
@@ -138,6 +122,7 @@ mod tests {
     //! These tests check exact mint decimals beyond the SDK Serde decimal range.
 
     use super::*;
+    use concordium_rust_sdk::types::MintRate;
 
     #[test]
     fn mint_rates_preserve_zero_full_mantissa_and_maximum_exponent() {

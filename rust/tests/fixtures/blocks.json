@@ -1,0 +1,25 @@
+{
+  "info": {
+    "blockHash": "0101010101010101010101010101010101010101010101010101010101010101",
+    "blockParent": "0202020202020202020202020202020202020202020202020202020202020202",
+    "blockLastFinalized": "0303030303030303030303030303030303030303030303030303030303030303",
+    "blockHeight": 9007199254740995, "genesisIndex": 2, "eraBlockHeight": 10,
+    "blockReceiveTime": "2026-01-01T00:00:00.001Z", "blockArriveTime": "2026-01-01T00:00:00.01Z",
+    "blockSlot": null, "blockSlotTime": "2026-01-01T00:00:00Z", "blockBaker": 42,
+    "finalized": true, "transactionCount": 4294967295, "transactionEnergyCost": 18446744073709551615,
+    "transactionsSize": 4294967295,
+    "blockStateHash": "0404040404040404040404040404040404040404040404040404040404040404",
+    "protocolVersion": 6, "round": 7, "epoch": 8
+  },
+  "summary": {
+    "sender": "2xBpaHottqhwFZURMZW4uZduQvpxNDSy46iXMYs9kceNGaPpZX",
+    "sponsorDetails": null,
+    "hash": "0404040404040404040404040404040404040404040404040404040404040404",
+    "cost": "10", "energyCost": 37, "index": 9
+  },
+  "transfer": [{"tag": "Transferred", "from": {"type": "AddressAccount", "address": "2xBpaHottqhwFZURMZW4uZduQvpxNDSy46iXMYs9kceNGaPpZX"}, "to": {"type": "AddressAccount", "address": "2wkBET2rRgE8pahuaczxKbmv7ciehqsne57F9gtzf1PVdr2VP3"}, "amount": "18446744073709551615"}],
+  "module": [{"tag": "ModuleDeployed", "contents": "0505050505050505050505050505050505050505050505050505050505050505"}],
+  "schedule": [{"tag": "TransferredWithSchedule", "from": "2xBpaHottqhwFZURMZW4uZduQvpxNDSy46iXMYs9kceNGaPpZX", "to": "2wkBET2rRgE8pahuaczxKbmv7ciehqsne57F9gtzf1PVdr2VP3", "amount": [[1767225600000, "0"], [1767225600001, "18446744073709551615"]]}],
+  "memo": {"tag": "TransferMemo", "memo": "00ff"},
+  "registered": [{"tag": "DataRegistered", "data": "00ff"}]
+}

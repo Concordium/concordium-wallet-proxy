@@ -4,6 +4,7 @@
 mod accounts;
 mod accounts_rpc;
 mod balances;
+mod blocks;
 mod catalogs;
 mod config;
 mod discovery;

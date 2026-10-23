@@ -3,6 +3,7 @@
 
 pub mod accounts;
 pub mod balances;
+pub mod blocks;
 pub mod catalogs;
 mod compatibility;
 pub mod config;

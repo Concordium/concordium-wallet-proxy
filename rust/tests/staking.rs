@@ -1,7 +1,7 @@
 //! This module checks staking HTTP contracts with controlled node responses.
 //! Source-derived fixtures cover chain-parameter versions and pending-change boundaries.
 
-mod fixtures;
+pub(super) mod fixtures;
 mod rpc;
 
 use super::{balances::fixtures as balances, support};

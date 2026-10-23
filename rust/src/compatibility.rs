@@ -5,6 +5,26 @@ use crate::network::NetworkFailure;
 use chrono::{DateTime, TimeDelta, Utc};
 use concordium_rust_sdk::types::{AmountFraction, PartsPerHundredThousands};
 
+/// Convert a mint rate to an exact decimal for the full exponent range.
+pub(crate) fn mint_rate(rate: concordium_rust_sdk::types::MintRate) -> serde_json::Number {
+    let digits = format!(
+        "{:0>width$}",
+        rate.mantissa,
+        width = usize::from(rate.exponent) + 1
+    );
+    let split = digits.len() - usize::from(rate.exponent);
+    let text = if rate.exponent == 0 {
+        digits
+    } else {
+        format!("{}.{}", &digits[..split], &digits[split..])
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_string()
+    };
+    text.parse()
+        .expect("Integer mantissa and exponent produce a JSON decimal")
+}
+
 /// Convert an amount fraction to an exact JSON decimal.
 pub(crate) fn fraction(value: AmountFraction) -> serde_json::Number {
     let parts: PartsPerHundredThousands = value.into();

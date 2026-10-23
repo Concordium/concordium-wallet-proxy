@@ -813,6 +813,7 @@ dependencies = [
  "chrono",
  "clap",
  "concordium-rust-sdk",
+ "futures-util",
  "http",
  "http-body-util",
  "prost",
