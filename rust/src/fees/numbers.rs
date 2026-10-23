@@ -13,6 +13,11 @@ pub(super) fn word32(text: &str) -> Option<u32> {
     Some(bits(text, 32)? as u32)
 }
 
+/// Read a Word64 with modular conversion.
+pub(super) fn word64(text: &str) -> Option<u64> {
+    bits(text, 64)
+}
+
 /// Read an integer and reduce it to the requested unsigned representation.
 fn bits(text: &str, width: usize) -> Option<u64> {
     let mut text = text.trim();

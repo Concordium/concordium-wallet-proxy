@@ -1,19 +1,33 @@
 //! This module calculates legacy energy and rounded micro-CCD fees.
 //! Arithmetic retains the Haskell Word32 payload and Word64 energy wrap points.
 
-use super::{FeeError, first, numbers};
+use super::{FeeError, contract::ContractEstimate, first, numbers, token};
 use concordium_rust_sdk::{
     base::transactions::cost,
     types::{ProtocolVersion, chain_parameters::EnergyRate},
 };
 use num::{BigUint, ToPrimitive};
 
-/// Calculate energy from the first occurrence of each query parameter.
+/// This type separates fixed energy from a required contract invocation.
+pub(super) enum Estimate {
+    /// This energy does not require a contract query.
+    Fixed(
+        /// This value is the full energy estimate.
+        u64,
+    ),
+    /// This request needs contract execution before energy calculation.
+    Contract(
+        /// This request includes the invocation and buffer settings.
+        Box<ContractEstimate>,
+    ),
+}
+
+/// Prepare an estimate from the first occurrence of each query parameter.
 #[allow(deprecated)] // The legacy endpoint still estimates encrypted transactions.
-pub(super) fn energy(
+pub(super) fn prepare(
     query: &[(String, String)],
     protocol: ProtocolVersion,
-) -> Result<u64, FeeError> {
+) -> Result<Estimate, FeeError> {
     let signatures = numbers::int(first(query, "numSignatures").unwrap_or("1"))
         .filter(|n| *n > 0)
         .ok_or_else(|| parse("numSignatures"))? as u64;
@@ -22,6 +36,11 @@ pub(super) fn energy(
     let has = |name| first(query, name).is_some();
     let mut sponsored = has("sponsored");
     let (payload, specific) = match kind {
+        "update" => {
+            return super::contract::prepare(query, signatures, sponsored)
+                .map(|estimate| Estimate::Contract(Box::new(estimate)));
+        }
+        "tokenUpdate" => return token::energy(query, signatures, sponsored).map(Estimate::Fixed),
         "simpleTransfer" | "encryptedTransfer" => {
             let memo = match first(query, "memoSize") {
                 None => 0,
@@ -96,11 +115,17 @@ pub(super) fn energy(
             )));
         }
     };
+    Ok(Estimate::Fixed(
+        minimum(payload, signatures, sponsored).wrapping_add(specific),
+    ))
+}
+
+/// Calculate the header cost with a 64-bit signature count.
+pub(super) fn minimum(payload: u32, signatures: u64, sponsored: bool) -> u64 {
     // SDK base_cost takes u32 signatures; Haskell accepts a positive 64-bit Int.
-    Ok(signatures
+    signatures
         .wrapping_mul(100)
         .wrapping_add(60 + u64::from(payload) + if sponsored { 34 } else { 0 })
-        .wrapping_add(specific))
 }
 
 /// Read the signed metadata length and convert it to a Word32 payload component.

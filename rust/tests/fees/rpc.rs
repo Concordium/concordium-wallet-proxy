@@ -1,6 +1,8 @@
 //! This module checks fee context through the real SDK transport.
 //! Local handlers verify query order and the Best selector without account lookup.
 
+mod invocation;
+
 use super::*;
 use crate::{staking::fixtures, support};
 use axum::{
@@ -26,6 +28,12 @@ struct RpcState {
     malformed: bool,
     /// This number selects the chain-parameter version.
     version: u8,
+    /// This flag selects an invocation rejection.
+    reject: bool,
+    /// This flag selects a response with no invocation result.
+    malformed_invoke: bool,
+    /// This flag delays invocation beyond the node timeout.
+    delayed_invoke: bool,
 }
 /// This alias keeps large RPC failures outside response values.
 type RpcResult<T> = Result<T, Box<tonic::Status>>;
@@ -104,6 +112,10 @@ async fn server(state: Arc<RpcState>) -> support::Server {
             .route(
                 "/concordium.v2.Queries/GetBlockChainParameters",
                 post(parameters),
+            )
+            .route(
+                "/concordium.v2.Queries/InvokeInstance",
+                post(invocation::invoke),
             )
             .with_state(state),
     )

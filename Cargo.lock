@@ -810,6 +810,7 @@ version = "0.50.0"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
+ "bs58",
  "chrono",
  "clap",
  "concordium-rust-sdk",

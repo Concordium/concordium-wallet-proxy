@@ -1,7 +1,9 @@
 //! This module checks fee modes, legacy numeric boundaries, and HTTP validation.
 //! Expected calculations come from the Haskell sources, not the Rust estimator.
 
+mod contract;
 mod rpc;
+mod token;
 
 use axum::{Router, body::Body};
 use concordium_rust_sdk::types::{ProtocolVersion, chain_parameters::EnergyRate};
@@ -41,6 +43,14 @@ impl Default for TestNode {
     }
 }
 impl FeeNode for TestNode {
+    async fn invoke_contract(
+        &self,
+        _: &concordium_rust_sdk::types::smart_contracts::ContractContext,
+    ) -> Result<concordium_rust_sdk::types::smart_contracts::InvokeContractResult, NetworkFailure>
+    {
+        panic!("Unexpected contract invocation")
+    }
+
     async fn fee_context(&self) -> Result<(EnergyRate, ProtocolVersion), NetworkFailure> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         if self.fail {

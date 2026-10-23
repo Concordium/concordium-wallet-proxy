@@ -180,7 +180,6 @@ deployment configuration. Rust does not perform this per-pod selection.
 - **Update range validation:** Rust requires complete, valid range expressions.
   It rejects whitespace and trailing junk instead of accepting partial input or
   silently treating unrecognized input as an empty range set.
-
 - **Node selection:** Haskell supports a gRPC `target` header. Rust rejects
   `--node-target` and `WALLET_PROXY_NODE_TARGET` because the SDK does not expose
   custom request metadata.

@@ -65,5 +65,6 @@ big-integer ceiling and Word64 conversion itself. Tests include both boundary
 values and a product that exceeds u128.
 
 Independent fixture review, observed CI execution, controlled real-node release
-acceptance, and Task 01 acceptance remain required. Unsupported modes `update`
-and `tokenUpdate` remain for Task 12; the replacement is not ready for production.
+acceptance, and Task 01 acceptance remain required. Task 12 adds `update` and
+`tokenUpdate`; see [extended fee provenance](fees-extended.md) for their evidence
+and additional blockers. The replacement is not ready for production.
