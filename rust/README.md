@@ -177,13 +177,14 @@ deployment configuration. Rust does not perform this per-pod selection.
 
 ## Known compatibility issues
 
-- **Submission validation (approved):** Credential and standard account submission
-  can reject malformed requests locally through the SDK. When both implementations
+- **Submission validation:** Credential, standard, extended, and raw
+  submission can reject malformed requests locally through the SDK. When both implementations
   return an error, its wording and classification need not match. Successful
   submission contents and identifiers must still match. See
   [submission evidence and remaining limits](tests/fixtures/submission.md),
   including the unapproved success-versus-error difference for a malformed node
-  response hash.
+  response hash. [Extended/raw evidence](tests/fixtures/submission-extended.md)
+  also documents the raw route's legacy hardcoded P10 governance boundary.
 - **Update range validation:** Rust requires complete, valid range expressions.
   It rejects whitespace and trailing junk instead of accepting partial input or
   silently treating unrecognized input as an empty range set.

@@ -7,7 +7,7 @@ use concordium_rust_sdk::types::CryptographicParameters;
 use concordium_wallet_proxy::{
     database::History,
     health::{Clock, Health},
-    http::router,
+    http::router_with_network,
     node::{Node, NodeFailure},
 };
 use http_body_util::BodyExt;
@@ -75,6 +75,16 @@ fn fixture() -> Value {
     serde_json::from_str(include_str!("fixtures/health.json")).unwrap()
 }
 fn app(node: &str, fail: bool, cors: bool) -> (axum::Router, Arc<AtomicUsize>) {
+    app_with_routes(node, fail, cors, axum::Router::new())
+}
+
+/// Build feature routes inside the actual shared HTTP compatibility middleware.
+pub(super) fn app_with_routes(
+    node: &str,
+    fail: bool,
+    cors: bool,
+    routes: axum::Router,
+) -> (axum::Router, Arc<AtomicUsize>) {
     let calls = Arc::new(AtomicUsize::new(0));
     let health = Health::<TestDependencies> {
         node: TestNode(node.into()),
@@ -88,11 +98,12 @@ fn app(node: &str, fail: bool, cors: bool) -> (axum::Router, Arc<AtomicUsize>) {
         tolerance_seconds: 300,
     };
     (
-        router(
+        router_with_network(
             health,
             std::array::from_fn(|_| serde_json::json!([])),
             Default::default(),
             cors,
+            routes,
         ),
         calls,
     )

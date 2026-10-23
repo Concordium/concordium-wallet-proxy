@@ -1,7 +1,10 @@
 //! This module checks credential and account submission without production effects.
 //! Source-derived byte fixtures verify accepted contents and locally calculated identifiers.
 
+mod extended;
 mod fixtures;
+mod http_contract;
+mod raw;
 mod rpc;
 
 use axum::{Router, body::Body};

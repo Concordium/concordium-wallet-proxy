@@ -1,6 +1,7 @@
-//! This module submits credential deployments and standard account transactions.
+//! This module submits credential, account, extended, and raw block items.
 //! It calculates identifiers locally and never treats a rejected submission as success.
 
+mod raw;
 mod request;
 
 use crate::{http::error, network::NetworkFailure};
@@ -25,11 +26,13 @@ pub trait SubmissionNode: Send + Sync {
     fn submit(&self, item: &Submission) -> impl Future<Output = Result<(), NetworkFailure>> + Send;
 }
 
-/// Build the existing credential and standard transaction submission routes.
+/// Build the existing credential, account, extended, and raw submission routes.
 pub fn routes<N: SubmissionNode + 'static>(node: Arc<N>) -> Router {
     Router::new()
         .route("/v0/submitCredential", put(credential::<N>))
         .route("/v0/submitTransfer", put(transfer::<N>))
+        .route("/v0/submitExtended", put(extended::<N>))
+        .route("/v0/submitRawTransaction", put(raw::<N>))
         .with_state(node)
 }
 
@@ -49,6 +52,19 @@ async fn transfer<N: SubmissionNode>(State(node): State<Arc<N>>, body: Bytes) ->
         "Transaction rejected by the node",
     )
     .await
+}
+
+async fn extended<N: SubmissionNode>(State(node): State<Arc<N>>, body: Bytes) -> Response {
+    send(
+        node,
+        request::extended(&body),
+        "Transaction rejected by the node",
+    )
+    .await
+}
+
+async fn raw<N: SubmissionNode>(State(node): State<Arc<N>>, body: Bytes) -> Response {
+    send(node, raw::decode(&body), "Transaction rejected by the node").await
 }
 
 async fn send<N: SubmissionNode>(

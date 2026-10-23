@@ -56,6 +56,60 @@ pub fn transaction_bytes() -> Vec<u8> {
     bytes
 }
 
+/// Construct the legacy extended JSON envelope, with or without a sponsor.
+pub fn extended(sponsored: bool) -> Value {
+    let standard = transaction();
+    let body = hex(standard["transaction"].as_str().unwrap());
+    let mut extended = u16::from(sponsored).to_be_bytes().to_vec();
+    extended.extend_from_slice(&body[..60]);
+    if sponsored {
+        extended.extend_from_slice(&[4; 32]);
+    }
+    extended.extend_from_slice(&body[60..]);
+    let mut signatures = json!({"sender":standard["signatures"]});
+    if sponsored {
+        signatures["sponsor"] = json!({"2":{"7":"12".repeat(64)}});
+    }
+    json!({"signatures":signatures,"transaction":encoded(&extended)})
+}
+
+/// Construct source-defined extended block-item bytes, including its tag.
+pub fn extended_bytes(sponsored: bool) -> Vec<u8> {
+    let standard = transaction_bytes();
+    let body = hex(transaction()["transaction"].as_str().unwrap());
+    let mut bytes = vec![3];
+    bytes.extend_from_slice(&standard[1..standard.len() - body.len()]);
+    if sponsored {
+        bytes.extend_from_slice(&[1, 2, 1, 7, 0, 64]);
+        bytes.extend_from_slice(&[0x12; 64]);
+    } else {
+        bytes.push(0);
+    }
+    bytes.extend_from_slice(&hex(extended(sponsored)["transaction"].as_str().unwrap()));
+    bytes
+}
+
+/// Construct an update instruction around one source-defined payload.
+pub fn update_bytes(payload: &[u8]) -> Vec<u8> {
+    let mut bytes = vec![2];
+    bytes.extend_from_slice(&5u64.to_be_bytes());
+    bytes.extend_from_slice(&0u64.to_be_bytes());
+    bytes.extend_from_slice(&u64::MAX.to_be_bytes());
+    bytes.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+    bytes.extend_from_slice(payload);
+    bytes.extend_from_slice(&[0, 1, 0, 7, 0, 64]);
+    bytes.extend_from_slice(&[0x34; 64]);
+    bytes
+}
+
+/// Construct the P10-compatible EUR-per-energy update payload.
+pub fn exchange_rate_update() -> Vec<u8> {
+    let mut payload = vec![3];
+    payload.extend_from_slice(&2u64.to_be_bytes());
+    payload.extend_from_slice(&3u64.to_be_bytes());
+    update_bytes(&payload)
+}
+
 /// Construct the expected credential block item from the source field layout.
 pub fn credential_bytes(normal: bool) -> Vec<u8> {
     let request = credential(normal);

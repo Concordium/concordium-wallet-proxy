@@ -1,6 +1,8 @@
 //! This module checks submission through the real SDK and local gRPC transport.
 //! It verifies every transmitted field and prevents retries on rejection or timeout.
 
+mod extended;
+
 use super::*;
 use crate::support;
 use axum::{

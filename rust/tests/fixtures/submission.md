@@ -2,7 +2,8 @@
 
 Status: source-derived fixtures; independent review remains outstanding.
 Task 13 covers `PUT /v0/submitCredential` and `PUT /v0/submitTransfer` only.
-Extended/sponsored and raw submission routes remain Task 14.
+Task 14 adds extended/sponsored and raw routes; see
+[extended submission provenance](submission-extended.md) for their evidence.
 
 ## Approved error equivalence
 
