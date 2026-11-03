@@ -1,4 +1,4 @@
-//! This module decodes persisted pre-token events and renders their English descriptions.
+//! This module decodes persisted events and renders their English descriptions.
 //! SDK field types validate binary data; legacy event tags and wording remain explicit.
 
 use concordium_rust_sdk::{
@@ -257,6 +257,8 @@ impl Event {
                 )?;
                 "Chain update event enqueued.".into()
             }
+            "TokenModuleEvent" | "TokenTransfer" | "TokenMint" | "TokenBurn" | "TokenCreated"
+            | "LockCreated" | "LockDestroyed" => super::tokens::description(&tag, &mut value)?,
             _ => anyhow::bail!("Unsupported legacy history event: {tag}"),
         };
         value["tag"] = json!(tag);

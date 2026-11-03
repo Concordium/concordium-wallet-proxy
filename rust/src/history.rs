@@ -5,9 +5,11 @@ mod events;
 mod kinds;
 mod numbers;
 mod payload;
+mod rejection;
 mod request;
 mod rewards;
 mod routes;
+mod tokens;
 mod view;
 pub use routes::routes;
 
@@ -15,7 +17,7 @@ use concordium_rust_sdk::{id::types::AccountAddress, types::hashes::BlockHash};
 use serde_json::Value;
 use std::future::Future;
 
-/// This value selects the pre-token account-history response version.
+/// This value selects the account-history response version.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HistoryVersion {
     /// This version omits memos and validator suspension events.
@@ -24,6 +26,8 @@ pub enum HistoryVersion {
     V1,
     /// This version includes memos and validator suspension events.
     V2,
+    /// This version adds protocol-level token and lock history.
+    V3,
 }
 
 /// This value selects the entry order and the exclusive cursor direction.

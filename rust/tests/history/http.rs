@@ -187,7 +187,7 @@ async fn canonical_lookup_precedes_validation_and_not_found_retains_the_given_ad
 async fn query_defaults_integer_syntax_duplicates_and_filter_error_order_match_legacy() {
     let (node, database) = adapters(vec![]);
     let router = history::routes(node, database.clone());
-    for version in 0..3 {
+    for version in 0..4 {
         let (_, body) = request(router.clone(), &format!("/v{version}/accTransactions/{SENDER}?order=DESC&from=3&limit=0x20&limit=1&blockTimeFrom=(2)&blockTimeTo=-1&blockHeightFrom=0o10&blockHeightTo=20&includeRewards=none&blockRewards=n&finalizationRewards=n&bakingRewards=n&onlyEncrypted=y")).await;
         assert_eq!(
             body,
@@ -197,7 +197,12 @@ async fn query_defaults_integer_syntax_duplicates_and_filter_error_order_match_l
         let query = &calls.last().unwrap().1;
         assert_eq!(
             query.version,
-            [HistoryVersion::V0, HistoryVersion::V1, HistoryVersion::V2][version as usize]
+            [
+                HistoryVersion::V0,
+                HistoryVersion::V1,
+                HistoryVersion::V2,
+                HistoryVersion::V3
+            ][version as usize]
         );
         assert_eq!(query.time_from, Some(2000));
         assert_eq!(query.time_to, Some(u64::MAX.wrapping_mul(1000)));

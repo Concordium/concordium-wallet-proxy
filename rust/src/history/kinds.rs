@@ -7,6 +7,30 @@ use concordium_rust_sdk::{
 };
 use serde::{Deserialize, Serialize};
 
+/// This value retains a transaction type that was removed from the current SDK.
+#[derive(Deserialize, Serialize)]
+pub(super) enum LegacyType {
+    /// This type identifies persisted meta updates, not current node submissions.
+    #[serde(rename = "metaUpdate")]
+    MetaUpdate,
+}
+
+/// This value decodes both current and historical account transaction names.
+#[derive(Deserialize, Serialize)]
+#[serde(untagged)]
+pub(super) enum AccountKind {
+    /// This type is available in the current SDK.
+    Current(
+        /// This value validates the standard transaction name.
+        TransactionType,
+    ),
+    /// This type is retained only in legacy history.
+    Legacy(
+        /// This value validates the historical transaction name.
+        LegacyType,
+    ),
+}
+
 /// This value identifies the legacy transaction-summary category.
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", content = "contents")]
@@ -15,7 +39,7 @@ pub(super) enum Kind {
     #[serde(rename = "accountTransaction")]
     Account(
         /// This type is absent for malformed payloads.
-        Option<TransactionType>,
+        Option<AccountKind>,
     ),
     /// This category deploys an initial or normal credential.
     #[serde(rename = "credentialDeploymentTransaction")]
@@ -76,7 +100,9 @@ impl Kind {
                     "registerData" => "Register data on the chain",
                     "configureBaker" => "Configure validator",
                     "configureDelegation" => "Configure delegation",
-                    _ => anyhow::bail!("Unsupported pre-token transaction type: {name}"),
+                    "tokenUpdate" => "Token update",
+                    "metaUpdate" => "Meta update",
+                    _ => anyhow::bail!("Unsupported history transaction type: {name}"),
                 };
                 let rendered = match (name.as_str(), memos) {
                     ("transferWithMemo", false) => "transfer",
@@ -122,7 +148,8 @@ impl Kind {
                         "Update finalization committee parameters"
                     }
                     Some("updateValidatorScoreParameters") => "Update validator score parameters",
-                    _ => anyhow::bail!("Unsupported pre-token chain update: {name}"),
+                    Some("updateCreatePLT") => "Update create new PLT token",
+                    _ => anyhow::bail!("Unsupported history chain update: {name}"),
                 };
                 ("chainUpdate".into(), description)
             }

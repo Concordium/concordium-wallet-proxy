@@ -6,6 +6,9 @@ mod http;
 mod legacy;
 mod rendering;
 mod rpc;
+mod token_events;
+mod token_postgres;
+mod token_rejections;
 
 use concordium_rust_sdk::id::types::AccountAddress;
 use concordium_wallet_proxy::{
@@ -137,16 +140,24 @@ async fn history_preserves_version_reward_and_encrypted_filter_interactions(pool
     }
     let history = PostgresHistory(pool);
     let transactions = [1, 8, 9, 10, 11, 15];
-    for version in [HistoryVersion::V0, HistoryVersion::V1, HistoryVersion::V2] {
+    for version in [
+        HistoryVersion::V0,
+        HistoryVersion::V1,
+        HistoryVersion::V2,
+        HistoryVersion::V3,
+    ] {
         let mut query = HistoryQuery {
             version,
             ..Default::default()
         };
         let mut all = vec![1, 2, 3, 4, 5, 8, 9, 10, 11, 15];
-        if version == HistoryVersion::V2 {
+        if matches!(version, HistoryVersion::V2 | HistoryVersion::V3) {
             all.extend([6, 7]);
-            all.sort();
         }
+        if version == HistoryVersion::V3 {
+            all.extend([12, 13, 14]);
+        }
+        all.sort();
         assert_eq!(ids(&history, &query).await, all);
         query.rewards = RewardFilter::AllButFinalization;
         assert_eq!(
@@ -158,10 +169,13 @@ async fn history_preserves_version_reward_and_encrypted_filter_interactions(pool
         );
         query.rewards = RewardFilter::None;
         let mut none = transactions.to_vec();
-        if version == HistoryVersion::V2 {
+        if matches!(version, HistoryVersion::V2 | HistoryVersion::V3) {
             none.extend([6, 7]);
-            none.sort();
         }
+        if version == HistoryVersion::V3 {
+            none.extend([12, 13, 14]);
+        }
+        none.sort();
         assert_eq!(ids(&history, &query).await, none);
         for rewards in [
             RewardFilter::All,

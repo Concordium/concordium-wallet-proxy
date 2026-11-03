@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 
 #[tokio::test]
 async fn transfer_versions_preserve_precision_memos_description_and_block_fields() {
-    for version in 0..3 {
+    for version in 0..4 {
         let value = summary(
             "transferWithMemo",
             vec![

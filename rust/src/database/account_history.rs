@@ -56,7 +56,8 @@ impl AccountHistory for PostgresHistory {
             RewardFilter::AllButFinalization => 1,
             RewardFilter::None => 2,
         };
-        let suspension = query.version == HistoryVersion::V2;
+        let suspension = matches!(query.version, HistoryVersion::V2 | HistoryVersion::V3);
+        let tokens = query.version == HistoryVersion::V3;
         // Only the order and exclusive cursor operator differ. Each expansion is
         // checked by SQLx; all filter values remain bound statement parameters.
         macro_rules! fetch {
@@ -77,6 +78,7 @@ impl AccountHistory for PostgresHistory {
                     query.only_encrypted,
                     rewards,
                     suspension,
+                    tokens,
                 )
                 .fetch_all(&self.0)
                 .await?

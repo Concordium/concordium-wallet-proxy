@@ -1,4 +1,4 @@
-//! This module serves all pre-token versions of account transaction history.
+//! This module serves CCD and token-inclusive account transaction history.
 //! Canonical account resolution precedes filter validation and database selection.
 
 use super::{AccountHistory, HistoryNode, HistoryOrder, HistoryVersion, request::Request, view};
@@ -12,7 +12,7 @@ use axum::{
 };
 use std::sync::Arc;
 
-/// Build the v0, v1, and v2 account-history routes with shared adapters.
+/// Build the v0 through v3 account-history routes with shared adapters.
 pub fn routes<N: HistoryNode + 'static, H: AccountHistory + 'static>(
     node: Arc<N>,
     history: Arc<H>,
@@ -29,6 +29,10 @@ pub fn routes<N: HistoryNode + 'static, H: AccountHistory + 'static>(
         .route(
             "/v2/accTransactions/{address}",
             get(history_response::<N, H, 2>),
+        )
+        .route(
+            "/v3/accTransactions/{address}",
+            get(history_response::<N, H, 3>),
         )
         .with_state((node, history))
 }
@@ -49,7 +53,8 @@ async fn history_response<N: HistoryNode, H: AccountHistory, const VERSION: u8>(
     let version = match VERSION {
         0 => HistoryVersion::V0,
         1 => HistoryVersion::V1,
-        _ => HistoryVersion::V2,
+        2 => HistoryVersion::V2,
+        _ => HistoryVersion::V3,
     };
     let request = match Request::parse(version, &values) {
         Ok(request) => request,

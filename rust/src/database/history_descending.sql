@@ -17,7 +17,7 @@ WHERE e.account = $1
           'ValidatorSuspended', 'ValidatorPrimedForSuspension')))))
   AND ($13::boolean OR s.summary #>> '{Right,tag}' IS NULL
       OR s.summary #>> '{Right,tag}' NOT IN ('ValidatorSuspended', 'ValidatorPrimedForSuspension'))
-  AND (s.summary #>> '{Left,type,contents}' IS NULL
+  AND ($14::boolean OR s.summary #>> '{Left,type,contents}' IS NULL
       OR s.summary #>> '{Left,type,contents}' NOT IN ('updateCreatePLT', 'tokenUpdate', 'metaUpdate'))
 ORDER BY e.id DESC
 LIMIT $3

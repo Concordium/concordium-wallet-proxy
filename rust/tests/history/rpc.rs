@@ -29,7 +29,7 @@ use std::{
 
 /// This state records node queries and selects the canonical-address response.
 #[derive(Default)]
-struct RpcState {
+pub(super) struct RpcState {
     /// This code can fail account lookup before any database read.
     failure: Option<tonic::Code>,
     /// This flag delays the node beyond the shared query deadline.
@@ -77,7 +77,7 @@ async fn dispatch(State(state): State<Arc<RpcState>>, request: Request) -> Respo
         .await
         .map(Body::new)
 }
-async fn sdk(state: Arc<RpcState>) -> (support::Server, Arc<SdkNode>) {
+pub(super) async fn sdk(state: Arc<RpcState>) -> (support::Server, Arc<SdkNode>) {
     let server = support::serve_router(
         Router::new()
             .route("/concordium.v2.Queries/GetAccountInfo", post(dispatch))

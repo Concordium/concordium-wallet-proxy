@@ -1,16 +1,15 @@
-//! This module projects persisted summaries into pre-token account-history responses.
+//! This module projects persisted summaries into versioned account-history responses.
 //! It computes account-relative public and encrypted effects before attributing sender or sponsor fees.
 
 use super::{
     HistoryEntry, HistoryVersion,
     events::{Event, account},
     kinds::Kind,
+    rejection::Rejection,
     rewards,
 };
 use concordium_rust_sdk::{
-    common::types::Amount,
-    id::types::AccountAddress,
-    types::{RejectReason, hashes::TransactionHash},
+    common::types::Amount, id::types::AccountAddress, types::hashes::TransactionHash,
 };
 use num::{BigInt, BigRational, ToPrimitive};
 use serde::{Deserialize, Serialize};
@@ -64,7 +63,7 @@ enum ResultDetails {
     Reject {
         /// This reason retains the typed dynamic rejection fields.
         #[serde(rename = "rejectReason")]
-        reason: RejectReason,
+        reason: Rejection,
     },
 }
 
@@ -166,12 +165,9 @@ fn transaction(
         }
         ResultDetails::Reject { reason } => {
             details["outcome"] = json!("reject");
-            details["rejectReason"] = json!(
-                crate::compatibility::rejection::description(&reason)
-                    .map_err(|_| anyhow::anyhow!("Unsupported legacy rejection"))?
-            );
+            details["rejectReason"] = json!(reason.description()?);
             if raw {
-                details["rawRejectReason"] = serde_json::to_value(reason)?;
+                details["rawRejectReason"] = reason.raw_value()?;
             }
             (None, None)
         }
@@ -278,6 +274,28 @@ fn effects(
             copy(details, &events[0], &[("transferDestination", "to")]);
             details["transferAmount"] = json!(schedule(&events[0])?.to_string());
             memo_from = Some(1);
+        }
+        (Some("tokenUpdate" | "metaUpdate"), ["TokenTransfer"]) => {
+            details["transferSource"] = events[0].value["from"]["address"].clone();
+            details["transferDestination"] = events[0].value["to"]["address"].clone();
+            copy(
+                details,
+                &events[0],
+                &[("tokenId", "tokenId"), ("tokenTransferAmount", "amount")],
+            );
+            for name in ["fromLock", "toLock", "memo"] {
+                if let Some(value) = events[0].value.get(name).filter(|value| !value.is_null()) {
+                    details[name] = value.clone();
+                }
+            }
+        }
+        (Some("metaUpdate"), ["LockCreated"]) => copy(
+            details,
+            &events[0],
+            &[("lockId", "lockId"), ("lockConfig", "lockConfig")],
+        ),
+        (Some("metaUpdate"), ["LockDestroyed"]) => {
+            copy(details, &events[0], &[("lockId", "lockId")])
         }
         (Some("registerData"), ["DataRegistered"]) => {
             copy(details, &events[0], &[("registeredData", "data")])

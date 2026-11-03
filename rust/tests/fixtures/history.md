@@ -106,6 +106,8 @@ required before compatibility acceptance. Task 01 and its shared node-cookie and
 SDK error-provenance limits remain release concerns. Controlled real-node release
 acceptance remains required; no production data or chain state was changed.
 
-Task 17 must add v3 token-inclusive selection and token/lock details. These CCD
-routes deliberately do not infer newer event variants or silently discard them.
-Task 22 is final release review, not a deferred CCD implementation phase.
+Task 17 adds v3 token-inclusive selection and token/lock details; see
+[token and lock history provenance](token-history.md) for the additional schemas,
+fixtures, and acceptance limits. These decoders do not infer unknown variants or
+silently discard them. Task 22 is final release review, not a deferred CCD
+implementation phase.
