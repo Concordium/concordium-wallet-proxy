@@ -5,6 +5,7 @@ pub mod accounts;
 pub mod balances;
 pub mod blocks;
 pub mod catalogs;
+pub mod cis2;
 mod compatibility;
 pub mod config;
 pub mod database;

@@ -4,6 +4,7 @@
 mod accounts;
 mod balances;
 mod blocks;
+mod cis2;
 mod fees;
 mod history;
 mod progress;

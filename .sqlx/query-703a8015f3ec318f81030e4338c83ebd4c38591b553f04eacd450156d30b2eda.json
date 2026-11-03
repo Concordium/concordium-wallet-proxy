@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, token_id, total_supply::text AS \"supply!\" FROM cis2_tokens WHERE index = $1 AND subindex = $2 AND ($3::bigint IS NULL OR id > $3) ORDER BY id ASC LIMIT $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "cis2_tokens",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "token_id",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "cis2_tokens",
+            "name": "token_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "supply!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "703a8015f3ec318f81030e4338c83ebd4c38591b553f04eacd450156d30b2eda"
+}

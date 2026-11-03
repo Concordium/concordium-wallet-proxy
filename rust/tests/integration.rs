@@ -6,6 +6,7 @@ mod accounts_rpc;
 mod balances;
 mod blocks;
 mod catalogs;
+mod cis2;
 mod config;
 mod discovery;
 mod fees;

@@ -79,19 +79,7 @@ fn parse(name: &str) -> FeeError {
 
 /// Decode the checksum before checking address length and version.
 fn sender(text: &str) -> Result<AccountAddress, FeeError> {
-    let bytes = bs58::decode(text)
-        .with_check(None)
-        .into_vec()
-        .map_err(|_| sender_error("Base 58 checksum invalid."))?;
-    if bytes.len() != 33 {
-        return Err(sender_error("Wrong address length."));
-    }
-    if bytes[0] != 1 {
-        return Err(sender_error("Unknown base58 check version byte."));
-    }
-    Ok(AccountAddress(
-        bytes[1..].try_into().expect("32-byte account address"),
-    ))
+    crate::compatibility::input::account(text).map_err(sender_error)
 }
 
 /// Format a legacy sender error with its checksum or shape detail.
@@ -101,27 +89,8 @@ fn sender_error(detail: &str) -> FeeError {
 
 /// Decode hexadecimal bytes with the legacy Base16 error order and offsets.
 fn parameter(text: &str) -> Result<Vec<u8>, FeeError> {
-    let bytes = text.as_bytes();
-    let failure =
-        |message| FeeError::Parse(format!("Could not parse `parameter` value: {message}"));
-    if !bytes.len().is_multiple_of(2) {
-        return Err(failure("invalid bytestring size".into()));
-    }
-    let mut result = Vec::with_capacity(bytes.len() / 2);
-    for (index, pair) in bytes.as_chunks::<2>().0.iter().enumerate() {
-        let mut byte = 0;
-        for (offset, digit) in pair.iter().enumerate() {
-            let digit = char::from(*digit).to_digit(16).ok_or_else(|| {
-                failure(format!(
-                    "invalid character at offset: {}",
-                    2 * index + offset
-                ))
-            })?;
-            byte = byte * 16 + digit as u8;
-        }
-        result.push(byte);
-    }
-    Ok(result)
+    crate::compatibility::input::hex(text)
+        .map_err(|message| FeeError::Parse(format!("Could not parse `parameter` value: {message}")))
 }
 
 #[cfg(test)]

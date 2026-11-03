@@ -15,6 +15,17 @@ CREATE TABLE ati (
 );
 CREATE INDEX ati_account_summary ON ati(account, summary);
 
+-- TEST ONLY. Existing CIS-2 indexer schema; this is not a proxy migration.
+CREATE TABLE cis2_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    index BIGINT NOT NULL,
+    subindex BIGINT NOT NULL,
+    token_id BYTEA NOT NULL,
+    total_supply NUMERIC(80, 0) NOT NULL,
+    UNIQUE (index, subindex, token_id)
+);
+CREATE INDEX cis2_tokens_address ON cis2_tokens(index, subindex);
+
 -- AccountPublicKeyBinding uses BYTEA wrappers and Word8's SqlInt32 mapping.
 -- The legacy declaration has no uniqueness constraint or discovery index.
 CREATE TABLE account_public_key_bindings (

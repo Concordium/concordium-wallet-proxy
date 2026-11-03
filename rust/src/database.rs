@@ -2,6 +2,7 @@
 //! It reads existing records and does not change the database schema.
 
 mod account_history;
+mod cis2;
 
 use crate::discovery::{Binding, DiscoveryHistory};
 use concordium_rust_sdk::id::types::AccountAddress;
