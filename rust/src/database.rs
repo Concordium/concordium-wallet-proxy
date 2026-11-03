@@ -1,5 +1,7 @@
-//! This module checks history access and reads public-key account bindings.
+//! This module reads account history and public-key bindings, and checks table access.
 //! It reads existing records and does not change the database schema.
+
+mod account_history;
 
 use crate::discovery::{Binding, DiscoveryHistory};
 use concordium_rust_sdk::id::types::AccountAddress;

@@ -12,6 +12,7 @@ pub mod dependencies;
 pub mod discovery;
 pub mod fees;
 pub mod health;
+pub mod history;
 pub mod http;
 pub mod network;
 pub mod node;

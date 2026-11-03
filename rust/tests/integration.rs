@@ -10,6 +10,7 @@ mod config;
 mod discovery;
 mod fees;
 mod health;
+mod history;
 mod network;
 mod postgres;
 mod progress;

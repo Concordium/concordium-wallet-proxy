@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT e.id, s.block, s.timestamp, s.height, s.summary\nFROM ati AS e INNER JOIN summaries AS s ON e.summary = s.id\nWHERE e.account = $1\n  AND ($2::bigint IS NULL OR e.id < $2)\n  AND ($4::bigint IS NULL OR s.timestamp >= $4)\n  AND ($5::bigint IS NULL OR s.timestamp <= $5)\n  AND ($6::bigint IS NULL OR s.height >= $6)\n  AND ($7::bigint IS NULL OR s.height <= $7)\n  AND (NOT $8::boolean OR s.summary ? 'Left' OR s.summary #>> '{Right,tag}' <> 'BlockReward')\n  AND (NOT $9::boolean OR s.summary ? 'Left' OR s.summary #>> '{Right,tag}' <> 'FinalizationRewards')\n  AND (NOT $10::boolean OR s.summary ? 'Left' OR s.summary #>> '{Right,tag}' <> 'BakingRewards')\n  AND (NOT $11::boolean OR s.summary #>> '{Left,type,contents}' IN (\n      'encryptedAmountTransfer', 'transferToEncrypted', 'transferToPublic', 'encryptedAmountTransferWithMemo'))\n  AND ($12::integer = 0\n      OR ($12 = 1 AND (s.summary ? 'Left' OR s.summary #>> '{Right,tag}' <> 'FinalizationRewards'))\n      OR ($12 = 2 AND (s.summary ? 'Left' OR ($13::boolean AND s.summary #>> '{Right,tag}' IN (\n          'ValidatorSuspended', 'ValidatorPrimedForSuspension')))))\n  AND ($13::boolean OR s.summary #>> '{Right,tag}' IS NULL\n      OR s.summary #>> '{Right,tag}' NOT IN ('ValidatorSuspended', 'ValidatorPrimedForSuspension'))\n  AND (s.summary #>> '{Left,type,contents}' IS NULL\n      OR s.summary #>> '{Left,type,contents}' NOT IN ('updateCreatePLT', 'tokenUpdate', 'metaUpdate'))\nORDER BY e.id DESC\nLIMIT $3\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ati",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "block",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "summaries",
+            "name": "block"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "timestamp",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "summaries",
+            "name": "timestamp"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "height",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "summaries",
+            "name": "height"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "summary",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "summaries",
+            "name": "summary"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Int4",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "db2d5ea2ca96572304ddee4d6c740b020a6c20d23cf53f78dc039d045cfa1b10"
+}
