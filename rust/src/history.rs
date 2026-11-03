@@ -1,5 +1,15 @@
-//! This module defines reads from the existing account-history tables.
-//! These types keep database selection separate from legacy summary decoding.
+//! This module serves historical CCD account transactions from the existing tables.
+//! It separates canonical account lookup, database selection, and legacy summary rendering.
+
+mod events;
+mod kinds;
+mod numbers;
+mod payload;
+mod request;
+mod rewards;
+mod routes;
+mod view;
+pub use routes::routes;
 
 use concordium_rust_sdk::{id::types::AccountAddress, types::hashes::BlockHash};
 use serde_json::Value;
@@ -100,6 +110,15 @@ pub struct HistoryEntry {
     pub height: u64,
     /// This value retains the legacy Left or Right summary envelope.
     pub summary: Value,
+}
+
+/// This interface resolves aliases at the last finalized block.
+pub trait HistoryNode: Send + Sync {
+    /// Read the canonical address, retaining NOT_FOUND separately from query failures.
+    fn canonical_address(
+        &self,
+        address: AccountAddress,
+    ) -> impl Future<Output = Result<AccountAddress, crate::network::NetworkFailure>> + Send;
 }
 
 /// This interface reads account history without changing external tables.

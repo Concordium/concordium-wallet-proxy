@@ -2,6 +2,8 @@
 //! It preserves exact fractions, payday rounding, UTC timestamps, and Haskell string escapes.
 
 mod haskell;
+pub(crate) mod numbers;
+pub(crate) mod rejection;
 pub(crate) use haskell::{show_bytes, show_text};
 
 use crate::network::NetworkFailure;

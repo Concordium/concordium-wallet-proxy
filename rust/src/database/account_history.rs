@@ -26,9 +26,14 @@ impl TryFrom<StoredEntry> for HistoryEntry {
     type Error = anyhow::Error;
 
     fn try_from(row: StoredEntry) -> Result<Self, Self::Error> {
-        let block: [u8; 32] = row.block.as_slice().try_into().map_err(|_| {
-            anyhow::anyhow!("Invalid stored block hash in history entry {}", row.id)
-        })?;
+        // Cereal reads the first hash and permits trailing serialized bytes.
+        let block: [u8; 32] = row
+            .block
+            .get(..32)
+            .ok_or_else(|| {
+                anyhow::anyhow!("Invalid stored block hash in history entry {}", row.id)
+            })?
+            .try_into()?;
         Ok(Self {
             id: row.id,
             block: BlockHash::from(block),

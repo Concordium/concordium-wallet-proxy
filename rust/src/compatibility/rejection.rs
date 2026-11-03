@@ -8,7 +8,7 @@ use crate::{
 use concordium_rust_sdk::types::{Address, RejectReason as Reason};
 
 /// Render a known rejection reason with the existing English wording and quirks.
-pub(super) fn description(reason: &Reason) -> Result<String, NetworkFailure> {
+pub(crate) fn description(reason: &Reason) -> Result<String, NetworkFailure> {
     let value = match reason {
         Reason::ModuleNotWF => "Typechecking of module failed".into(),
         Reason::ModuleHashAlreadyExists { contents } => {

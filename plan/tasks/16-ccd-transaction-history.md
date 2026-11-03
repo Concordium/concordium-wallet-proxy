@@ -22,31 +22,40 @@ Deliver all pre-token-inclusive account-history versions against existing Postgr
 
 ## Implementation status
 
-In progress; storage selection only. Added a typed account-history read interface
-and two compile-time checked SQLx statements for ascending/descending entry
-cursors, inclusive time/height bounds, capped limits, reward filters,
-encrypted-only selection, and pre-token version exclusions. The adapter reads
-existing `ati`/`summaries` rows without schema changes, preserves legacy JSON,
-and decodes binary block identifiers. Offline metadata is included alongside
-the statements.
+Implemented the v0, v1, and v2 account-history routes and connected them to the
+executable. LastFinal canonical-address lookup precedes filter validation; only
+NOT_FOUND falls back to the supplied account. The existing checked SQL statements
+retain static cursor/order variants, inclusion rules, pagination, and filters.
+No schema ownership or production data is changed.
 
-Four real PostgreSQL integration tests cover the storage boundary, including
-account isolation, ordering, boundary filters, duplicate summary entries,
-version/filter interactions, JSON null semantics, signed Word64 storage, and
-query/record failures. Provenance and limits are in
-`rust/tests/fixtures/history.md`. These are not accepted HTTP fixtures.
+The legacy JSON decoder now renders account/credential/chain-update categories,
+reward and suspension outcomes, memo-version differences, encrypted effects,
+staking events, contract traces, and localized English descriptions. Sender,
+receiver, alias/self-transfer, and sponsor fee effects remain distinct. Raw
+rejections are presence-controlled. Invalid formats fail the whole page instead
+of discarding rows. Exact integral scientific JSON decoding, full Word8 mint
+exponents, single-round timestamp conversion, and Cereal block-hash prefixes are
+covered. Integer parsing and rejection descriptions are shared with existing
+fee/status features rather than duplicated.
 
-Validation: all 202 tests pass serially, including the ten disposable PostgreSQL
-tests (four new history tests and six existing database tests). Both statements
-were checked against live PostgreSQL; offline builds, package formatting,
-Clippy with warnings denied, and whitespace checks pass. Existing SDK
-lifetime-syntax warnings remain unchanged. CI has not been observed.
+Twenty-four history tests cover the storage boundary, source-derived response
+fields and wording, request validation order, SDK query conversion/failures,
+and real HTTP plus PostgreSQL behavior. Five use disposable PostgreSQL databases,
+including an end-to-end self-transfer/sponsored-rejection/suspension fixture.
+Provenance, behavior boundaries, and review status are in
+`rust/tests/fixtures/history.md`.
 
-Still required: canonical-address lookup, query parsing and validation order,
-complete legacy summary decoding, localized details/events, fee attribution and
-balance effects (including self-transfers and sponsorship), HTTP routes and
-reviewed HTTP fixtures. No account-history route is exposed yet. Acceptance
-checkboxes remain open; this task is not complete.
+Validation: all 222 tests pass serially (four unit and 218 integration), including
+all eleven disposable PostgreSQL tests. Live SQLx re-description matches all
+four offline metadata files byte-for-byte. Locked offline builds, package
+formatting, Clippy with warnings denied, and whitespace checks pass. The SDK's
+two existing lifetime-syntax warnings remain unchanged.
+
+Not yet accepted: independent fixture/legacy-decoder/wording review, Task 01
+acceptance, observed CI, and controlled real-node release acceptance. Acceptance
+checkboxes remain open pending that evidence. No CCD route, decoder, or effect
+implementation is deferred to Task 17 or Task 22. Task 17 adds token-inclusive
+v3 and token/lock details; Task 22 is final release review.
 
 ## Blocked by
 

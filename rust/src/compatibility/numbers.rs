@@ -4,17 +4,17 @@
 use num::{BigInt, ToPrimitive};
 
 /// Read an Int with the deployed 64-bit representation.
-pub(super) fn int(text: &str) -> Option<i64> {
+pub(crate) fn int(text: &str) -> Option<i64> {
     Some(bits(text, 64)? as i64)
 }
 
 /// Read a Word32 with modular conversion.
-pub(super) fn word32(text: &str) -> Option<u32> {
+pub(crate) fn word32(text: &str) -> Option<u32> {
     Some(bits(text, 32)? as u32)
 }
 
 /// Read a Word64 with modular conversion.
-pub(super) fn word64(text: &str) -> Option<u64> {
+pub(crate) fn word64(text: &str) -> Option<u64> {
     bits(text, 64)
 }
 

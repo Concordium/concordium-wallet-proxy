@@ -2,7 +2,7 @@
 //! It retains sorted block references and does not expose SDK transaction-summary JSON.
 
 mod outcome;
-mod rejection;
+use crate::compatibility::rejection;
 
 use crate::{http::error, network::NetworkFailure};
 use axum::{

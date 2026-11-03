@@ -3,11 +3,10 @@
 
 mod calculation;
 mod contract;
-mod numbers;
 mod token;
 mod token_json;
 
-use crate::{http::error, network::NetworkFailure};
+use crate::{compatibility::numbers, http::error, network::NetworkFailure};
 use axum::{
     Json, Router,
     extract::{Query, State},

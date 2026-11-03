@@ -1,6 +1,12 @@
 //! These tests check account-history selection against disposable PostgreSQL databases.
 //! The synthetic legacy envelopes test SQL behavior, not accepted HTTP decoding.
 
+mod boundaries;
+mod http;
+mod legacy;
+mod rendering;
+mod rpc;
+
 use concordium_rust_sdk::id::types::AccountAddress;
 use concordium_wallet_proxy::{
     database::PostgresHistory,
@@ -257,6 +263,15 @@ async fn history_preserves_json_null_selection_and_signed_storage_bits(pool: PgP
     assert_eq!(entries[0].timestamp, u64::MAX);
     assert_eq!(entries[0].height, u64::MAX - 1);
     assert_eq!(entries[0].summary, json!({"Left": null}));
+    assert_eq!(entries[0].block.as_ref(), [2; 32]);
+    sqlx::raw_sql("UPDATE summaries SET block = block || decode('ffff', 'hex') WHERE id = 9998")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let entries = history
+        .account_history(AccountAddress([1; 32]), &query)
+        .await
+        .unwrap();
     assert_eq!(entries[0].block.as_ref(), [2; 32]);
 }
 

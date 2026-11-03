@@ -5,6 +5,7 @@ mod accounts;
 mod balances;
 mod blocks;
 mod fees;
+mod history;
 mod progress;
 mod staking;
 mod submission;
