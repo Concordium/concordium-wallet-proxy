@@ -1,7 +1,7 @@
 //! This module serves block metadata, height lookup, and transaction outcomes.
 //! It keeps legacy validation and response fields separate from SDK query models.
 
-mod outcomes;
+pub(crate) mod outcomes;
 
 use crate::{compatibility::format_time, http::error, network::NetworkFailure};
 use axum::{

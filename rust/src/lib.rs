@@ -15,6 +15,7 @@ pub mod health;
 pub mod http;
 pub mod network;
 pub mod node;
+pub mod progress;
 pub mod staking;
 pub mod startup;
 pub mod submission;

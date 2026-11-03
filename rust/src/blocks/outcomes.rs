@@ -42,7 +42,8 @@ fn tagged(tag: &str, mut fields: Value) -> Value {
     fields
 }
 
-pub(super) fn value(summary: &BlockItemSummary) -> Result<Value, NetworkFailure> {
+/// Project the legacy event contract shared by block and submission-status routes.
+pub(crate) fn value(summary: &BlockItemSummary) -> Result<Value, NetworkFailure> {
     let mut value = json!({"sender": null, "sponsorDetails": null, "hash": summary.hash, "cost": "0", "energyCost": summary.energy_cost, "index": summary.index});
     let (kind, contents, result) = match known(&summary.details)? {
         BlockItemSummaryDetails::AccountTransaction(details) => {

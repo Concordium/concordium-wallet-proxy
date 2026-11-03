@@ -12,6 +12,7 @@ mod fees;
 mod health;
 mod network;
 mod postgres;
+mod progress;
 mod sdk;
 mod staking;
 mod submission;

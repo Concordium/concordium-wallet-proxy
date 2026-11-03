@@ -1,5 +1,8 @@
 //! This module supplies response conversions shared by wallet-facing features.
-//! It preserves exact fractions, payday rounding, and UTC timestamps.
+//! It preserves exact fractions, payday rounding, UTC timestamps, and Haskell string escapes.
+
+mod haskell;
+pub(crate) use haskell::{show_bytes, show_text};
 
 use crate::network::NetworkFailure;
 use chrono::{DateTime, TimeDelta, Utc};

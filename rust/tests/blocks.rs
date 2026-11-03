@@ -1,7 +1,7 @@
 //! This module checks block routes against source-derived HTTP expectations.
 //! Controlled nodes keep block selection, ordering, and failures deterministic.
 
-mod fixtures;
+pub(super) mod fixtures;
 mod outcomes;
 mod rpc;
 
