@@ -207,6 +207,14 @@ deployment configuration. Rust does not perform this per-pod selection.
   forwarding for the live network routes. Unsupported future protocol variants
   are not claimed compatible until SDK support and fixtures establish parity.
 
+## Optional testnet CCD drops
+
+The faucet is disabled unless `--drop-account FILE` or
+`WALLET_PROXY_DROP_ACCOUNT` identifies a legacy JSON account-key file with
+`address` and `accountKeys` fields.
+`--drop-amount` / `WALLET_PROXY_DROP_AMOUNT` accepts a decimal CCD amount and
+defaults to 2000 CCD (2,000,000,000 microCCD).
+
 ## Tests
 
 ```sh

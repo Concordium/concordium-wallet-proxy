@@ -37,7 +37,7 @@ impl<'de> Deserialize<'de> for Object {
 }
 
 /// Read one JSON value without requiring a JSON content type or consuming trailing input.
-pub(super) fn read(body: &[u8]) -> anyhow::Result<Value> {
+pub(crate) fn read(body: &[u8]) -> anyhow::Result<Value> {
     let value = Box::<RawValue>::deserialize(&mut serde_json::Deserializer::from_slice(body))?;
     normalize(&value, 0)
 }
@@ -80,7 +80,7 @@ fn normalize(raw: &RawValue, depth: usize) -> anyhow::Result<Value> {
 }
 
 /// Normalize numeric JSON map keys to their bounded unsigned decimal form.
-pub(super) fn indices(value: &mut Value, maximum: u64) -> anyhow::Result<()> {
+pub(crate) fn indices(value: &mut Value, maximum: u64) -> anyhow::Result<()> {
     let original = std::mem::take(value.as_object_mut().context("Invalid indexed map")?);
     let mut normalized = serde_json::Map::new();
     for (key, value) in original {

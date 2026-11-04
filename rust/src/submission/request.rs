@@ -10,7 +10,7 @@ use concordium_rust_sdk::{
 };
 use serde_json::Value;
 
-mod json;
+use crate::compatibility::json;
 
 /// Read the supported credential envelope version after decoding its contents.
 pub(super) fn credential(body: &[u8]) -> anyhow::Result<Submission> {

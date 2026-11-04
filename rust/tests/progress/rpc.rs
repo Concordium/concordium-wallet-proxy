@@ -347,3 +347,107 @@ async fn real_http_status_preserves_language_precedence_metadata_head_and_no_sid
     assert_eq!(state.arrivals.load(Ordering::SeqCst), 2);
     assert_eq!(database_calls.load(Ordering::SeqCst), 0);
 }
+
+#[tokio::test]
+async fn faucet_sdk_status_checks_pending_success_absence_and_malformed_finality() {
+    use concordium_wallet_proxy::faucet::DropNode;
+    let received = p::BlockItemStatus {
+        status: Some(p::block_item_status::Status::Received(p::Empty {})),
+    };
+    let committed = p::BlockItemStatus {
+        status: Some(p::block_item_status::Status::Committed(
+            p::block_item_status::Committed { outcomes: vec![] },
+        )),
+    };
+    let mut rejected = fixtures::raw_transfer();
+    let Some(p::block_item_summary::Details::AccountTransaction(details)) =
+        rejected.details.as_mut()
+    else {
+        unreachable!()
+    };
+    details.effects = Some(p::AccountTransactionEffects {
+        effect: Some(p::account_transaction_effects::Effect::None(
+            p::account_transaction_effects::None {
+                transaction_type: Some(p::TransactionType::Transfer as i32),
+                reject_reason: Some(p::RejectReason {
+                    reason: Some(p::reject_reason::Reason::AmountTooLarge(
+                        p::reject_reason::AmountTooLarge {
+                            address: Some(p::Address {
+                                r#type: Some(p::address::Type::Account(p::AccountAddress {
+                                    value: vec![7; 32],
+                                })),
+                            }),
+                            amount: Some(p::Amount { value: 1 }),
+                        },
+                    )),
+                }),
+            },
+        )),
+    });
+    let rejected = p::BlockItemStatus {
+        status: Some(p::block_item_status::Status::Finalized(
+            p::block_item_status::Finalized {
+                outcome: Some(p::BlockItemSummaryInBlock {
+                    block_hash: Some(p::BlockHash { value: vec![3; 32] }),
+                    outcome: Some(rejected),
+                }),
+            },
+        )),
+    };
+    let rejected_server = server(Arc::new(RpcState {
+        response: rejected,
+        ..Default::default()
+    }))
+    .await;
+    assert!(
+        !sdk(&rejected_server)
+            .await
+            .acceptable([0xaa; 32].into())
+            .await
+            .unwrap()
+    );
+    let malformed = p::BlockItemStatus {
+        status: Some(p::block_item_status::Status::Finalized(
+            p::block_item_status::Finalized { outcome: None },
+        )),
+    };
+    for response in [received, committed, finalized_response()] {
+        let server = server(Arc::new(RpcState {
+            response,
+            ..Default::default()
+        }))
+        .await;
+        assert!(
+            sdk(&server)
+                .await
+                .acceptable([0xaa; 32].into())
+                .await
+                .unwrap()
+        );
+    }
+    let server = server(Arc::new(RpcState {
+        response: malformed,
+        ..Default::default()
+    }))
+    .await;
+    assert!(
+        sdk(&server)
+            .await
+            .acceptable([0xaa; 32].into())
+            .await
+            .is_err()
+    );
+    for code in [tonic::Code::NotFound, tonic::Code::Unavailable] {
+        let server = self::server(Arc::new(RpcState {
+            status: Some(code),
+            ..Default::default()
+        }))
+        .await;
+        let result = sdk(&server).await.acceptable([0xaa; 32].into()).await;
+        if code == tonic::Code::NotFound {
+            assert!(!result.unwrap());
+        } else {
+            assert!(result.is_err());
+        }
+    }
+}

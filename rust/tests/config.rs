@@ -68,6 +68,44 @@ fn command() -> Command {
 }
 
 #[test]
+fn drop_settings_are_optional_and_amounts_use_ccd_units() {
+    let config = parse(&[]).unwrap();
+    assert!(config.faucet.account.is_none());
+    assert_eq!(config.faucet.amount.micro_ccd, 2_000_000_000);
+    let config = parse(&["--drop-account", "keys.json", "--drop-amount", "12.345678"]).unwrap();
+    assert_eq!(config.faucet.account, Some(PathBuf::from("keys.json")));
+    assert_eq!(config.faucet.amount.micro_ccd, 12_345_678);
+    for amount in ["-1", "0.0000001", "18446744073709551616"] {
+        assert!(parse(&["--drop-amount", amount]).is_err());
+    }
+}
+
+#[test]
+fn drop_flags_override_environment_values() {
+    let (dir, config) = config();
+    let keys = dir.path().join("keys.json");
+    std::fs::write(&keys, "secret-invalid-json").unwrap();
+    let output = command()
+        .env("WALLET_PROXY_DROP_ACCOUNT", "missing-secret-keys.json")
+        .env("WALLET_PROXY_DROP_AMOUNT", "invalid-amount")
+        .args(["--drop-amount", "1", "--drop-account"])
+        .arg(&keys)
+        .arg("--ip-data")
+        .arg(config.catalogs.v0)
+        .arg("--ip-data-v1")
+        .arg(config.catalogs.v1)
+        .arg("--ip-data-v2")
+        .arg(config.catalogs.v2)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("Invalid drop account key file"), "{error}");
+    assert!(!error.contains("secret-invalid-json"));
+    assert!(!error.contains("missing-secret-keys.json"));
+}
+
+#[test]
 fn clap_command_is_valid() {
     Config::command().debug_assert();
 }

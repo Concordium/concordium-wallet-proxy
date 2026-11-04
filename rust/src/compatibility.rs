@@ -3,6 +3,7 @@
 
 mod haskell;
 pub(crate) mod input;
+pub(crate) mod json;
 pub(crate) mod numbers;
 pub(crate) mod rejection;
 pub(crate) use haskell::{show_bytes, show_text};

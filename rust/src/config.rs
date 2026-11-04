@@ -29,6 +29,9 @@ pub struct Config {
     /// These settings supply wallet updates and terms.
     #[command(flatten, next_help_heading = "Wallet")]
     pub wallet: WalletConfig,
+    /// These settings enable optional testnet CCD drops.
+    #[command(flatten, next_help_heading = "Testnet drops")]
+    pub faucet: FaucetConfig,
 }
 
 /// This type contains the HTTP server settings.
@@ -158,6 +161,37 @@ pub struct WalletConfig {
     /// This URL points to the terms.
     #[arg(long, env = "WALLET_PROXY_TC_URL")]
     pub tc_url: Option<String>,
+}
+
+/// These settings identify faucet signing keys and the CCD amount.
+#[derive(Clone, Args)]
+#[group(skip)]
+pub struct FaucetConfig {
+    /// This optional file contains the funding address and account keys.
+    #[arg(
+        long = "drop-account",
+        env = "WALLET_PROXY_DROP_ACCOUNT",
+        hide_env_values = true
+    )]
+    pub account: Option<PathBuf>,
+    /// This decimal CCD amount defaults to 2000 CCD, not 2000 microCCD.
+    #[arg(
+        long = "drop-amount",
+        env = "WALLET_PROXY_DROP_AMOUNT",
+        default_value = "2000"
+    )]
+    pub amount: concordium_rust_sdk::smart_contracts::common::Amount,
+}
+
+impl Default for FaucetConfig {
+    fn default() -> Self {
+        Self {
+            account: None,
+            amount: concordium_rust_sdk::smart_contracts::common::Amount::from_micro_ccd(
+                2_000_000_000,
+            ),
+        }
+    }
 }
 
 impl Config {

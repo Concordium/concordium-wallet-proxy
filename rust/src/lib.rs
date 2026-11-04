@@ -11,6 +11,7 @@ pub mod config;
 pub mod database;
 pub mod dependencies;
 pub mod discovery;
+pub mod faucet;
 pub mod fees;
 pub mod health;
 pub mod history;

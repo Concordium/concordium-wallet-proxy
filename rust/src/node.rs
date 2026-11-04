@@ -5,6 +5,7 @@ mod accounts;
 mod balances;
 mod blocks;
 mod cis2;
+mod faucet;
 mod fees;
 mod history;
 mod plt;

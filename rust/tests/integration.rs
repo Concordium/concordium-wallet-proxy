@@ -9,6 +9,7 @@ mod catalogs;
 mod cis2;
 mod config;
 mod discovery;
+mod faucet;
 mod fees;
 mod health;
 mod history;

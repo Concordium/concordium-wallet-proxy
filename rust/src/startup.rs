@@ -22,6 +22,14 @@ pub struct Application {
     pub catalogs: [serde_json::Value; 3],
     /// These settings supply wallet updates and terms.
     pub wallet: crate::wallet::WalletSettings,
+    /// This service supplies optional testnet CCD drops.
+    pub faucet: Arc<
+        crate::faucet::Faucet<
+            SdkNode,
+            crate::faucet::database::PostgresDrops,
+            crate::faucet::SystemDropTime,
+        >,
+    >,
     /// These node parameters remain available without another startup query.
     pub network: crate::network::Network<Production>,
 }
@@ -32,14 +40,33 @@ pub async fn initialize(config: &Config) -> anyhow::Result<Application> {
     config.validate()?;
     let catalogs = load_catalogs(&config.catalogs)?;
     let wallet = crate::wallet::WalletSettings::load(&config.wallet)?;
+    let drop_settings = config
+        .faucet
+        .account
+        .as_ref()
+        .map(|path| crate::faucet::DropSettings::load(path, config.faucet.amount))
+        .transpose()?;
     let pool = PgPoolOptions::new()
         .max_connections(config.database.max_connections.get())
         .connect(&config.database.url)
         .await
         .context("Cannot initialize PostgreSQL pool")?;
+    let drops = crate::faucet::database::PostgresDrops(pool.clone());
+    if drop_settings.is_some() {
+        drops
+            .initialize()
+            .await
+            .context("Cannot initialize testnet drop recipient table")?;
+    }
     let node = SdkNode::connect(&config.node).await?;
     let cryptographic_parameters = node.cryptographic_parameters().await?;
     Ok(Application {
+        faucet: Arc::new(crate::faucet::Faucet {
+            settings: drop_settings,
+            node: Arc::new(node.clone()),
+            store: Arc::new(drops),
+            time: crate::faucet::SystemDropTime,
+        }),
         balances: crate::balances::Balances { node: node.clone() },
         health: Health {
             node: node.clone(),

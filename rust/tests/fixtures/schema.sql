@@ -36,3 +36,11 @@ CREATE TABLE account_public_key_bindings (
     key_index INTEGER NOT NULL,
     is_simple_account BOOLEAN NOT NULL
 );
+
+-- TEST ONLY. Proxy-owned GTURecipient uses Persistent's g_t_u_recipient name.
+CREATE TABLE g_t_u_recipient (
+    id BIGSERIAL PRIMARY KEY,
+    account BYTEA NOT NULL,
+    transaction BYTEA NOT NULL,
+    CONSTRAINT unique_account UNIQUE (account)
+);
