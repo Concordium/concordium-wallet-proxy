@@ -17,6 +17,7 @@ pub mod history;
 pub mod http;
 pub mod network;
 pub mod node;
+pub mod plt;
 pub mod progress;
 pub mod staking;
 pub mod startup;

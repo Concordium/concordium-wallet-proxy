@@ -38,6 +38,9 @@ async fn main() -> anyhow::Result<()> {
                 .merge(concordium_wallet_proxy::staking::routes(
                     application.health.node.clone().into(),
                 ))
+                .merge(concordium_wallet_proxy::plt::routes(
+                    application.health.node.clone().into(),
+                ))
                 .merge(concordium_wallet_proxy::cis2::routes(
                     application.health.node.clone().into(),
                     application.health.history.clone(),

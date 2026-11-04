@@ -7,6 +7,7 @@ mod blocks;
 mod cis2;
 mod fees;
 mod history;
+mod plt;
 mod progress;
 mod staking;
 mod submission;

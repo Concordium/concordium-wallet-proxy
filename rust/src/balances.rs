@@ -2,7 +2,7 @@
 //! It preserves the order and block selection of account, staking, and token queries.
 
 mod token_state;
-mod tokens;
+pub(crate) mod tokens;
 mod view;
 
 use crate::{

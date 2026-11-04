@@ -12,16 +12,18 @@ pub(super) fn holding(holding: &AccountToken, info: &TokenInfo) -> Value {
     if let Some(state) = &holding.state.module_state {
         account["state"] = token_state::account(state.as_ref());
     }
+    json!({"token": information(info), "tokenAccountState":account})
+}
+
+/// Select the global token fields used by the HTTP API.
+pub(crate) fn information(info: &TokenInfo) -> Value {
     json!({
-        "token": {
-            "tokenId":info.token_id.to_string(),
-            "tokenState": {
-                "tokenModuleRef":info.token_state.token_module_ref.to_string(),
-                "decimals":info.token_state.decimals,
-                "totalSupply":{"value":info.token_state.total_supply.value().to_string(),"decimals":info.token_state.total_supply.decimals()},
-                "moduleState":token_state::module(info.token_state.module_state.as_ref())
-            }
-        },
-        "tokenAccountState":account
+        "tokenId":info.token_id.to_string(),
+        "tokenState": {
+            "tokenModuleRef":info.token_state.token_module_ref.to_string(),
+            "decimals":info.token_state.decimals,
+            "totalSupply":{"value":info.token_state.total_supply.value().to_string(),"decimals":info.token_state.total_supply.decimals()},
+            "moduleState":token_state::module(info.token_state.module_state.as_ref())
+        }
     })
 }

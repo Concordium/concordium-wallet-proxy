@@ -13,6 +13,7 @@ mod fees;
 mod health;
 mod history;
 mod network;
+mod plt;
 mod postgres;
 mod progress;
 mod sdk;
