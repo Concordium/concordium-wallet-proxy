@@ -38,6 +38,9 @@ async fn main() -> anyhow::Result<()> {
                 .merge(concordium_wallet_proxy::staking::routes(
                     application.health.node.clone().into(),
                 ))
+                .merge(concordium_wallet_proxy::transak::routes(
+                    application.transak,
+                ))
                 .merge(concordium_wallet_proxy::faucet::routes(application.faucet))
                 .merge(concordium_wallet_proxy::plt::routes(
                     application.health.node.clone().into(),
@@ -62,7 +65,8 @@ async fn main() -> anyhow::Result<()> {
                 .merge(concordium_wallet_proxy::balances::routes(
                     application.balances,
                 )),
-        ),
+        )
+        .into_make_service_with_connect_info::<std::net::SocketAddr>(),
     )
     .with_graceful_shutdown(shutdown())
     .await?;

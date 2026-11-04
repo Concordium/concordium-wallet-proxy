@@ -32,6 +32,9 @@ pub struct Config {
     /// These settings enable optional testnet CCD drops.
     #[command(flatten, next_help_heading = "Testnet drops")]
     pub faucet: FaucetConfig,
+    /// These settings enable optional hosted CCD purchase sessions.
+    #[command(flatten, next_help_heading = "Transak")]
+    pub transak: crate::transak::config::TransakConfig,
 }
 
 /// This type contains the HTTP server settings.
@@ -199,6 +202,7 @@ impl Config {
     /// Return an error if a setting is invalid or the SDK does not support it.
     pub fn validate(&self) -> anyhow::Result<()> {
         self.database.validate()?;
+        self.transak.settings()?;
         if self.node.timeout_seconds == 0 {
             bail!("Node timeout must be positive");
         }

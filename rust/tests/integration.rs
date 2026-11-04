@@ -22,4 +22,5 @@ mod staking;
 mod submission;
 mod support;
 
+mod transak;
 mod wallet;

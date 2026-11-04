@@ -22,6 +22,8 @@ pub struct Application {
     pub catalogs: [serde_json::Value; 3],
     /// These settings supply wallet updates and terms.
     pub wallet: crate::wallet::WalletSettings,
+    /// This optional service creates hosted Transak purchase sessions.
+    pub transak: Option<Arc<crate::transak::Transak<SystemClock>>>,
     /// This service supplies optional testnet CCD drops.
     pub faucet: Arc<
         crate::faucet::Faucet<
@@ -46,6 +48,7 @@ pub async fn initialize(config: &Config) -> anyhow::Result<Application> {
         .as_ref()
         .map(|path| crate::faucet::DropSettings::load(path, config.faucet.amount))
         .transpose()?;
+    let transak = crate::transak::configured(config.transak.settings()?, SystemClock)?;
     let pool = PgPoolOptions::new()
         .max_connections(config.database.max_connections.get())
         .connect(&config.database.url)
@@ -76,6 +79,7 @@ pub async fn initialize(config: &Config) -> anyhow::Result<Application> {
         },
         catalogs,
         wallet,
+        transak,
         network: crate::network::Network {
             node,
             parameters: Arc::new(cryptographic_parameters),

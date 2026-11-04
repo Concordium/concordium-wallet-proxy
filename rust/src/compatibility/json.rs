@@ -42,6 +42,14 @@ pub(crate) fn read(body: &[u8]) -> anyhow::Result<Value> {
     normalize(&value, 0)
 }
 
+/// Read a complete upstream JSON document while retaining first duplicate keys.
+pub(crate) fn read_complete(body: &[u8]) -> anyhow::Result<Value> {
+    let mut decoder = serde_json::Deserializer::from_slice(body);
+    let value = Box::<RawValue>::deserialize(&mut decoder)?;
+    decoder.end()?;
+    normalize(&value, 0)
+}
+
 /// Normalize a value while keeping nested duplicate keys and exact integers.
 fn normalize(raw: &RawValue, depth: usize) -> anyhow::Result<Value> {
     anyhow::ensure!(

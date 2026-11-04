@@ -23,4 +23,5 @@ pub mod progress;
 pub mod staking;
 pub mod startup;
 pub mod submission;
+pub mod transak;
 pub mod wallet;
