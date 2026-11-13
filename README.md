@@ -743,6 +743,12 @@ Similarly, the value was historically only present when the origin was `"self"`,
 The total change in the account's __public__ CCD balance due to the transaction and associated fees.
 A negative value indicates a debit from the account, while a positive value indicates a credit to the account.
 
+#### `transactionCost` (optional)
+The cost of the transaction, whichever account paid it.
+Unlike `cost`, it is present when the account did not pay for the transaction, e.g., for the recipient of a transfer.
+For a sponsored transaction, it is the cost paid by the sponsor.
+This is not present for special transactions.
+
 #### `energy` (optional)
 The energy cost (in NRG) of executing the transaction.
 This is not present for special transactions.
@@ -854,6 +860,7 @@ $ curl -XGET "http://localhost:3000/v0/accTransactions/4KYJHs49FX7tPD2pFY2whbfZ8
       },
       "energy": 59,
       "cost": 59,
+      "transactionCost": 59,
       "sponsor": {
         "sponsor": "4KYJHs49FX7tPD2pFY2whbfZ8AjupEtX8yNSLwWMFQFUZgRobL",
         "cost": 59

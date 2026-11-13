@@ -2488,10 +2488,17 @@ formatEntry includeMemos rawRejectReason i self (Entity key Entry{}, Entity _ Su
 
                 myTotal = fromMaybe 0 subtotal - fromMaybe 0 myCost
 
+                -- Cost of the transaction, whichever account paid it. For a sponsored
+                -- transaction the sponsor pays the whole cost and the sender pays nothing.
+                transactionCost = case stsSponsorDetails of
+                    Just SponsorDetails{..} -> toInteger sdCost
+                    Nothing -> toInteger stsCost
+
                 costs =
                     ["subtotal" .= show st | Just st <- [mySubtotal]]
                         ++ ["cost" .= show c | Just c <- [myCost]]
                         ++ ["total" .= show myTotal]
+                        ++ ["transactionCost" .= show transactionCost]
 
                 encryptedCost = case stsSender of
                     Just sender
