@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+- Add `GET` endpoint `/v0/accCanonicalAddress/{account address}` for getting the canonical address of the account an address (possibly an alias) refers to.
+
 ## [0.51.0] - 2026-11-17
 
 - Add application-level CORS handling. A new `--enable-public-cors` flag for the public API and a strict exact-origin allowlist for `POST /v0/transakOnRamp` configured via `allowedOrigins` in the Transak config file.

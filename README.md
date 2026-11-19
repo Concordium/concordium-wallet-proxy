@@ -18,6 +18,8 @@ cooldowns and the available balance) and get the info if an account is on any al
 * `GET /v0/accNonce/{account address}`: get the next nonce for an account
 * `GET /v0/accEncryptionKey/{account address}`: get the public encryption key of
   the account
+* `GET /v0/accCanonicalAddress/{account address}`: get the canonical address of
+  the account an address (possibly an alias) refers to
 * `GET /v0/transactionCost`: get the cost of a transaction
 * `GET /v0/submissionStatus/{transactionHash OR submissionId}`: get the status
   of a transfer or credential deployment
@@ -367,6 +369,31 @@ the form
 }
 ```
 The field is mandatory, and the value will always be a hex-encoded public key.
+
+## Account canonical address
+
+An account has many addresses (aliases): they share their first 29 bytes and
+differ in the last 3. Transaction outcomes and block events name the alias used
+on chain. The `v0/accCanonicalAddress/{account address}` endpoint takes any
+address of an account and returns the canonical address of the account, the one
+it was created with, as of the last finalized block. The mapping never changes
+once the account exists, so clients can cache it.
+
+If the request is invalid, i.e., malformed address, the status code in 500+
+range is returned, if the request is valid, but the account does not exist in
+the last finalized block, a status code 404 is returned. In both these cases the
+returned object is of the form of a generic error object, described above.
+
+In case of success, the return code is 200, and the return value is an object of
+the form
+
+```json
+{
+  "accountAddress": String
+}
+```
+The field is mandatory, and the value will always be a base58check account
+address.
 
 ## Transaction cost.
 

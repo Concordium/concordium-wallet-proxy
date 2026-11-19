@@ -294,6 +294,7 @@ mkYesod
 /v2/accBalance/#Text AccountBalanceV2R GET
 /v0/accNonce/#Text AccountNonceR GET
 /v0/accEncryptionKey/#Text AccountEncryptionKeyR GET
+/v0/accCanonicalAddress/#Text AccountCanonicalAddressR GET
 /v0/accTransactions/#Text AccountTransactionsV0R GET
 /v0/transactionCost TransactionCostR GET
 /v0/submissionStatus/#Text SubmissionStatusR GET
@@ -920,6 +921,26 @@ getAccountEncryptionKeyR addrText = do
                     <> ": "
                     <> Text.pack (show encryptionKey)
             sendResponse (object ["accountEncryptionKey" .= encryptionKey])
+
+-- | Get the canonical address of the account that the given address (possibly an alias) refers to, in the last
+--  finalized block. An account has many addresses (aliases), which share their first 29 bytes; transaction outcomes
+--  and block events name the alias used on chain, while this returns the address the account was created with.
+--  The mapping never changes once the account exists.
+--  Return @404@ status code if the account does not exist in the last finalized block.
+getAccountCanonicalAddressR :: Text -> Handler TypedContent
+getAccountCanonicalAddressR addrText = do
+    addr <- doParseAccountAddress "getAccountCanonicalAddress" addrText
+    runGRPCWithCustomError
+        (Just (StatusNotOkError NOT_FOUND, Nothing, Nothing, Just EMAccountDoesNotExist))
+        (getAccountInfo (AccAddress addr) LastFinal)
+        $ \accInfo -> do
+            let canonicalAddress = aiAccountAddress accInfo
+            $(logInfo) $
+                "Retrieved canonical address for "
+                    <> addrText
+                    <> ": "
+                    <> Text.pack (show canonicalAddress)
+            sendResponse (object ["accountAddress" .= canonicalAddress])
 
 -- | Known token operations mapped to their specific costs
 knownTokenOperationSpecificCostMap :: Map.Map Text Energy
