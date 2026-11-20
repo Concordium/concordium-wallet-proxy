@@ -3081,19 +3081,90 @@ getBlockInfoR hashText =
 -- | Returns the transaction events (transaction outcomes) for the block with the given hash.
 --  This proxies the node's @GetBlockTransactionEvents@ method and returns the list of
 --  transaction summaries contained in the block.
+--  With the query parameter @canonicalAddresses=y@, each summary also has a @canonicalAddresses@
+--  object, mapping every account address in it to the canonical address of its account.
 --  Returns 404 if no block with the given hash exists.
 --  If the block hash could not be parsed, a HTTP response with status code @400@ is returned.
 getBlockTransactionEventsR :: Text -> Handler TypedContent
 getBlockTransactionEventsR hashText =
     case readMaybe (Text.unpack hashText) of
         Nothing -> respond400Error EMMalformedBlockHash RequestInvalid
-        Just blockHash ->
-            runGRPCWithCustomError
-                (Just (StatusNotOkError NOT_FOUND, Just notFound404, Nothing, Just $ EMErrorResponse NotFound))
-                (getBlockTransactionEvents (Given blockHash))
-                $ \txEvents -> do
-                    $(logOther "Trace") "Successfully got block transaction events."
-                    sendResponse $ toJSON txEvents
+        Just blockHash -> do
+            withCanonicalAddresses <-
+                lookupGetParam "canonicalAddresses" >>= \case
+                    Just "y" -> return True
+                    Just "n" -> return False
+                    Nothing -> return False
+                    Just other -> respond400Error (EMParseError $ "Invalid `canonicalAddresses` parameter (should be `y` or `n`): " ++ Text.unpack other) RequestInvalid
+            let blockNotFound = Just (StatusNotOkError NOT_FOUND, Just notFound404, Nothing, Just $ EMErrorResponse NotFound)
+                block = Given blockHash
+            if withCanonicalAddresses
+                then runGRPCWithCustomError blockNotFound (getBlockTransactionEventsWithCanonicalAddresses block) $
+                    \(txEvents, canonical) -> do
+                        $(logOther "Trace") "Successfully got block transaction events and canonical addresses."
+                        sendResponse . toJSON $ addCanonicalAddresses canonical <$> txEvents
+                else runGRPCWithCustomError blockNotFound (getBlockTransactionEvents block) $
+                    \txEvents -> do
+                        $(logOther "Trace") "Successfully got block transaction events."
+                        sendResponse $ toJSON txEvents
+
+-- | The bytes that identify the account of an address: all aliases of an account share them.
+accountKey :: AccountAddress -> BS.ByteString
+accountKey = BS.take accountAddressPrefixSize . S.encode
+
+-- | The account addresses in a JSON value: every string that parses as one. In a transaction
+--  summary, these are the sender, the sponsor, and the accounts named by the events or the
+--  reject reason, whatever the transaction type.
+jsonAccountAddresses :: AE.Value -> [AccountAddress]
+jsonAccountAddresses = \case
+    AE.String s -> either (const []) pure (addressFromText s :: Either String AccountAddress)
+    AE.Object o -> foldMap jsonAccountAddresses o
+    AE.Array a -> foldMap jsonAccountAddresses a
+    _ -> []
+
+-- | The transaction events of a block, and the canonical address of each account named in them,
+--  keyed by 'accountKey'. The account info is queried once per account, in that block, so an
+--  account created in the block is found. An address without an account in that block (for
+--  example in a reject reason) is left out.
+getBlockTransactionEventsWithCanonicalAddresses ::
+    BlockHashInput ->
+    ClientMonad IO (GRPCResult (Either String ([SupplementedTransactionSummary], Map.Map BS.ByteString AccountAddress)))
+getBlockTransactionEventsWithCanonicalAddresses block = do
+    eventsRes <- getBlockTransactionEvents block
+    case getResponseValueAndHeaders eventsRes of
+        Left errRes -> return errRes
+        Right (Left err, hds) -> return $ StatusOk $ GRPCResponse hds $ Left err
+        Right (Right txEvents, hds) -> do
+            let accounts = Map.elems $ Map.fromList [(accountKey addr, addr) | addr <- foldMap (jsonAccountAddresses . toJSON) txEvents]
+            resolve hds (toList txEvents) Map.empty accounts
+  where
+    resolve hds txEvents canonical [] = return $ StatusOk $ GRPCResponse hds $ Right (txEvents, canonical)
+    resolve hds txEvents canonical (addr : rest) = do
+        accInfoRes <- getAccountInfo (AccAddress addr) block
+        case accInfoRes of
+            StatusNotOk (NOT_FOUND, _) -> resolve hds txEvents canonical rest
+            _ -> case getResponseValueAndHeaders accInfoRes of
+                Left errRes -> return errRes
+                Right (Left err, hds') -> return $ StatusOk $ GRPCResponse hds' $ Left err
+                Right (Right accInfo, _) ->
+                    resolve hds txEvents (Map.insert (accountKey addr) (aiAccountAddress accInfo) canonical) rest
+
+-- | A transaction summary with its @canonicalAddresses@ object, mapping each account address in
+--  the summary to the canonical address of its account.
+addCanonicalAddresses :: Map.Map BS.ByteString AccountAddress -> SupplementedTransactionSummary -> AE.Value
+addCanonicalAddresses canonical summary =
+    case summaryJson of
+        AE.Object o -> AE.Object $ KM.insert "canonicalAddresses" (toJSON addresses) o
+        other -> other
+  where
+    summaryJson = toJSON summary
+    addresses :: Map.Map AccountAddress AccountAddress
+    addresses =
+        Map.fromList
+            [ (addr, canonicalAddr)
+              | addr <- jsonAccountAddresses summaryJson,
+                Just canonicalAddr <- [Map.lookup (accountKey addr) canonical]
+            ]
 
 -- | Create a Transak on-ramp session. This requires an "address" parameter to be specified, which
 --  will be the address of the account to which the purchased funds will be sent.

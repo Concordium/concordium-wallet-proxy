@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+- Add the `canonicalAddresses=y` query parameter to `GET /v0/blockTransactionEvents/{blockHash}`. Each transaction summary then also has a `canonicalAddresses` object, mapping every account address in it (possibly an alias) to the canonical address of its account.
+
 ## [0.51.0] - 2026-11-17
 
 - Add application-level CORS handling. A new `--enable-public-cors` flag for the public API and a strict exact-origin allowlist for `POST /v0/transakOnRamp` configured via `allowedOrigins` in the Transak config file.

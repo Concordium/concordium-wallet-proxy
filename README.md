@@ -56,7 +56,8 @@ cooldowns and the available balance) and get the info if an account is on any al
 * `GET /v0/consensusInfo`: get the current consensus status from the node.
 * `GET /v0/blockInfo/{blockHash}`: get block information for a given block hash.
 * `GET /v0/blocksAtHeight/{blockHeight}`: get the block hashes at a given absolute block height.
-* `GET /v0/blockTransactionEvents/{blockHash}`: get the transaction events (outcomes) in a given block.
+* `GET /v0/blockTransactionEvents/{blockHash}`: get the transaction events (outcomes) in a given block,
+  optionally with the canonical address of each account they name.
 
 ### Errors
 
@@ -1670,6 +1671,47 @@ Example response:
           "to": { "type": "AddressAccount", "address": "4tjy... " }
         }
       ]
+    }
+  }
+]
+```
+
+### Canonical addresses
+
+An account has many addresses (aliases): they share their first 29 bytes and differ in the last 3.
+The summaries name each account by the alias used on chain, which can differ from the address the
+account was created with (its canonical address). The canonical address cannot be derived from an
+alias.
+
+With the query parameter `canonicalAddresses=y` (default `n`), each summary also has a
+`canonicalAddresses` object, mapping every account address in the summary (the sender, the sponsor,
+and the accounts in the events or the reject reason) to the canonical address of its account. The
+account info is queried in the given block, once per account. An address without an account in that
+block (for example in a reject reason) is not in the object.
+
+Example response for `/v0/blockTransactionEvents/{blockHash}?canonicalAddresses=y`, for a transfer
+sent from an alias:
+
+```json
+[
+  {
+    "hash": "7c0a... ",
+    "sender": "4DAERy94ScrVZQPLyqV9bGF9kT8kDSUS8M5Y4Epmew49ZXjfnk",
+    ...
+    "result": {
+      "outcome": "success",
+      "events": [
+        {
+          "tag": "Transferred",
+          "amount": "1000000",
+          "from": { "type": "AddressAccount", "address": "4DAERy94ScrVZQPLyqV9bGF9kT8kDSUS8M5Y4Epmew49ZXjfnk" },
+          "to": { "type": "AddressAccount", "address": "3WD5VXRzZwwkQyLBjxb1qonF8E5GKRe1uBN6g3WCE8XrGuXuwu" }
+        }
+      ]
+    },
+    "canonicalAddresses": {
+      "4DAERy94ScrVZQPLyqV9bGF9kT8kDSUS8M5Y4Epmew49ZXjfnk": "4DAERy94ScrVZQPLyqV9bGF9kT8kDSUS8M5Y4EpmdNS2q4LmLd",
+      "3WD5VXRzZwwkQyLBjxb1qonF8E5GKRe1uBN6g3WCE8XrGuXuwu": "3WD5VXRzZwwkQyLBjxb1qonF8E5GKRe1uBN6g3WCE8XrGuXuwu"
     }
   }
 ]
