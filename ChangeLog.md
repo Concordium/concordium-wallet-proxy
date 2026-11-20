@@ -2,7 +2,7 @@
 
 ## [unreleased]
 
-- Add `GET` endpoint `/v0/accCanonicalAddress/{account address}` for getting the canonical address of the account an address (possibly an alias) refers to.
+- Add the `canonicalAddresses=y` query parameter to `GET /v0/blockTransactionEvents/{blockHash}`. Each transaction summary then also has a `canonicalAddresses` object, mapping every account address in it (possibly an alias) to the canonical address of its account.
 
 ## [0.51.0] - 2026-11-17
 

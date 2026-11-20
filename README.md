@@ -18,8 +18,6 @@ cooldowns and the available balance) and get the info if an account is on any al
 * `GET /v0/accNonce/{account address}`: get the next nonce for an account
 * `GET /v0/accEncryptionKey/{account address}`: get the public encryption key of
   the account
-* `GET /v0/accCanonicalAddress/{account address}`: get the canonical address of
-  the account an address (possibly an alias) refers to
 * `GET /v0/transactionCost`: get the cost of a transaction
 * `GET /v0/submissionStatus/{transactionHash OR submissionId}`: get the status
   of a transfer or credential deployment
@@ -58,7 +56,8 @@ cooldowns and the available balance) and get the info if an account is on any al
 * `GET /v0/consensusInfo`: get the current consensus status from the node.
 * `GET /v0/blockInfo/{blockHash}`: get block information for a given block hash.
 * `GET /v0/blocksAtHeight/{blockHeight}`: get the block hashes at a given absolute block height.
-* `GET /v0/blockTransactionEvents/{blockHash}`: get the transaction events (outcomes) in a given block.
+* `GET /v0/blockTransactionEvents/{blockHash}`: get the transaction events (outcomes) in a given block,
+  optionally with the canonical address of each account they name.
 
 ### Errors
 
@@ -369,31 +368,6 @@ the form
 }
 ```
 The field is mandatory, and the value will always be a hex-encoded public key.
-
-## Account canonical address
-
-An account has many addresses (aliases): they share their first 29 bytes and
-differ in the last 3. Transaction outcomes and block events name the alias used
-on chain. The `v0/accCanonicalAddress/{account address}` endpoint takes any
-address of an account and returns the canonical address of the account, the one
-it was created with, as of the last finalized block. The mapping never changes
-once the account exists, so clients can cache it.
-
-If the request is invalid, i.e., malformed address, the status code in 500+
-range is returned, if the request is valid, but the account does not exist in
-the last finalized block, a status code 404 is returned. In both these cases the
-returned object is of the form of a generic error object, described above.
-
-In case of success, the return code is 200, and the return value is an object of
-the form
-
-```json
-{
-  "accountAddress": String
-}
-```
-The field is mandatory, and the value will always be a base58check account
-address.
 
 ## Transaction cost.
 
@@ -1697,6 +1671,47 @@ Example response:
           "to": { "type": "AddressAccount", "address": "4tjy... " }
         }
       ]
+    }
+  }
+]
+```
+
+### Canonical addresses
+
+An account has many addresses (aliases): they share their first 29 bytes and differ in the last 3.
+The summaries name each account by the alias used on chain, which can differ from the address the
+account was created with (its canonical address). The canonical address cannot be derived from an
+alias.
+
+With the query parameter `canonicalAddresses=y` (default `n`), each summary also has a
+`canonicalAddresses` object, mapping every account address in the summary (the sender, the sponsor,
+and the accounts in the events or the reject reason) to the canonical address of its account. The
+account info is queried in the given block, once per account. An address without an account in that
+block (for example in a reject reason) is not in the object.
+
+Example response for `/v0/blockTransactionEvents/{blockHash}?canonicalAddresses=y`, for a transfer
+sent from an alias:
+
+```json
+[
+  {
+    "hash": "7c0a... ",
+    "sender": "4DAERy94ScrVZQPLyqV9bGF9kT8kDSUS8M5Y4Epmew49ZXjfnk",
+    ...
+    "result": {
+      "outcome": "success",
+      "events": [
+        {
+          "tag": "Transferred",
+          "amount": "1000000",
+          "from": { "type": "AddressAccount", "address": "4DAERy94ScrVZQPLyqV9bGF9kT8kDSUS8M5Y4Epmew49ZXjfnk" },
+          "to": { "type": "AddressAccount", "address": "3WD5VXRzZwwkQyLBjxb1qonF8E5GKRe1uBN6g3WCE8XrGuXuwu" }
+        }
+      ]
+    },
+    "canonicalAddresses": {
+      "4DAERy94ScrVZQPLyqV9bGF9kT8kDSUS8M5Y4Epmew49ZXjfnk": "4DAERy94ScrVZQPLyqV9bGF9kT8kDSUS8M5Y4EpmdNS2q4LmLd",
+      "3WD5VXRzZwwkQyLBjxb1qonF8E5GKRe1uBN6g3WCE8XrGuXuwu": "3WD5VXRzZwwkQyLBjxb1qonF8E5GKRe1uBN6g3WCE8XrGuXuwu"
     }
   }
 ]
